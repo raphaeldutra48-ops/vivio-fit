@@ -72,15 +72,23 @@ geram duas cópias de React e o build da web quebra com
 **Como aplicar:** ao atualizar o React, atualizar os dois apps juntos, na mesma
 versão exata.
 
+### 9. Offline: WatermelonDB trocado por cache + fila
+**Assumida em:** C6
+**Estado:** o modo offline usa `AsyncStorage` (cache do plano ativo e das
+séries anteriores + fila de saída), não WatermelonDB como o plano previa.
+**Por quê:** WatermelonDB exige *dev client* nativo — quebraria o Expo Go — e é
+um motor de sincronização relacional bidirecional. A Fase 1 precisa de cache de
+leitura e fila de escrita; a parte difícil (idempotência) já está no servidor.
+**Reavaliar em:** quando houver edição offline de dados que o profissional também
+edita (dieta, anotações), aí a resolução de conflito justifica o peso.
+
 ## Resolvidas
 
-_(nada ainda)_
-
-### 9. Testes e2e mutavam os dados do seed  — RESOLVIDA em C6
-**Era:** os e2e usavam as contas do seed. O teste de execucao ativava um plano
-proprio (arquivando o da Ana) e, pior, qualquer treino feito no app virava "a
-ultima execucao" e quebrava as assercoes da coluna ANTERIOR — suite instavel.
-**Correcao:**  cria o proprio aluno (registro + vinculo +
-consentimento) no  e apaga tudo dele no .
+### Testes e2e mutavam os dados do seed — resolvida em C6
+**Era:** os e2e usavam as contas do seed. O teste de execução ativava um plano
+próprio (arquivando o da Ana) e, pior, qualquer treino feito no app virava "a
+última execução" e quebrava as asserções da coluna ANTERIOR — suíte instável.
+**Correção:** `execucao.e2e.spec.ts` cria o próprio aluno (registro + vínculo +
+consentimento) no `beforeAll` e apaga tudo dele no `afterAll`.
 **Verificado:** duas rodadas seguidas, 77 testes passando nas duas.
-**Ainda aberto:** os demais e2e continuam usando o seed (ver pendencia 2).
+**Ainda aberto:** os demais e2e continuam usando o seed (ver pendência 2).
