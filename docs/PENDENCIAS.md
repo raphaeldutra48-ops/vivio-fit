@@ -36,10 +36,6 @@ a tela de verificação do admin.
 **Por quê:** rate limit distribuído precisa de Redis, que chega no C8.
 **Pagar em:** C8. Enquanto isso, argon2id já torna força bruta cara.
 
-## Resolvidas
-
-_(nada ainda)_
-
 ### 5. Tokens no localStorage (web)
 **Assumida em:** C3
 **Estado:** `apps/web` guarda access e refresh token em `localStorage`.
@@ -55,3 +51,7 @@ backend emitindo `Set-Cookie` e tratamento de CSRF.
 **Por quê:** funciona com teclado e leitor de tela sem biblioteca extra; o
 arrastar é polimento, não requisito do fluxo.
 **Pagar em:** quando a tela receber acabamento visual (pós-C4).
+
+## Resolvidas
+
+_(nada ainda)_
