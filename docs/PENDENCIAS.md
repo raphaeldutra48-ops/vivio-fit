@@ -55,3 +55,22 @@ arrastar é polimento, não requisito do fluxo.
 ## Resolvidas
 
 _(nada ainda)_
+
+### 7. nodeLinker hoisted no workspace inteiro
+**Assumida em:** C4
+**Estado:** `pnpm-workspace.yaml` usa `nodeLinker: hoisted` por causa do Metro.
+**Consequência:** o monorepo perde o isolamento estrito do pnpm — um pacote passa
+a conseguir importar dependência que não declarou, e o erro só aparece no build
+de produção.
+**Mitigação atual:** `pnpm build` roda os 7 workspaces no CI e pegaria o caso.
+**Alternativa futura:** isolar o mobile em workspace próprio, ou reavaliar quando
+o Metro melhorar o suporte a symlinks.
+
+### 8. React precisa da mesma versão exata em web e mobile
+**Assumida em:** C4
+**Estado:** `apps/web` e `apps/mobile` fixam `react`/`react-dom` em `19.2.3`.
+**Por quê:** com nodeLinker hoisted, faixas diferentes (`^19.0.0` vs `19.2.3`)
+geram duas cópias de React e o build da web quebra com
+`Cannot read properties of null (reading 'useContext')`.
+**Como aplicar:** ao atualizar o React, atualizar os dois apps juntos, na mesma
+versão exata.
