@@ -10,7 +10,9 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
+import { FotosModule } from './modules/fotos/fotos.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
+import { MidiaModule } from './modules/midia/midia.module';
 import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
 import { VinculosModule } from './modules/vinculos/vinculos.module';
@@ -21,12 +23,14 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     JwtModule.register({ global: true }),
     PrismaModule,
     AuditoriaModule, // global: os guards registram negativas
+    MidiaModule, // global: vários módulos assinam links de leitura
     AuthModule,
     VinculosModule,
     ConsentimentosModule,
     MedidasModule,
     ExerciciosModule,
     TreinosModule,
+    FotosModule,
   ],
   controllers: [HealthController, MeController],
   providers: [

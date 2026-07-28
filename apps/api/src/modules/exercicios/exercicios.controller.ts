@@ -20,8 +20,13 @@ import {
   type CriarExercicioInput,
   type ExercicioResumo,
   type ListarExerciciosQuery,
+  type UrlAssinada,
   type UsuarioAutenticado,
 } from '@vivio/contracts';
+import { z } from 'zod';
+
+const vincularVideoSchema = z.object({ chave: z.string().min(10) });
+type VincularVideoInput = z.infer<typeof vincularVideoSchema>;
 import { Papeis } from '../../common/decorators/papeis.decorator';
 import { UsuarioAtual } from '../../common/decorators/usuario-atual.decorator';
 import { PapeisGuard } from '../../common/guards/papeis.guard';
@@ -72,6 +77,26 @@ export class ExerciciosController {
     @Body(new ZodValidationPipe(atualizarExercicioSchema)) dados: AtualizarExercicioInput,
   ): Promise<ExercicioResumo> {
     return this.exercicios.atualizar(usuario, id, dados);
+  }
+
+  @Patch(':id/video')
+  @Papeis(...PROFISSIONAIS)
+  @ApiOperation({ summary: 'Vincula o vídeo já enviado (chave devolvida por /midia/upload-url)' })
+  vincularVideo(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(vincularVideoSchema)) dados: VincularVideoInput,
+  ): Promise<ExercicioResumo> {
+    return this.exercicios.vincularVideo(usuario, id, dados.chave);
+  }
+
+  @Get(':id/video')
+  @ApiOperation({ summary: 'Link assinado do vídeo — expira em 5 minutos' })
+  urlDoVideo(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+  ): Promise<UrlAssinada> {
+    return this.exercicios.urlDoVideo(usuario, id);
   }
 
   @Delete(':id')

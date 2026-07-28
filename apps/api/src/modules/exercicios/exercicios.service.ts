@@ -6,10 +6,12 @@ import type {
   ExercicioResumo,
   GrupoMuscular,
   ListarExerciciosQuery,
+  UrlAssinada,
   UsuarioAutenticado,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
+import { MidiaService } from '../midia/midia.service';
 
 function paraResumo(e: {
   id: string;
@@ -35,7 +37,40 @@ function paraResumo(e: {
 
 @Injectable()
 export class ExerciciosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly midia: MidiaService,
+  ) {}
+
+  /** Vincula ao exercício o vídeo já enviado ao storage. */
+  async vincularVideo(
+    usuario: UsuarioAutenticado,
+    id: string,
+    chave: string,
+  ): Promise<ExercicioResumo> {
+    const exercicio = await this.exigirPropriedade(usuario, id);
+    if (!chave.startsWith(`exercicios/${usuario.id}/`)) {
+      throw ErroDominio.conflito('Chave de arquivo não pertence a você.');
+    }
+
+    const atualizado = await this.prisma.exercicio.update({
+      where: { id: exercicio.id },
+      data: { videoChave: chave },
+    });
+    return paraResumo(atualizado);
+  }
+
+  /** Vídeo nunca é servido por URL pública — só por link assinado curto. */
+  async urlDoVideo(usuario: UsuarioAutenticado, id: string): Promise<UrlAssinada> {
+    const exercicio = await this.prisma.exercicio.findUnique({ where: { id } });
+    if (!exercicio || exercicio.deletadoEm) throw ErroDominio.naoEncontrado('Exercício');
+    if (exercicio.escopo === EscopoExercicio.PRIVADO && exercicio.criadoPorId !== usuario.id) {
+      throw ErroDominio.naoEncontrado('Exercício');
+    }
+    if (!exercicio.videoChave) throw ErroDominio.naoEncontrado('Vídeo do exercício');
+
+    return this.midia.urlDeLeitura(exercicio.videoChave);
+  }
 
   /**
    * Lista o que o usuário pode ver: a biblioteca GLOBAL mais os exercícios

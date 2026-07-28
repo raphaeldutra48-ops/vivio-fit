@@ -2,7 +2,11 @@ import type {
   AcessoRegistrado,
   AnterioresDaSessao,
   AtualizarExercicioInput,
+  AutorizacaoDeUpload,
+  FotoEvolucaoResumo,
   HistoricoCarga,
+  PedirUploadInput,
+  RegistrarFotoInput,
   ConcederConsentimentoInput,
   CriarExercicioInput,
   CriarPlanoTreinoInput,
@@ -372,6 +376,55 @@ export class VivioClient {
         metodo: 'POST',
         corpo: dados,
       }),
+  };
+
+  // --- mídia ---------------------------------------------------------------
+
+  readonly midia = {
+    autorizarUpload: (dados: PedirUploadInput): Promise<AutorizacaoDeUpload> =>
+      this.requisicao<AutorizacaoDeUpload>('/midia/upload-url', { metodo: 'POST', corpo: dados }),
+
+    /**
+     * Envia o arquivo direto ao storage usando a autorização.
+     * Não passa pelo `requisicao` porque o destino pode ser o bucket, não a API.
+     */
+    enviarArquivo: async (autorizacao: AutorizacaoDeUpload, arquivo: Blob): Promise<void> => {
+      const resposta = await this.fetchImpl(autorizacao.urlUpload, {
+        method: autorizacao.metodo,
+        headers: autorizacao.cabecalhos,
+        body: arquivo,
+      });
+      if (!resposta.ok) {
+        throw new ErroApi('ERRO_INTERNO', 'Falha ao enviar o arquivo.', resposta.status);
+      }
+    },
+  };
+
+  // --- fotos de evolução ----------------------------------------------------
+
+  readonly fotos = {
+    listar: (alunoId: string): Promise<FotoEvolucaoResumo[]> =>
+      this.requisicao<FotoEvolucaoResumo[]>(`/alunos/${alunoId}/fotos`),
+
+    registrar: (alunoId: string, dados: RegistrarFotoInput): Promise<FotoEvolucaoResumo> =>
+      this.requisicao<FotoEvolucaoResumo>(`/alunos/${alunoId}/fotos`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    /** O aluno escolhe quais profissionais veem esta foto. */
+    definirVisibilidade: (
+      alunoId: string,
+      fotoId: string,
+      visivelPara: string[],
+    ): Promise<FotoEvolucaoResumo> =>
+      this.requisicao<FotoEvolucaoResumo>(`/alunos/${alunoId}/fotos/${fotoId}/visibilidade`, {
+        metodo: 'PATCH',
+        corpo: { visivelPara },
+      }),
+
+    remover: (alunoId: string, fotoId: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/fotos/${fotoId}`, { metodo: 'DELETE' }),
   };
 
   // --- medidas ------------------------------------------------------------

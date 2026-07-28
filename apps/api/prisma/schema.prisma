@@ -72,6 +72,7 @@ model User {
   planosComoAluno   PlanoTreino[] @relation("PlanosDoAluno")
   planosComoPersonal PlanoTreino[] @relation("PlanosDoPersonal")
   execucoes          ExecucaoTreino[] @relation("ExecucoesDoAluno")
+  fotosEvolucao      FotoEvolucao[]   @relation("FotosDoAluno")
 
   @@index([papel, status])
 }
@@ -415,6 +416,35 @@ model Medida {
 
   /// Uma medição por dia por aluno — remedir no mesmo dia atualiza a linha.
   @@unique([alunoId, data])
+  @@index([alunoId, data(sort: Desc)])
+}
+
+enum AnguloFoto {
+  FRENTE
+  LADO
+  COSTAS
+  LIVRE
+}
+
+/// Foto de evolução. Escopo de consentimento: EVOLUCAO.
+///
+/// `chaveArquivo` é a chave no storage privado — NUNCA uma URL pública. A
+/// entrega é sempre por link assinado de curta duração.
+model FotoEvolucao {
+  id           String     @id @default(cuid())
+  alunoId      String
+  aluno        User       @relation("FotosDoAluno", fields: [alunoId], references: [id])
+  data         DateTime   @db.Date
+  chaveArquivo String     @unique
+  mimeType     String
+  tamanhoBytes Int
+  angulo       AnguloFoto @default(FRENTE)
+  observacao   String?
+  /// Papéis autorizados pelo aluno a ver esta foto. Vazio = só o próprio aluno.
+  visivelPara  Papel[]    @default([])
+  criadoEm     DateTime   @default(now())
+  deletadoEm   DateTime?
+
   @@index([alunoId, data(sort: Desc)])
 }
 
