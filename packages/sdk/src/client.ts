@@ -7,6 +7,7 @@ import type {
   HistoricoCarga,
   PedirUploadInput,
   RegistrarFotoInput,
+  UrlAssinada,
   ConcederConsentimentoInput,
   CriarExercicioInput,
   CriarPlanoTreinoInput,
@@ -312,6 +313,16 @@ export class VivioClient {
 
     remover: (id: string): Promise<void> =>
       this.requisicao<void>(`/exercicios/${id}`, { metodo: 'DELETE' }),
+
+    /** Vincula ao exercício um vídeo já enviado via `midia.enviarArquivo`. */
+    vincularVideo: (id: string, chave: string): Promise<ExercicioResumo> =>
+      this.requisicao<ExercicioResumo>(`/exercicios/${id}/video`, {
+        metodo: 'PATCH',
+        corpo: { chave },
+      }),
+
+    urlDoVideo: (id: string): Promise<UrlAssinada> =>
+      this.requisicao<UrlAssinada>(`/exercicios/${id}/video`),
   };
 
   // --- planos de treino ---------------------------------------------------

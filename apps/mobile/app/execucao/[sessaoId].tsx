@@ -10,7 +10,7 @@ import {
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { lerAnteriores, lerPlano, salvarAnteriores, salvarPlano } from '../../src/cacheTreino';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
@@ -148,6 +148,19 @@ export default function Execucao() {
     alterar(serie.chave, { concluida: virandoConcluida });
     // Só inicia o descanso ao MARCAR — desmarcar por engano não deve disparar.
     if (virandoConcluida && descansoSeg) setDescansoRestante(descansoSeg);
+  }
+
+  /**
+   * O link do vídeo é assinado e expira em 5 minutos, então é pedido na hora do
+   * toque — guardá-lo junto do plano deixaria um link morto no cache offline.
+   */
+  async function abrirVideo(exercicioId: string) {
+    try {
+      const { url } = await sdk.exercicios.urlDoVideo(exercicioId);
+      await Linking.openURL(url);
+    } catch {
+      setErro('Não foi possível abrir o vídeo agora (precisa de conexão).');
+    }
   }
 
   function adicionarSerie(itemTreinoId: string, exercicioId: string) {
@@ -300,15 +313,41 @@ export default function Execucao() {
 
           return (
             <View key={item.id} style={{ gap: espacamento.sm }}>
-              <Text
-                style={{
-                  fontSize: tipografia.tamanho.lg,
-                  fontWeight: '700',
-                  color: tema.primariaFundo,
-                }}
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento.sm }}
               >
-                {item.exercicio.nome}
-              </Text>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: tipografia.tamanho.lg,
+                    fontWeight: '700',
+                    color: tema.primariaFundo,
+                  }}
+                >
+                  {item.exercicio.nome}
+                </Text>
+
+                {item.exercicio.temVideo && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver vídeo de ${item.exercicio.nome}`}
+                    onPress={() => void abrirVideo(item.exercicio.id)}
+                    style={{
+                      minHeight: alvoToqueMin,
+                      paddingHorizontal: espacamento.md,
+                      borderRadius: raio.md,
+                      borderWidth: 1,
+                      borderColor: tema.borda,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: tema.textoPrimario, fontSize: tipografia.tamanho.sm }}>
+                      ▶ Vídeo
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
 
               {item.observacao ? (
                 <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>

@@ -36,9 +36,15 @@ export default function LayoutProfissional({ children }: { children: React.React
         className="flex items-center justify-between border-b px-xl py-lg"
         style={{ borderColor: 'var(--vv-borda)', background: 'var(--vv-superficie)' }}
       >
-        <Link href="/alunos" className="text-lg font-bold">
-          Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
-        </Link>
+        <div className="flex items-center gap-xl">
+          <Link href="/alunos" className="text-lg font-bold">
+            Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
+          </Link>
+          <nav className="flex gap-lg text-sm">
+            <Link href="/alunos">Alunos</Link>
+            <Link href="/exercicios">Exercícios</Link>
+          </nav>
+        </div>
         <div className="flex items-center gap-lg">
           <div className="text-right">
             <p className="text-sm font-semibold">{usuario.nome}</p>

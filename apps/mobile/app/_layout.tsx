@@ -19,6 +19,7 @@ function Navegacao() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="execucao/[sessaoId]" options={{ title: 'Treino em andamento' }} />
+        <Stack.Screen name="fotos" options={{ title: 'Fotos de evolução' }} />
       </Stack>
     </>
   );

@@ -1,5 +1,6 @@
 import type { ExecucaoResumo } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../../src/sdk';
@@ -9,6 +10,7 @@ import { useSincronizacao } from '../../src/sincronizacao';
 export default function Evolucao() {
   const { usuario, tema } = useSessao();
   const { pendentes, sincronizando, sincronizar } = useSincronizacao();
+  const router = useRouter();
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
 
   useEffect(() => {
@@ -83,6 +85,23 @@ export default function Evolucao() {
           </View>
         ))}
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Abrir fotos de evolução"
+        onPress={() => router.push('/fotos')}
+        style={{
+          minHeight: 52,
+          borderRadius: raio.md,
+          backgroundColor: tema.superficie,
+          borderWidth: 1,
+          borderColor: tema.borda,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>📸 Fotos de evolução</Text>
+      </Pressable>
 
       <Text style={{ fontSize: tipografia.tamanho.lg, fontWeight: '600', color: tema.textoPrimario }}>
         Histórico
