@@ -138,6 +138,23 @@ export default function Inicio() {
         )}
       </View>
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Configurar lembretes"
+        onPress={() => router.push('/lembretes')}
+        style={{
+          minHeight: 52,
+          borderRadius: raio.md,
+          backgroundColor: tema.superficie,
+          borderWidth: 1,
+          borderColor: tema.borda,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>⏰ Lembretes</Text>
+      </Pressable>
+
       <Pressable accessibilityRole="button" onPress={() => void sair()} style={{ paddingVertical: espacamento.md }}>
         <Text style={{ color: tema.textoSecundario, textAlign: 'center' }}>Sair da conta</Text>
       </Pressable>

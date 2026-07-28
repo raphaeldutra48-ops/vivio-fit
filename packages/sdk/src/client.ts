@@ -18,6 +18,10 @@ import type {
   PlanoTreinoResumo,
   ConsentimentoResumo,
   ConsultaAuditoria,
+  DefinirLembreteInput,
+  LembreteResumo,
+  NotificacaoResumo,
+  RegistrarDispositivoInput,
   EscopoDado,
   LoginInput,
   MedidaResumo,
@@ -436,6 +440,27 @@ export class VivioClient {
 
     remover: (alunoId: string, fotoId: string): Promise<void> =>
       this.requisicao<void>(`/alunos/${alunoId}/fotos/${fotoId}`, { metodo: 'DELETE' }),
+  };
+
+  // --- lembretes e notificações --------------------------------------------
+
+  readonly lembretes = {
+    listar: (): Promise<LembreteResumo[]> => this.requisicao<LembreteResumo[]>('/me/lembretes'),
+
+    definir: (dados: DefinirLembreteInput): Promise<LembreteResumo> =>
+      this.requisicao<LembreteResumo>('/me/lembretes', { metodo: 'PUT', corpo: dados }),
+
+    registrarDispositivo: (dados: RegistrarDispositivoInput): Promise<void> =>
+      this.requisicao<void>('/me/dispositivos', { metodo: 'PUT', corpo: dados }),
+
+    removerDispositivo: (token: string): Promise<void> =>
+      this.requisicao<void>(`/me/dispositivos/${encodeURIComponent(token)}`, { metodo: 'DELETE' }),
+
+    notificacoes: (limit?: number): Promise<NotificacaoResumo[]> =>
+      this.requisicao<NotificacaoResumo[]>('/me/notificacoes', { query: { limit } }),
+
+    marcarComoLida: (id: string): Promise<void> =>
+      this.requisicao<void>(`/me/notificacoes/${id}/lida`, { metodo: 'PATCH' }),
   };
 
   // --- medidas ------------------------------------------------------------

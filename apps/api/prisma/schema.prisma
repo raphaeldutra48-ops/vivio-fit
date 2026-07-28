@@ -73,6 +73,9 @@ model User {
   planosComoPersonal PlanoTreino[] @relation("PlanosDoPersonal")
   execucoes          ExecucaoTreino[] @relation("ExecucoesDoAluno")
   fotosEvolucao      FotoEvolucao[]   @relation("FotosDoAluno")
+  dispositivos       TokenDispositivo[]
+  lembretes          ConfiguracaoLembrete[] @relation("LembretesDoAluno")
+  notificacoes       Notificacao[]          @relation("NotificacoesDoUsuario")
 
   @@index([papel, status])
 }
@@ -446,6 +449,72 @@ model FotoEvolucao {
   deletadoEm   DateTime?
 
   @@index([alunoId, data(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// 4.8 — Notificações e lembretes
+// ---------------------------------------------------------------------------
+
+enum TipoLembrete {
+  TREINO
+  REFEICAO
+  AGUA
+  CONSULTA
+  MENSAGEM
+}
+
+model TokenDispositivo {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  plataforma String // IOS | ANDROID | WEB
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+  usadoEm    DateTime @default(now())
+
+  @@index([userId, ativo])
+}
+
+/// Quando e por onde o aluno quer ser lembrado.
+model ConfiguracaoLembrete {
+  id           String       @id @default(cuid())
+  alunoId      String
+  aluno        User         @relation("LembretesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  tipo         TipoLembrete
+  /// Horários locais do aluno, formato "HH:MM".
+  horarios     String[]     @default([])
+  /// Dias da semana (1=segunda ... 7=domingo). Vazio = todos.
+  diasDaSemana Int[]        @default([])
+  canais       String[]     @default(["PUSH"])
+  ativo        Boolean      @default(true)
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime     @updatedAt
+
+  @@unique([alunoId, tipo])
+}
+
+/// Notificação gerada. Guardar antes de enviar dá histórico e evita duplicata.
+model Notificacao {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation("NotificacoesDoUsuario", fields: [userId], references: [id], onDelete: Cascade)
+  tipo         TipoLembrete
+  titulo       String
+  corpo        String
+  deeplink     String?
+  /// Data local (do aluno) a que este lembrete se refere — base da deduplicação.
+  referenteA   DateTime     @db.Date
+  agendadaPara DateTime
+  enviadaEm    DateTime?
+  falhaEm      DateTime?
+  erro         String?
+  lidaEm       DateTime?
+  criadoEm     DateTime     @default(now())
+
+  /// Um lembrete de cada tipo por dia, por usuário.
+  @@unique([userId, tipo, referenteA])
+  @@index([userId, criadoEm(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------

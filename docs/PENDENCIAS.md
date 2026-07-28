@@ -82,6 +82,24 @@ leitura e fila de escrita; a parte difícil (idempotência) já está no servido
 **Reavaliar em:** quando houver edição offline de dados que o profissional também
 edita (dieta, anotações), aí a resolução de conflito justifica o peso.
 
+### 10. Push nao entrega de verdade (driver de log)
+**Assumida em:** C8
+**Estado:** todo o agendamento funciona — horario no fuso do aluno, dias da
+semana, deduplicacao, "nao lembrar quem ja treinou". A entrega usa o driver de
+log: escreve no console em vez de mandar para o aparelho.
+**Por que:** enviar exige projeto no Firebase e credencial.
+**Pagar em:** quando o Firebase existir. Trocar o provider de ENVIADOR por uma
+implementacao com o SDK do FCM; nenhuma regra de agendamento muda.
+
+### 11. Scheduler roda dentro do processo da API
+**Assumida em:** C8
+**Estado:** a varredura de lembretes usa @nestjs/schedule, a cada minuto, no
+mesmo processo da API.
+**Consequencia:** com varias instancias, todas varrem. E seguro (a unique
+(userId, tipo, referenteA) impede envio duplicado, e ha teste para isso), mas
+desperdica consulta ao banco.
+**Pagar em:** quando houver Redis — mover para BullMQ com job unico.
+
 ## Resolvidas
 
 ### Testes e2e mutavam os dados do seed — resolvida em C6
