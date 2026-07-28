@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessaoProvider, useSessao } from '../src/sessao';
+import { SincronizacaoProvider } from '../src/sincronizacao';
 
 function Navegacao() {
   const { tema, nomeDoTema } = useSessao();
@@ -27,7 +28,9 @@ export default function LayoutRaiz() {
   return (
     <SafeAreaProvider>
       <SessaoProvider>
-        <Navegacao />
+        <SincronizacaoProvider>
+          <Navegacao />
+        </SincronizacaoProvider>
       </SessaoProvider>
     </SafeAreaProvider>
   );

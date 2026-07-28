@@ -1,18 +1,21 @@
 import type { ExecucaoResumo } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
+import { useSincronizacao } from '../../src/sincronizacao';
 
 export default function Evolucao() {
   const { usuario, tema } = useSessao();
+  const { pendentes, sincronizando, sincronizar } = useSincronizacao();
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
 
   useEffect(() => {
     if (!usuario) return;
     sdk.execucoes.listar(usuario.id, 30).then(setExecucoes).catch(() => undefined);
-  }, [usuario]);
+    // Recarrega quando a fila esvazia: o treino recém-enviado precisa aparecer.
+  }, [usuario, pendentes.length]);
 
   const volumeTotal = execucoes.reduce((soma, e) => soma + e.volumeTotalKg, 0);
   const totalSeries = execucoes.reduce((soma, e) => soma + e.totalSeries, 0);
@@ -22,6 +25,32 @@ export default function Evolucao() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
+      {pendentes.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Enviar treinos pendentes agora"
+          onPress={() => void sincronizar()}
+          style={{
+            backgroundColor: tema.superficie,
+            borderRadius: raio.md,
+            borderWidth: 1,
+            borderColor: tema.alerta,
+            padding: espacamento.md,
+          }}
+        >
+          <Text style={{ color: tema.alerta, fontWeight: '700' }}>
+            {pendentes.length === 1
+              ? '1 treino aguardando envio'
+              : `${pendentes.length} treinos aguardando envio`}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            {sincronizando
+              ? 'Enviando…'
+              : 'Ficam salvos no aparelho. Toque para tentar agora.'}
+          </Text>
+        </Pressable>
+      )}
+
       <View style={{ flexDirection: 'row', gap: espacamento.md }}>
         {[
           { rotulo: 'Treinos', valor: execucoes.length.toString() },

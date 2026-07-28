@@ -11,8 +11,10 @@ import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { lerAnteriores, lerPlano, salvarAnteriores, salvarPlano } from '../../src/cacheTreino';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
+import { useSincronizacao } from '../../src/sincronizacao';
 import { gerarUuid } from '../../src/uuid';
 
 interface SerieNaTela {
@@ -38,7 +40,9 @@ function formatarDescanso(segundos: number): string {
 export default function Execucao() {
   const { sessaoId } = useLocalSearchParams<{ sessaoId: string }>();
   const { usuario, tema } = useSessao();
+  const { registrarTreino } = useSincronizacao();
   const router = useRouter();
+  const [offline, setOffline] = useState(false);
 
   const [sessao, setSessao] = useState<SessaoTreinoResumo | null>(null);
   const [anteriores, setAnteriores] = useState<AnterioresDaSessao['porExercicio']>({});
@@ -57,8 +61,26 @@ export default function Execucao() {
     if (!usuario || !sessaoId) return;
 
     void (async () => {
+      // Rede primeiro; sem rede, o cache assume. A tela de treino é a única que
+      // NÃO pode depender de conexão — é usada no subsolo da academia.
+      let plano: PlanoTreinoCompleto | null = null;
       try {
-        const plano: PlanoTreinoCompleto = await sdk.treinos.obterAtivo(usuario.id);
+        plano = await sdk.treinos.obterAtivo(usuario.id);
+        await salvarPlano(usuario.id, plano);
+      } catch {
+        const emCache = await lerPlano(usuario.id);
+        if (emCache) {
+          plano = emCache.plano;
+          setOffline(true);
+        }
+      }
+
+      if (!plano) {
+        setErro('Não foi possível carregar o treino e não há cópia salva no aparelho.');
+        return;
+      }
+
+      {
         const encontrada = plano.sessoes.find((s) => s.id === sessaoId);
         if (!encontrada) {
           setErro('Esta sessão não pertence ao seu plano ativo.');
@@ -80,11 +102,16 @@ export default function Execucao() {
           ),
         );
 
-        // Falha aqui não impede treinar: a coluna ANTERIOR simplesmente fica vazia.
-        const previas = await sdk.execucoes.anteriores(usuario.id, sessaoId).catch(() => null);
-        if (previas) setAnteriores(previas.porExercicio);
-      } catch {
-        setErro('Não foi possível carregar o treino.');
+        // Falha aqui não impede treinar: a coluna ANTERIOR cai para o cache e,
+        // na pior das hipóteses, fica vazia.
+        try {
+          const previas = await sdk.execucoes.anteriores(usuario.id, sessaoId);
+          setAnteriores(previas.porExercicio);
+          await salvarAnteriores(usuario.id, sessaoId, previas);
+        } catch {
+          const emCache = await lerAnteriores(usuario.id, sessaoId);
+          if (emCache) setAnteriores(emCache.porExercicio);
+        }
       }
     })();
   }, [usuario, sessaoId]);
@@ -164,7 +191,9 @@ export default function Execucao() {
         tipo: s.tipo,
       }));
 
-      await sdk.execucoes.registrar(usuario.id, {
+      // Vai para a fila local ANTES de tentar a rede. Falhar o envio não perde
+      // o treino — ele sai da fila só quando o servidor confirmar.
+      await registrarTreino(usuario.id, {
         clienteUuid: clienteUuid.current,
         sessaoId,
         iniciadoEm: iniciadoEm.current,
@@ -175,7 +204,7 @@ export default function Execucao() {
 
       router.replace('/(tabs)/evolucao');
     } catch {
-      setErro('Não foi possível enviar agora. Tente de novo em instantes.');
+      setErro('Não foi possível salvar o treino no aparelho.');
     } finally {
       setEnviando(false);
     }
@@ -255,6 +284,14 @@ export default function Execucao() {
           </Text>
         </Pressable>
       </View>
+
+      {offline && (
+        <View style={{ backgroundColor: tema.alerta, paddingVertical: espacamento.xs }}>
+          <Text style={{ color: '#1A1D21', textAlign: 'center', fontSize: tipografia.tamanho.sm }}>
+            Sem conexão — treinando com a cópia salva. Enviamos quando a rede voltar.
+          </Text>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.xl }}>
         {sessao.itens.map((item) => {

@@ -3,6 +3,7 @@ import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { lerPlano, salvarPlano } from '../../src/cacheTreino';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -13,13 +14,26 @@ export default function Treino() {
   const router = useRouter();
   const [plano, setPlano] = useState<PlanoTreinoCompleto | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const [doCache, setDoCache] = useState(false);
 
   useEffect(() => {
     if (!usuario) return;
-    sdk.treinos
-      .obterAtivo(usuario.id)
-      .then(setPlano)
-      .catch(() => setMensagem('Nenhum plano de treino ativo no momento.'));
+    void (async () => {
+      try {
+        const atual = await sdk.treinos.obterAtivo(usuario.id);
+        setPlano(atual);
+        setDoCache(false);
+        await salvarPlano(usuario.id, atual);
+      } catch {
+        const emCache = await lerPlano(usuario.id);
+        if (emCache) {
+          setPlano(emCache.plano);
+          setDoCache(true);
+        } else {
+          setMensagem('Nenhum plano de treino ativo no momento.');
+        }
+      }
+    })();
   }, [usuario]);
 
   return (
@@ -28,6 +42,12 @@ export default function Treino() {
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
       {mensagem && <Text style={{ color: tema.textoSecundario }}>{mensagem}</Text>}
+
+      {doCache && (
+        <Text style={{ color: tema.alerta, fontSize: tipografia.tamanho.sm }}>
+          Sem conexão — mostrando a cópia salva no aparelho.
+        </Text>
+      )}
 
       {plano && (
         <>

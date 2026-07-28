@@ -1,8 +1,8 @@
 import { Redirect, Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, type ColorValue } from 'react-native';
 import { useSessao } from '../../src/sessao';
 
-function Icone({ texto, cor }: { texto: string; cor: string }) {
+function Icone({ texto, cor }: { texto: string; cor: ColorValue }) {
   return <Text style={{ fontSize: 18, color: cor }}>{texto}</Text>;
 }
 

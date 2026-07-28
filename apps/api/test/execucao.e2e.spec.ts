@@ -35,12 +35,34 @@ describe('Execução de treino (e2e)', () => {
     await app.init();
     prisma = app.get(PrismaService);
 
-    [tokenPersonal, tokenAna] = await Promise.all([
-      logar('personal@viviofit.com.br'),
-      logar('ana@exemplo.com'),
-    ]);
+    tokenPersonal = await logar('personal@viviofit.com.br');
 
-    idAna = (await prisma.user.findUniqueOrThrow({ where: { email: 'ana@exemplo.com' } })).id;
+    // Aluno EXCLUSIVO deste teste. Reaproveitar o do seed deixava a suíte
+    // instável: qualquer treino feito no app (ou por outro teste) virava "a
+    // última execução" e quebrava as asserções da coluna ANTERIOR.
+    const emailAluno = `execucao.${Date.now().toString(36)}@exemplo.com`;
+    const registro = await request(app.getHttpServer())
+      .post(url('/auth/registrar/aluno'))
+      .send({ nome: 'Aluno de Execução', email: emailAluno, senha, dataNascimento: '1996-02-10' })
+      .expect(201);
+    tokenAna = registro.body.accessToken;
+    idAna = registro.body.usuario.id;
+
+    const convite = await request(app.getHttpServer())
+      .post(url('/vinculos/convidar'))
+      .set('Authorization', `Bearer ${tokenPersonal}`)
+      .send({ email: emailAluno })
+      .expect(201);
+    await request(app.getHttpServer())
+      .patch(url(`/vinculos/${convite.body.id}/aceitar`))
+      .set('Authorization', `Bearer ${tokenAna}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(url('/consentimentos'))
+      .set('Authorization', `Bearer ${tokenAna}`)
+      .send({ escopo: 'TREINO' })
+      .expect(201);
+
     const supino = await prisma.exercicio.findFirstOrThrow({
       where: { nome: 'Supino reto com barra', escopo: 'GLOBAL' },
     });
@@ -67,8 +89,15 @@ describe('Execução de treino (e2e)', () => {
   });
 
   afterAll(async () => {
+    // O aluno é exclusivo deste teste, então apagar tudo dele é seguro.
     await prisma.execucaoTreino.deleteMany({ where: { alunoId: idAna } });
-    await prisma.planoTreino.deleteMany({ where: { id: idPlano } });
+    await prisma.planoTreino.deleteMany({ where: { alunoId: idAna } });
+    await prisma.consentimento.deleteMany({ where: { alunoId: idAna } });
+    await prisma.vinculo.deleteMany({ where: { alunoId: idAna } });
+    await prisma.perfilAluno.deleteMany({ where: { userId: idAna } });
+    await prisma.sessaoRefresh.deleteMany({ where: { userId: idAna } });
+    await prisma.logAuditoria.deleteMany({ where: { OR: [{ alunoId: idAna }, { atorId: idAna }] } });
+    await prisma.user.deleteMany({ where: { id: idAna } });
     await app.close();
   });
 
