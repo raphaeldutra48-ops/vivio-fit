@@ -1,12 +1,228 @@
 // Schema do Vívio Fit.
-// Os modelos de domínio entram no passo B1 (identidade e vínculo).
-// Regra: entidade clínica nunca é deletada fisicamente — usar `deletadoEm`.
+//
+// Convenções:
+//  - id sempre cuid()
+//  - toda tabela tem criadoEm / atualizadoEm
+//  - entidade clínica NUNCA é deletada fisicamente (usar deletadoEm)
+//  - nomes de domínio em português, termos técnicos em inglês
+//
+// Blocos já modelados: 4.1 identidade e vínculo · 4.2 LGPD (consentimento e auditoria)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // conexão pooled — usada pela aplicação
+  directUrl = env("DIRECT_URL") // conexão direta — exigida por prisma migrate
+}
+
+// ---------------------------------------------------------------------------
+// 4.1 — Identidade e vínculo
+// ---------------------------------------------------------------------------
+
+enum Papel {
+  ALUNO
+  PERSONAL
+  NUTRICIONISTA
+  MEDICO
+  ADMIN
+  ACADEMIA
+}
+
+enum StatusConta {
+  PENDENTE_VERIFICACAO
+  ATIVA
+  SUSPENSA
+  DESATIVADA
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  senhaHash     String? // null quando a conta usa apenas login social
+  nome          String
+  telefone      String?
+  avatarUrl     String?
+  papel         Papel
+  status        StatusConta @default(PENDENTE_VERIFICACAO)
+  emailVerifEm  DateTime?
+  ultimoLoginEm DateTime?
+  criadoEm      DateTime    @default(now())
+  atualizadoEm  DateTime    @updatedAt
+  deletadoEm    DateTime?
+
+  perfilAluno        PerfilAluno?
+  perfilProfissional PerfilProfissional?
+  sessoes            SessaoRefresh[]
+
+  // Vínculos: um mesmo User aparece de um lado ou do outro conforme o papel
+  vinculosComoAluno        Vinculo[] @relation("VinculoAluno")
+  vinculosComoProfissional Vinculo[] @relation("VinculoProfissional")
+
+  consentimentosConcedidos Consentimento[] @relation("ConsentimentoAluno")
+  consentimentosRecebidos  Consentimento[] @relation("ConsentimentoProfissional")
+
+  acoesAuditadas      LogAuditoria[] @relation("AuditoriaAtor")
+  acessosAosMeusDados LogAuditoria[] @relation("AuditoriaTitular")
+
+  @@index([papel, status])
+}
+
+model PerfilAluno {
+  userId         String   @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataNascimento DateTime
+  sexoBiologico  String? // relevante para cálculo metabólico (TMB)
+  alturaCm       Int?
+  objetivo       String? // HIPERTROFIA | EMAGRECIMENTO | SAUDE | PERFORMANCE
+  nivelAtividade String?
+  timezone       String   @default("America/Sao_Paulo")
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+}
+
+model PerfilProfissional {
+  userId           String    @id
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipo             Papel // PERSONAL | NUTRICIONISTA | MEDICO
+  registroConselho String // CREF / CRN / CRM
+  ufRegistro       String
+  especialidades   String[]  @default([])
+  bio              String?
+  /// Preenchido pelo admin ao validar o registro no conselho.
+  /// Sem isto, o profissional não pode receber vínculo.
+  verificadoEm     DateTime?
+  verificadoPorId  String?
+  notaMedia        Decimal?  @db.Decimal(3, 2)
+  totalAvaliacoes  Int       @default(0)
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  @@unique([tipo, registroConselho, ufRegistro])
+}
+
+enum StatusVinculo {
+  PENDENTE
+  ATIVO
+  ENCERRADO
+  RECUSADO
+}
+
+/// Vínculo de cuidado: quem atende quem.
+/// É a base de TODA autorização de acesso a dado de aluno.
+model Vinculo {
+  id             String        @id @default(cuid())
+  alunoId        String
+  aluno          User          @relation("VinculoAluno", fields: [alunoId], references: [id])
+  profissionalId String
+  profissional   User          @relation("VinculoProfissional", fields: [profissionalId], references: [id])
+  /// Redundante com PerfilProfissional.tipo, mas evita join na checagem de
+  /// "1 vínculo ativo por tipo" e no guard, que roda em toda requisição.
+  tipo           Papel
+  status         StatusVinculo @default(PENDENTE)
+  convidadoPorId String
+  iniciadoEm     DateTime?
+  encerradoEm    DateTime?
+  criadoEm       DateTime      @default(now())
+  atualizadoEm   DateTime      @updatedAt
+
+  @@unique([alunoId, profissionalId])
+  @@index([profissionalId, status])
+  @@index([alunoId, tipo, status])
+}
+
+// ---------------------------------------------------------------------------
+// 4.2 — LGPD: consentimento e auditoria
+// ---------------------------------------------------------------------------
+
+enum EscopoDado {
+  TREINO
+  NUTRICAO
+  CLINICO
+  EVOLUCAO
+  MENSAGENS
+}
+
+/// Consentimento explícito do aluno para compartilhar um escopo de dado.
+/// Sem registro vigente aqui, o backend NEGA a leitura mesmo com vínculo ativo.
+model Consentimento {
+  id             String     @id @default(cuid())
+  alunoId        String
+  aluno          User       @relation("ConsentimentoAluno", fields: [alunoId], references: [id])
+  escopo         EscopoDado
+  /// null = consentimento vale para toda a equipe de cuidado do aluno
+  profissionalId String?
+  profissional   User?      @relation("ConsentimentoProfissional", fields: [profissionalId], references: [id])
+  /// Texto exibido ao aluno no momento do aceite — prova de finalidade específica
+  finalidade     String
+  versaoTermo    String
+  concedidoEm    DateTime   @default(now())
+  revogadoEm     DateTime?
+  ipOrigem       String?
+  userAgent      String?
+
+  @@index([alunoId, escopo, revogadoEm])
+  @@index([profissionalId, revogadoEm])
+}
+
+enum AcaoAuditoria {
+  LER
+  CRIAR
+  ATUALIZAR
+  REMOVER
+  EXPORTAR
+  NEGADO
+}
+
+/// Trilha de auditoria. Toda leitura/escrita de dado clínico gera uma linha,
+/// inclusive as NEGADAS — tentativa de acesso indevido é o que mais importa registrar.
+///
+/// ATENÇÃO: `metadata` nunca recebe conteúdo clínico. Só identificadores.
+model LogAuditoria {
+  id          String        @id @default(cuid())
+  atorId      String
+  ator        User          @relation("AuditoriaAtor", fields: [atorId], references: [id])
+  acao        AcaoAuditoria
+  recursoTipo String
+  recursoId   String?
+  /// Titular do dado. Alimenta a tela "quem viu meus dados" (direito LGPD).
+  alunoId     String?
+  aluno       User?         @relation("AuditoriaTitular", fields: [alunoId], references: [id])
+  escopo      EscopoDado?
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  criadoEm    DateTime      @default(now())
+
+  @@index([alunoId, criadoEm])
+  @@index([atorId, criadoEm])
+}
+
+// ---------------------------------------------------------------------------
+// Auth — sessões de refresh (suporte ao B2)
+// ---------------------------------------------------------------------------
+
+/// Refresh token rotativo com detecção de reuso.
+///
+/// Cada login abre uma "família". Cada refresh emite um token novo e marca o
+/// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
+/// vazou: revogamos a família inteira e forçamos novo login.
+model SessaoRefresh {
+  id         String    @id @default(cuid())
+  familiaId  String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Guardamos só o hash — token em claro nunca toca o banco
+  tokenHash  String    @unique
+  expiraEm   DateTime
+  usadoEm    DateTime?
+  revogadoEm DateTime?
+  ip         String?
+  userAgent  String?
+  criadoEm   DateTime  @default(now())
+
+  @@index([userId, revogadoEm])
+  @@index([familiaId])
 }
