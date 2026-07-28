@@ -3,9 +3,12 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   EscopoDado,
   registrarExecucaoSchema,
+  type AnterioresDaSessao,
   type ExecucaoResumo,
+  type HistoricoCarga,
   type RegistrarExecucaoInput,
 } from '@vivio/contracts';
+import { HistoricoService } from './historico.service';
 import { Auditar } from '../../common/decorators/auditar.decorator';
 import { ExigeConsentimento } from '../../common/decorators/exige-consentimento.decorator';
 import { CareLinkGuard } from '../../common/guards/care-link.guard';
@@ -20,11 +23,35 @@ import { ExecucoesService } from './execucoes.service';
 @UseInterceptors(AuditoriaInterceptor)
 @ExigeConsentimento(EscopoDado.TREINO)
 @Auditar('EXECUCAO_TREINO')
-@Controller('alunos/:alunoId/execucoes')
+@Controller('alunos/:alunoId')
 export class ExecucoesController {
-  constructor(private readonly execucoes: ExecucoesService) {}
+  constructor(
+    private readonly execucoes: ExecucoesService,
+    private readonly historico: HistoricoService,
+  ) {}
 
-  @Get()
+  @Get('sessoes/:sessaoId/anteriores')
+  @ApiOperation({
+    summary: 'Coluna ANTERIOR da tela de execução: última vez de cada exercício da sessão',
+  })
+  anteriores(
+    @Param('alunoId') alunoId: string,
+    @Param('sessaoId') sessaoId: string,
+  ): Promise<AnterioresDaSessao> {
+    return this.historico.anterioresDaSessao(alunoId, sessaoId);
+  }
+
+  @Get('exercicios/:exercicioId/historico-carga')
+  @ApiOperation({ summary: 'Progressão de carga do exercício — atual vs anteriores' })
+  historicoDeCarga(
+    @Param('alunoId') alunoId: string,
+    @Param('exercicioId') exercicioId: string,
+    @Query('limit') limit?: string,
+  ): Promise<HistoricoCarga> {
+    return this.historico.historicoDeCarga(alunoId, exercicioId, limit ? Number(limit) : undefined);
+  }
+
+  @Get('execucoes')
   listar(
     @Param('alunoId') alunoId: string,
     @Query('limit') limit?: string,
@@ -32,7 +59,7 @@ export class ExecucoesController {
     return this.execucoes.listar(alunoId, limit ? Number(limit) : undefined);
   }
 
-  @Post()
+  @Post('execucoes')
   @ApiOperation({
     summary: 'Registra treino realizado. Idempotente por clienteUuid (sync offline).',
   })

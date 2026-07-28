@@ -17,6 +17,7 @@ describe('Execução de treino (e2e)', () => {
   let idAna: string;
   let idSessao: string;
   let idItemSupino: string;
+  let idExercicioSupino: string;
   let idPlano: string;
 
   const url = (c: string) => `/api/v1${c}`;
@@ -62,6 +63,7 @@ describe('Execução de treino (e2e)', () => {
     idPlano = plano.body.id;
     idSessao = plano.body.sessoes[0].id;
     idItemSupino = plano.body.sessoes[0].itens[0].id;
+    idExercicioSupino = supino.id;
   });
 
   afterAll(async () => {
@@ -78,7 +80,14 @@ describe('Execução de treino (e2e)', () => {
     series: [
       { itemTreinoId: idItemSupino, serieNum: 1, repsFeitas: 12, cargaKg: 40, rpe: 7 },
       { itemTreinoId: idItemSupino, serieNum: 2, repsFeitas: 10, cargaKg: 42.5, rpe: 8 },
-      { itemTreinoId: idItemSupino, serieNum: 3, repsFeitas: 8, cargaKg: 42.5, rpe: 9, falhou: true },
+      {
+        itemTreinoId: idItemSupino,
+        serieNum: 3,
+        repsFeitas: 8,
+        cargaKg: 42.5,
+        rpe: 9,
+        tipo: 'FALHA',
+      },
     ],
     feedback: { dificuldade: 4, teveDor: false, sensacao: 'Boa', comentario: 'Peito bem ativado' },
   });
@@ -159,6 +168,70 @@ describe('Execução de treino (e2e)', () => {
         .set('Authorization', `Bearer ${tokenAna}`)
         .send({ ...treinoRealizado('nao-e-uuid'), clienteUuid: 'nao-e-uuid' })
         .expect(422);
+    });
+  });
+
+  describe('coluna ANTERIOR e histórico de carga', () => {
+    it('devolve a última execução de cada exercício da sessão', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/sessoes/${idSessao}/anteriores`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .expect(200);
+
+      const previas = r.body.porExercicio[idExercicioSupino];
+      expect(previas).toHaveLength(3);
+      expect(previas[0]).toMatchObject({ serieNum: 1, cargaKg: 40, repsFeitas: 12 });
+      expect(previas[2]).toMatchObject({ cargaKg: 42.5, tipo: 'FALHA' });
+      expect(r.body.ultimaVezEm[idExercicioSupino]).toBeTruthy();
+    });
+
+    it('traz apenas a ÚLTIMA execução, não a soma de todas', async () => {
+      // Já existem várias execuções deste teste; o "anterior" precisa ser de uma só.
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/sessoes/${idSessao}/anteriores`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .expect(200);
+
+      expect(r.body.porExercicio[idExercicioSupino]).toHaveLength(3);
+    });
+
+    it('monta a progressão de carga do exercício', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/exercicios/${idExercicioSupino}/historico-carga`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      expect(r.body.exercicioNome).toBe('Supino reto com barra');
+      expect(r.body.pontos.length).toBeGreaterThan(0);
+      const ponto = r.body.pontos[r.body.pontos.length - 1];
+      expect(ponto.cargaMaximaKg).toBe(42.5);
+      // Epley com a melhor série: 40 × (1 + 12/30) = 56
+      expect(ponto.estimativa1rmKg).toBeGreaterThanOrEqual(56);
+    });
+
+    /** Exercício nunca executado não pode quebrar a tela — devolve vazio. */
+    it('exercício sem histórico devolve lista vazia', async () => {
+      const outro = await prisma.exercicio.findFirstOrThrow({
+        where: { nome: 'Prancha abdominal', escopo: 'GLOBAL' },
+      });
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/exercicios/${outro.id}/historico-carga`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .expect(200);
+
+      expect(r.body.pontos).toHaveLength(0);
+    });
+
+    it('sem consentimento de TREINO o personal não vê o histórico', async () => {
+      const bruno = await prisma.user.findUniqueOrThrow({
+        where: { email: 'bruno@exemplo.com' },
+      });
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${bruno.id}/exercicios/${idExercicioSupino}/historico-carga`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(403);
+
+      expect(r.body.erro.codigo).toBe('CONSENTIMENTO_AUSENTE');
     });
   });
 

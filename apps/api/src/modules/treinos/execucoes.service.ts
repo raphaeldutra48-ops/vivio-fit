@@ -40,7 +40,10 @@ export class ExecucoesService {
 
     const sessao = await this.prisma.sessaoTreino.findUnique({
       where: { id: dados.sessaoId },
-      include: { plano: { select: { alunoId: true } }, itens: { select: { id: true } } },
+      include: {
+        plano: { select: { alunoId: true } },
+        itens: { select: { id: true, exercicioId: true } },
+      },
     });
     if (!sessao || sessao.plano.alunoId !== alunoId) {
       throw ErroDominio.naoEncontrado('Sessão de treino');
@@ -48,8 +51,8 @@ export class ExecucoesService {
 
     // Série precisa pertencer à sessão executada — senão o histórico de carga
     // de um exercício poderia ser contaminado por outro plano.
-    const idsValidos = new Set(sessao.itens.map((i) => i.id));
-    const invalidos = dados.series.filter((s) => !idsValidos.has(s.itemTreinoId));
+    const exercicioPorItem = new Map(sessao.itens.map((i) => [i.id, i.exercicioId]));
+    const invalidos = dados.series.filter((s) => !exercicioPorItem.has(s.itemTreinoId));
     if (invalidos.length > 0) {
       throw ErroDominio.conflito('Há séries que não pertencem a esta sessão.', {
         itens: invalidos.map((s) => s.itemTreinoId),
@@ -69,7 +72,13 @@ export class ExecucoesService {
           iniciadoEm: dados.iniciadoEm,
           finalizadoEm: dados.finalizadoEm,
           duracaoSeg,
-          series: { create: dados.series },
+          series: {
+            create: dados.series.map((s) => ({
+              ...s,
+              // Congelado no registro: o exercício é a chave estável do histórico.
+              exercicioId: exercicioPorItem.get(s.itemTreinoId)!,
+            })),
+          },
           feedback: dados.feedback ? { create: dados.feedback } : undefined,
         },
         include: INCLUDE,
@@ -101,11 +110,12 @@ export class ExecucoesService {
   private paraResumo(e: ExecucaoCompleta): ExecucaoResumo {
     const series = e.series.map((s) => ({
       itemTreinoId: s.itemTreinoId,
+      exercicioId: s.exercicioId,
       serieNum: s.serieNum,
       repsFeitas: s.repsFeitas,
       cargaKg: Number(s.cargaKg),
+      tipo: s.tipo,
       rpe: s.rpe,
-      falhou: s.falhou,
     }));
 
     return {

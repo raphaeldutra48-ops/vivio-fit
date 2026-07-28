@@ -233,7 +233,8 @@ model Exercicio {
   atualizadoEm  DateTime        @updatedAt
   deletadoEm    DateTime?
 
-  itens ItemTreino[]
+  itens            ItemTreino[]
+  seriesExecutadas SerieExecutada[]
 
   @@index([grupoMuscular])
   @@index([criadoPorId, escopo])
@@ -335,23 +336,36 @@ model ExecucaoTreino {
   @@index([sessaoId])
 }
 
+enum TipoSerie {
+  NORMAL
+  AQUECIMENTO
+  DROP
+  FALHA
+}
+
 /// Append-only: série executada nunca é editada, só registrada.
-/// É o dado que sustenta o gráfico de progressão de carga.
+/// É o dado que sustenta o "ANTERIOR" da tela de execução e o gráfico de carga.
 model SerieExecutada {
   id           String         @id @default(cuid())
   execucaoId   String
   execucao     ExecucaoTreino @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
   itemTreinoId String
   item         ItemTreino     @relation(fields: [itemTreinoId], references: [id])
+  /// Desnormalizado de propósito. Cada versão do plano cria ItemTreino novos, então
+  /// o histórico indexado por item se perderia a cada ajuste do personal. O exercício
+  /// é o que permanece — é por ele que "anterior" e progressão de carga são buscados.
+  exercicioId  String
+  exercicio    Exercicio      @relation(fields: [exercicioId], references: [id])
   serieNum     Int
   repsFeitas   Int
   cargaKg      Decimal        @db.Decimal(6, 2)
+  tipo         TipoSerie      @default(NORMAL)
   /// Escala de esforço percebido (1-10).
   rpe          Int?
-  falhou       Boolean        @default(false)
 
   @@unique([execucaoId, itemTreinoId, serieNum])
   @@index([itemTreinoId])
+  @@index([exercicioId])
 }
 
 /// Feedback pós-treino. Retroalimenta o personal e pode gerar alerta clínico

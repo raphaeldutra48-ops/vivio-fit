@@ -1,6 +1,8 @@
 import type {
   AcessoRegistrado,
+  AnterioresDaSessao,
   AtualizarExercicioInput,
+  HistoricoCarga,
   ConcederConsentimentoInput,
   CriarExercicioInput,
   CriarPlanoTreinoInput,
@@ -349,6 +351,20 @@ export class VivioClient {
   readonly execucoes = {
     listar: (alunoId: string, limit?: number): Promise<ExecucaoResumo[]> =>
       this.requisicao<ExecucaoResumo[]>(`/alunos/${alunoId}/execucoes`, { query: { limit } }),
+
+    /** Coluna ANTERIOR da tela de execução — uma chamada para a sessão inteira. */
+    anteriores: (alunoId: string, sessaoId: string): Promise<AnterioresDaSessao> =>
+      this.requisicao<AnterioresDaSessao>(`/alunos/${alunoId}/sessoes/${sessaoId}/anteriores`),
+
+    historicoDeCarga: (
+      alunoId: string,
+      exercicioId: string,
+      limit?: number,
+    ): Promise<HistoricoCarga> =>
+      this.requisicao<HistoricoCarga>(
+        `/alunos/${alunoId}/exercicios/${exercicioId}/historico-carga`,
+        { query: { limit } },
+      ),
 
     /** Idempotente por clienteUuid: reenviar a fila offline não duplica treino. */
     registrar: (alunoId: string, dados: RegistrarExecucaoInput): Promise<ExecucaoResumo> =>
