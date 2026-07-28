@@ -1,3 +1,12 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# pnpm bloqueia scripts de pós-instalação por padrão (supply chain).
+# Liberar apenas o que realmente precisa executar na instalação.
+allowBuilds:
+  '@prisma/client': true   # gera o client tipado
+  '@prisma/engines': true  # baixa os binarios do engine
+  prisma: true             # CLI de migracao
+  esbuild: true            # baixa o binario nativo (usado por tsx/vitest)
+  '@scarf/scarf': false    # telemetria — sem uso para nos
