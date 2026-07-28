@@ -72,6 +72,16 @@ geram duas cópias de React e o build da web quebra com
 **Como aplicar:** ao atualizar o React, atualizar os dois apps juntos, na mesma
 versão exata.
 
+### 9. Testes e2e mutam os dados do seed
+**Assumida em:** C5
+**Estado:** os e2e usam as contas do seed (Ana, Bruno, personal). O teste de
+execução cria um plano e o **ativa**, o que arquiva o plano real da Ana; ao
+apagar o próprio plano no final, ela fica sem nenhum plano ativo.
+**Sintoma:** depois de rodar a suíte, o app do aluno mostra "Nenhum treino ativo"
+até alguém reativar um plano na mão.
+**Pagar em:** junto com a pendência 2 (banco de teste separado). A correção certa
+é cada teste criar o próprio aluno em vez de reaproveitar o do seed.
+
 ## Resolvidas
 
 _(nada ainda)_
