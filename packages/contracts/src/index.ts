@@ -12,3 +12,4 @@ export * from './consentimentos';
 export * from './auditoria';
 export * from './medidas';
 export * from './treino';
+export * from './execucoes';

@@ -71,6 +71,7 @@ model User {
   exerciciosCriados Exercicio[]   @relation("ExerciciosCriados")
   planosComoAluno   PlanoTreino[] @relation("PlanosDoAluno")
   planosComoPersonal PlanoTreino[] @relation("PlanosDoPersonal")
+  execucoes          ExecucaoTreino[] @relation("ExecucoesDoAluno")
 
   @@index([papel, status])
 }
@@ -279,7 +280,8 @@ model SessaoTreino {
   /// 1 = segunda ... 7 = domingo
   diaSugerido Int?
 
-  itens ItemTreino[]
+  itens     ItemTreino[]
+  execucoes ExecucaoTreino[]
 
   @@unique([planoId, ordem])
 }
@@ -301,8 +303,70 @@ model ItemTreino {
   /// Itens com o mesmo valor são executados em sequência (bi-set, tri-set).
   supersetGrupo   String?
 
+  seriesExecutadas SerieExecutada[]
+
   @@unique([sessaoId, ordem])
   @@index([exercicioId])
+}
+
+/// Um treino realizado pelo aluno.
+///
+/// `clienteUuid` é gerado no celular ANTES de enviar. É o que torna o envio
+/// idempotente: reenviar a mesma execução (rede caiu, app reabriu, fila de sync
+/// repetiu) não cria uma segunda linha.
+model ExecucaoTreino {
+  id             String       @id @default(cuid())
+  alunoId        String
+  aluno          User         @relation("ExecucoesDoAluno", fields: [alunoId], references: [id])
+  sessaoId       String
+  sessao         SessaoTreino @relation(fields: [sessaoId], references: [id])
+  clienteUuid    String       @unique
+  iniciadoEm     DateTime
+  finalizadoEm   DateTime?
+  duracaoSeg     Int?
+  origem         String       @default("APP")
+  sincronizadoEm DateTime     @default(now())
+  criadoEm       DateTime     @default(now())
+
+  series   SerieExecutada[]
+  feedback FeedbackTreino?
+
+  @@index([alunoId, iniciadoEm(sort: Desc)])
+  @@index([sessaoId])
+}
+
+/// Append-only: série executada nunca é editada, só registrada.
+/// É o dado que sustenta o gráfico de progressão de carga.
+model SerieExecutada {
+  id           String         @id @default(cuid())
+  execucaoId   String
+  execucao     ExecucaoTreino @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  itemTreinoId String
+  item         ItemTreino     @relation(fields: [itemTreinoId], references: [id])
+  serieNum     Int
+  repsFeitas   Int
+  cargaKg      Decimal        @db.Decimal(6, 2)
+  /// Escala de esforço percebido (1-10).
+  rpe          Int?
+  falhou       Boolean        @default(false)
+
+  @@unique([execucaoId, itemTreinoId, serieNum])
+  @@index([itemTreinoId])
+}
+
+/// Feedback pós-treino. Retroalimenta o personal e pode gerar alerta clínico
+/// (dor repetida em execuções seguidas -> alerta para personal e médico).
+model FeedbackTreino {
+  id          String         @id @default(cuid())
+  execucaoId  String         @unique
+  execucao    ExecucaoTreino @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  /// 1 = muito fácil, 5 = muito difícil
+  dificuldade Int
+  teveDor     Boolean        @default(false)
+  localDor    String?
+  sensacao    String?
+  comentario  String?
+  criadoEm    DateTime       @default(now())
 }
 
 // ---------------------------------------------------------------------------

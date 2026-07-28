@@ -4,6 +4,7 @@ import type {
   ConcederConsentimentoInput,
   CriarExercicioInput,
   CriarPlanoTreinoInput,
+  ExecucaoResumo,
   ExercicioResumo,
   ListarExerciciosQuery,
   PlanoTreinoCompleto,
@@ -15,6 +16,7 @@ import type {
   MedidaResumo,
   ParDeTokens,
   RegistrarAlunoInput,
+  RegistrarExecucaoInput,
   RegistrarMedidaInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
@@ -339,6 +341,20 @@ export class VivioClient {
     ativar: (alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> =>
       this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}/ativar`, {
         metodo: 'POST',
+      }),
+  };
+
+  // --- execuções ----------------------------------------------------------
+
+  readonly execucoes = {
+    listar: (alunoId: string, limit?: number): Promise<ExecucaoResumo[]> =>
+      this.requisicao<ExecucaoResumo[]>(`/alunos/${alunoId}/execucoes`, { query: { limit } }),
+
+    /** Idempotente por clienteUuid: reenviar a fila offline não duplica treino. */
+    registrar: (alunoId: string, dados: RegistrarExecucaoInput): Promise<ExecucaoResumo> =>
+      this.requisicao<ExecucaoResumo>(`/alunos/${alunoId}/execucoes`, {
+        metodo: 'POST',
+        corpo: dados,
       }),
   };
 
