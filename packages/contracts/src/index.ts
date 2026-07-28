@@ -11,3 +11,4 @@ export * from './vinculos';
 export * from './consentimentos';
 export * from './auditoria';
 export * from './medidas';
+export * from './treino';

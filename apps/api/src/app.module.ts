@@ -9,7 +9,9 @@ import { PrismaModule } from './infra/prisma.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
+import { ExerciciosModule } from './modules/exercicios/exercicios.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
+import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
 import { VinculosModule } from './modules/vinculos/vinculos.module';
 
@@ -23,6 +25,8 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     VinculosModule,
     ConsentimentosModule,
     MedidasModule,
+    ExerciciosModule,
+    TreinosModule,
   ],
   controllers: [HealthController, MeController],
   providers: [

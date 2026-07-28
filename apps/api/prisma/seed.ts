@@ -181,7 +181,53 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log('\nSeed concluído. Senha de todos: ' + SENHA_PADRAO + '\n');
+  // --- Biblioteca global de exercícios ------------------------------------
+  const exerciciosGlobais = [
+    ['Supino reto com barra', 'PEITO', 'Barra', 'Escápulas retraídas, barra na linha do mamilo.'],
+    ['Supino inclinado com halteres', 'PEITO', 'Halteres', 'Banco a 30-45 graus.'],
+    ['Crucifixo na polia', 'PEITO', 'Polia', 'Cotovelos levemente flexionados e fixos.'],
+    ['Puxada frontal', 'COSTAS', 'Polia alta', 'Puxar com os cotovelos, não com as mãos.'],
+    ['Remada curvada', 'COSTAS', 'Barra', 'Coluna neutra, tronco a 45 graus.'],
+    ['Remada unilateral', 'COSTAS', 'Haltere', 'Apoiar o joelho e a mão no banco.'],
+    ['Desenvolvimento militar', 'OMBRO', 'Barra', 'Não hiperestender a lombar.'],
+    ['Elevação lateral', 'OMBRO', 'Halteres', 'Subir até a linha do ombro, sem balanço.'],
+    ['Rosca direta', 'BICEPS', 'Barra', 'Cotovelos junto ao tronco.'],
+    ['Rosca martelo', 'BICEPS', 'Halteres', 'Pegada neutra durante todo o movimento.'],
+    ['Tríceps na polia', 'TRICEPS', 'Polia alta', 'Cotovelos fixos ao lado do corpo.'],
+    ['Tríceps testa', 'TRICEPS', 'Barra W', 'Descer a barra até a testa, cotovelos parados.'],
+    ['Agachamento livre', 'PERNA', 'Barra', 'Joelhos alinhados aos pés, descer até paralela.'],
+    ['Leg press 45', 'PERNA', 'Máquina', 'Não travar o joelho na extensão.'],
+    ['Cadeira extensora', 'PERNA', 'Máquina', 'Controlar a fase excêntrica.'],
+    ['Mesa flexora', 'PERNA', 'Máquina', 'Quadril apoiado, sem tirar do banco.'],
+    ['Levantamento terra', 'COSTAS', 'Barra', 'Coluna neutra; barra rente às pernas.'],
+    ['Elevação pélvica', 'GLUTEO', 'Barra', 'Contrair o glúteo no topo por 1 segundo.'],
+    ['Panturrilha em pé', 'PANTURRILHA', 'Máquina', 'Amplitude completa, pausa embaixo.'],
+    ['Prancha abdominal', 'ABDOMEN', 'Peso corporal', 'Quadril alinhado, sem elevar.'],
+    ['Abdominal supra', 'ABDOMEN', 'Peso corporal', 'Sem puxar o pescoço.'],
+    ['Esteira — caminhada inclinada', 'CARDIO', 'Esteira', 'Inclinação 8-12%, sem se apoiar.'],
+    ['Burpee', 'CORPO_INTEIRO', 'Peso corporal', 'Movimento contínuo e controlado.'],
+  ] as const;
+
+  for (const [nome, grupoMuscular, equipamento, instrucoes] of exerciciosGlobais) {
+    const existente = await prisma.exercicio.findFirst({
+      where: { nome, escopo: 'GLOBAL' },
+    });
+    if (!existente) {
+      await prisma.exercicio.create({
+        data: {
+          nome,
+          grupoMuscular,
+          equipamento,
+          instrucoes,
+          escopo: 'GLOBAL',
+          criadoPorId: admin.id,
+        },
+      });
+    }
+  }
+
+  console.log('\nSeed concluído. Senha de todos: ' + SENHA_PADRAO);
+  console.log(`Biblioteca global: ${exerciciosGlobais.length} exercícios\n`);
   console.table([
     { papel: 'ADMIN', email: admin.email },
     { papel: 'PERSONAL', email: personal.email },

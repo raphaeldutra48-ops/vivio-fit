@@ -67,7 +67,10 @@ model User {
   acoesAuditadas      LogAuditoria[] @relation("AuditoriaAtor")
   acessosAosMeusDados LogAuditoria[] @relation("AuditoriaTitular")
 
-  medidas Medida[] @relation("MedidasDoAluno")
+  medidas           Medida[]      @relation("MedidasDoAluno")
+  exerciciosCriados Exercicio[]   @relation("ExerciciosCriados")
+  planosComoAluno   PlanoTreino[] @relation("PlanosDoAluno")
+  planosComoPersonal PlanoTreino[] @relation("PlanosDoPersonal")
 
   @@index([papel, status])
 }
@@ -200,6 +203,106 @@ model LogAuditoria {
 
   @@index([alunoId, criadoEm])
   @@index([atorId, criadoEm])
+}
+
+// ---------------------------------------------------------------------------
+// 4.3 — Treino (biblioteca de exercícios e plano)
+// ---------------------------------------------------------------------------
+
+enum EscopoExercicio {
+  GLOBAL
+  PRIVADO
+}
+
+/// Biblioteca de exercícios. GLOBAL é curado pelo admin e visível a todos;
+/// PRIVADO pertence ao profissional que criou.
+model Exercicio {
+  id            String          @id @default(cuid())
+  nome          String
+  grupoMuscular String
+  equipamento   String?
+  /// Chave no storage — a URL entregue ao cliente é sempre pré-assinada (C7).
+  videoChave    String?
+  thumbChave    String?
+  instrucoes    String?
+  escopo        EscopoExercicio @default(PRIVADO)
+  criadoPorId   String?
+  criadoPor     User?           @relation("ExerciciosCriados", fields: [criadoPorId], references: [id])
+  criadoEm      DateTime        @default(now())
+  atualizadoEm  DateTime        @updatedAt
+  deletadoEm    DateTime?
+
+  itens ItemTreino[]
+
+  @@index([grupoMuscular])
+  @@index([criadoPorId, escopo])
+}
+
+enum StatusPlano {
+  RASCUNHO
+  ATIVO
+  ARQUIVADO
+}
+
+/// Plano de treino. Ajustar um plano cria uma VERSÃO NOVA em vez de sobrescrever:
+/// o histórico precisa mostrar o que o aluno realmente executou em cada época.
+model PlanoTreino {
+  id         String      @id @default(cuid())
+  alunoId    String
+  aluno      User        @relation("PlanosDoAluno", fields: [alunoId], references: [id])
+  personalId String
+  personal   User        @relation("PlanosDoPersonal", fields: [personalId], references: [id])
+  nome       String
+  objetivo   String?
+  versao     Int         @default(1)
+  /// Agrupa todas as versões do mesmo plano. Null na versão 1 (ela é a raiz).
+  raizId     String?
+  status     StatusPlano @default(RASCUNHO)
+  inicioEm   DateTime?
+  fimEm      DateTime?
+  criadoEm   DateTime    @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  sessoes SessaoTreino[]
+
+  @@index([alunoId, status])
+  @@index([raizId])
+}
+
+/// "Treino A", "Treino B"... dentro de um plano.
+model SessaoTreino {
+  id          String  @id @default(cuid())
+  planoId     String
+  plano       PlanoTreino @relation(fields: [planoId], references: [id], onDelete: Cascade)
+  nome        String
+  ordem       Int
+  /// 1 = segunda ... 7 = domingo
+  diaSugerido Int?
+
+  itens ItemTreino[]
+
+  @@unique([planoId, ordem])
+}
+
+model ItemTreino {
+  id              String    @id @default(cuid())
+  sessaoId        String
+  sessao          SessaoTreino @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  exercicioId     String
+  exercicio       Exercicio @relation(fields: [exercicioId], references: [id])
+  ordem           Int
+  series          Int
+  /// Texto livre: "8-12", "até a falha", "30s". Não é sempre um número.
+  repsAlvo        String
+  cargaSugeridaKg Decimal?  @db.Decimal(6, 2)
+  descansoSeg     Int?
+  tecnica         String?
+  observacao      String?
+  /// Itens com o mesmo valor são executados em sequência (bi-set, tri-set).
+  supersetGrupo   String?
+
+  @@unique([sessaoId, ordem])
+  @@index([exercicioId])
 }
 
 // ---------------------------------------------------------------------------
