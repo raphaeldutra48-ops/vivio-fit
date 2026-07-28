@@ -70,7 +70,11 @@ describe('Exercícios e planos de treino (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.planoTreino.deleteMany({ where: { alunoId: idAna } });
+    // Apaga só o que ESTE teste criou (o plano e suas versões). Apagar tudo do
+    // aluno destruiria dados de outros testes e do ambiente de desenvolvimento.
+    await prisma.planoTreino.deleteMany({
+      where: { OR: [{ id: idPlano }, { raizId: idPlano }] },
+    });
     await prisma.exercicio.deleteMany({ where: { nome: { contains: sufixo } } });
     await app.close();
   });

@@ -2,6 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# O Metro (React Native) resolve módulos assumindo node_modules plano. Pacotes
+# internos do Expo importam dependências que não declaram
+# (@expo/metro-runtime -> @expo/log-box -> stacktrace-parser, expo-router ->
+# @babel/runtime...), e sob o layout isolado do pnpm o bundle quebra em cadeia.
+# `hoisted` reproduz o layout do npm — modo recomendado para React Native.
+nodeLinker: hoisted
+
 # pnpm bloqueia scripts de pós-instalação por padrão (supply chain).
 # Liberar apenas o que realmente precisa executar na instalação.
 allowBuilds:
