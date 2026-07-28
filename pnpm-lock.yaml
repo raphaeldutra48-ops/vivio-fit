@@ -112,6 +112,44 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/sdk:
+    dependencies:
+      '@vivio/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@vivio/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/ui:
+    devDependencies:
+      '@vivio/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(supports-color@8.1.1)(terser@5.49.0)
+
+  packages/ui-native:
+    dependencies:
+      '@vivio/ui':
+        specifier: workspace:*
+        version: link:../ui
+    devDependencies:
+      '@vivio/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
 packages:
 
   '@angular-devkit/core@19.2.24':
