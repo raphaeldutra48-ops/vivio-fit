@@ -1,0 +1,41 @@
+# Pendências
+
+Dívidas conscientes assumidas durante a construção. Cada uma tem o passo em que
+deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
+
+## Abertas
+
+### 1. Verificação de e-mail não bloqueia o login
+**Assumida em:** B2
+**Estado:** conta de aluno nasce `ATIVA` com `emailVerifEm = null`. A API devolve
+`usuario.emailVerificado: false`, mas nada é bloqueado.
+**Por quê:** confirmar e-mail exige serviço de envio, que só entra junto com o
+push (C8). Bloquear agora deixaria o ambiente de desenvolvimento inutilizável.
+**Pagar em:** C8, junto com a infraestrutura de notificação.
+**Risco enquanto aberta:** cadastro com e-mail de terceiro. Baixo em dev, **não
+aceitável em produção** — não lançar sem isso.
+
+### 2. Teste roda contra o banco de desenvolvimento
+**Assumida em:** B2
+**Estado:** os e2e criam e apagam usuários no mesmo Neon usado para desenvolver.
+Usam sufixo único por execução, então não colidem entre si.
+**Por quê:** evitar montar um segundo banco antes de existir o que testar.
+**Pagar em:** antes do CI (fim da Fase 0). O Neon tem branches — criar um branch
+`test` e apontar `DATABASE_URL` de teste para ele.
+
+### 3. `PerfilProfissional.verificadoPorId` sem relação declarada
+**Assumida em:** B1
+**Estado:** guarda o id do admin que verificou, mas sem foreign key.
+**Por quê:** evitar uma terceira relação `User -> User` no schema antes de existir
+a tela de verificação do admin.
+**Pagar em:** quando o painel admin de verificação for construído.
+
+### 4. Rate limit ausente
+**Assumida em:** B2
+**Estado:** `/auth/login` aceita tentativas ilimitadas.
+**Por quê:** rate limit distribuído precisa de Redis, que chega no C8.
+**Pagar em:** C8. Enquanto isso, argon2id já torna força bruta cara.
+
+## Resolvidas
+
+_(nada ainda)_

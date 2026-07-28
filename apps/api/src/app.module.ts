@@ -8,6 +8,7 @@ import { HealthController } from './health.controller';
 import { PrismaModule } from './infra/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MeController } from './modules/users/me.controller';
+import { VinculosModule } from './modules/vinculos/vinculos.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MeController } from './modules/users/me.controller';
     JwtModule.register({ global: true }),
     PrismaModule,
     AuthModule,
+    VinculosModule,
   ],
   controllers: [HealthController, MeController],
   providers: [
