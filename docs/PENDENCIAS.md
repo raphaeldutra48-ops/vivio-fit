@@ -52,9 +52,6 @@ backend emitindo `Set-Cookie` e tratamento de CSRF.
 arrastar é polimento, não requisito do fluxo.
 **Pagar em:** quando a tela receber acabamento visual (pós-C4).
 
-## Resolvidas
-
-_(nada ainda)_
 
 ### 7. nodeLinker hoisted no workspace inteiro
 **Assumida em:** C4
@@ -74,3 +71,7 @@ geram duas cópias de React e o build da web quebra com
 `Cannot read properties of null (reading 'useContext')`.
 **Como aplicar:** ao atualizar o React, atualizar os dois apps juntos, na mesma
 versão exata.
+
+## Resolvidas
+
+_(nada ainda)_
