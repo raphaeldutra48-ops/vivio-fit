@@ -67,6 +67,8 @@ model User {
   acoesAuditadas      LogAuditoria[] @relation("AuditoriaAtor")
   acessosAosMeusDados LogAuditoria[] @relation("AuditoriaTitular")
 
+  medidas Medida[] @relation("MedidasDoAluno")
+
   @@index([papel, status])
 }
 
@@ -198,6 +200,41 @@ model LogAuditoria {
 
   @@index([alunoId, criadoEm])
   @@index([atorId, criadoEm])
+}
+
+// ---------------------------------------------------------------------------
+// 4.5 — Evolução (parcial: medidas corporais)
+// ---------------------------------------------------------------------------
+
+enum FonteMedida {
+  MANUAL
+  BIOIMPEDANCIA
+  WEARABLE
+}
+
+/// Peso e medidas ao longo do tempo. Escopo de consentimento: EVOLUCAO.
+model Medida {
+  id                String      @id @default(cuid())
+  alunoId           String
+  aluno             User        @relation("MedidasDoAluno", fields: [alunoId], references: [id])
+  data              DateTime    @db.Date
+  pesoKg            Decimal?    @db.Decimal(5, 2)
+  percentualGordura Decimal?    @db.Decimal(4, 1)
+  massaMagraKg      Decimal?    @db.Decimal(5, 2)
+  cinturaCm         Decimal?    @db.Decimal(5, 1)
+  quadrilCm         Decimal?    @db.Decimal(5, 1)
+  bracoCm           Decimal?    @db.Decimal(5, 1)
+  coxaCm            Decimal?    @db.Decimal(5, 1)
+  toraxCm           Decimal?    @db.Decimal(5, 1)
+  fonte             FonteMedida @default(MANUAL)
+  registradoPorId   String
+  criadoEm          DateTime    @default(now())
+  atualizadoEm      DateTime    @updatedAt
+  deletadoEm        DateTime?
+
+  /// Uma medição por dia por aluno — remedir no mesmo dia atualiza a linha.
+  @@unique([alunoId, data])
+  @@index([alunoId, data(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------

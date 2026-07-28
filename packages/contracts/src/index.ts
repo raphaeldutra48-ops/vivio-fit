@@ -8,3 +8,6 @@ export * from './enums';
 export * from './erros';
 export * from './auth';
 export * from './vinculos';
+export * from './consentimentos';
+export * from './auditoria';
+export * from './medidas';
