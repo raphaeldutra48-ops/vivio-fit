@@ -11,3 +11,4 @@ allowBuilds:
   esbuild: true # baixa o binario nativo (usado por tsx/vitest)
   '@scarf/scarf': false # telemetria — sem uso para nos
   '@swc/core': true # binario nativo; compila decorators nos testes
+  sharp: true # binario nativo de imagem, usado pelo next/image

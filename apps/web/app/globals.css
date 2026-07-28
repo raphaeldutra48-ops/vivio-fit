@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* As variáveis --vv-* são injetadas pelo layout a partir de @vivio/ui,
+   para não existir cor duplicada entre o CSS e os tokens. */
+
+@layer base {
+  html {
+    background-color: var(--vv-fundo);
+    color: var(--vv-texto-primario);
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  /* Foco visível é requisito de acessibilidade, não enfeite. */
+  :focus-visible {
+    outline: 2px solid var(--vv-acao-fundo);
+    outline-offset: 2px;
+  }
+}

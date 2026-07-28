@@ -1,6 +1,13 @@
 import type {
   AcessoRegistrado,
+  AtualizarExercicioInput,
   ConcederConsentimentoInput,
+  CriarExercicioInput,
+  CriarPlanoTreinoInput,
+  ExercicioResumo,
+  ListarExerciciosQuery,
+  PlanoTreinoCompleto,
+  PlanoTreinoResumo,
   ConsentimentoResumo,
   ConsultaAuditoria,
   EscopoDado,
@@ -275,6 +282,63 @@ export class VivioClient {
           limit: consulta.limit,
           escopo: consulta.escopo as EscopoDado | undefined,
         },
+      }),
+  };
+
+  // --- exercícios ---------------------------------------------------------
+
+  readonly exercicios = {
+    listar: (consulta: Partial<ListarExerciciosQuery> = {}): Promise<ExercicioResumo[]> =>
+      this.requisicao<ExercicioResumo[]>('/exercicios', {
+        query: { q: consulta.q, grupoMuscular: consulta.grupoMuscular, limit: consulta.limit },
+      }),
+
+    obter: (id: string): Promise<ExercicioResumo> =>
+      this.requisicao<ExercicioResumo>(`/exercicios/${id}`),
+
+    criar: (dados: CriarExercicioInput): Promise<ExercicioResumo> =>
+      this.requisicao<ExercicioResumo>('/exercicios', { metodo: 'POST', corpo: dados }),
+
+    atualizar: (id: string, dados: AtualizarExercicioInput): Promise<ExercicioResumo> =>
+      this.requisicao<ExercicioResumo>(`/exercicios/${id}`, { metodo: 'PATCH', corpo: dados }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/exercicios/${id}`, { metodo: 'DELETE' }),
+  };
+
+  // --- planos de treino ---------------------------------------------------
+
+  readonly treinos = {
+    listar: (alunoId: string): Promise<PlanoTreinoResumo[]> =>
+      this.requisicao<PlanoTreinoResumo[]>(`/alunos/${alunoId}/planos-treino`),
+
+    /** Payload completo do plano ativo — é o que o mobile guarda para o modo offline. */
+    obterAtivo: (alunoId: string): Promise<PlanoTreinoCompleto> =>
+      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/ativo`),
+
+    obter: (alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> =>
+      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}`),
+
+    criar: (alunoId: string, dados: CriarPlanoTreinoInput): Promise<PlanoTreinoCompleto> =>
+      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    /** Gera uma versão nova e arquiva a anterior — não sobrescreve. */
+    novaVersao: (
+      alunoId: string,
+      planoId: string,
+      dados: CriarPlanoTreinoInput,
+    ): Promise<PlanoTreinoCompleto> =>
+      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+
+    ativar: (alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> =>
+      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}/ativar`, {
+        metodo: 'POST',
       }),
   };
 

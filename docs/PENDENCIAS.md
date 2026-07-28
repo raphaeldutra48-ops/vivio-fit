@@ -39,3 +39,19 @@ a tela de verificação do admin.
 ## Resolvidas
 
 _(nada ainda)_
+
+### 5. Tokens no localStorage (web)
+**Assumida em:** C3
+**Estado:** `apps/web` guarda access e refresh token em `localStorage`.
+**Por quê:** simples e suficiente para desenvolver; cookie httpOnly exigiria o
+backend emitindo `Set-Cookie` e tratamento de CSRF.
+**Risco:** XSS na web consegue ler o refresh token de 30 dias.
+**Pagar em:** antes do lançamento. Migrar o refresh token para cookie httpOnly
++ SameSite=Lax e manter só o access token em memória.
+
+### 6. Reordenação por arrastar não implementada
+**Assumida em:** C3
+**Estado:** a montagem de treino reordena exercícios com botões ↑ ↓.
+**Por quê:** funciona com teclado e leitor de tela sem biblioteca extra; o
+arrastar é polimento, não requisito do fluxo.
+**Pagar em:** quando a tela receber acabamento visual (pós-C4).
