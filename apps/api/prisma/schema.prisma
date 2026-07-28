@@ -77,6 +77,12 @@ model User {
   lembretes          ConfiguracaoLembrete[] @relation("LembretesDoAluno")
   notificacoes       Notificacao[]          @relation("NotificacoesDoUsuario")
 
+  dietasComoAluno         PlanoDieta[]       @relation("DietasDoAluno")
+  dietasComoNutricionista PlanoDieta[]       @relation("DietasDoNutricionista")
+  registrosDeRefeicao     RegistroRefeicao[] @relation("RegistrosDeRefeicao")
+  metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
+  registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
+
   @@index([papel, status])
 }
 
@@ -449,6 +455,136 @@ model FotoEvolucao {
   deletadoEm   DateTime?
 
   @@index([alunoId, data(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// 4.4 — Nutrição
+// ---------------------------------------------------------------------------
+
+/// Tabela de composição de alimentos. Valores SEMPRE por 100 g, para o cálculo
+/// da dieta ser uma regra de três simples e auditável.
+model Alimento {
+  id           String   @id @default(cuid())
+  nome         String
+  grupo        String
+  kcal         Decimal  @db.Decimal(7, 2)
+  proteinaG    Decimal  @db.Decimal(6, 2)
+  carboidratoG Decimal  @db.Decimal(6, 2)
+  gorduraG     Decimal  @db.Decimal(6, 2)
+  fibraG       Decimal? @db.Decimal(6, 2)
+  sodioMg      Decimal? @db.Decimal(7, 2)
+  /// Medida caseira de referência, ex.: "1 filé médio (100 g)".
+  medidaCaseira String?
+  /// Gramas da medida caseira — o aluno pensa em "1 concha", não em gramas.
+  medidaGramas  Decimal? @db.Decimal(6, 2)
+  fonte        String   @default("TACO")
+  criadoPorId  String?
+
+  itens ItemRefeicao[]
+
+  @@index([nome])
+  @@index([grupo])
+}
+
+model PlanoDieta {
+  id              String      @id @default(cuid())
+  alunoId         String
+  aluno           User        @relation("DietasDoAluno", fields: [alunoId], references: [id])
+  nutricionistaId String
+  nutricionista   User        @relation("DietasDoNutricionista", fields: [nutricionistaId], references: [id])
+  nome            String
+  observacao      String?
+  /// Metas definidas pelo nutricionista. O total real vem da soma dos itens.
+  kcalAlvo        Int?
+  proteinaAlvoG   Int?
+  carboAlvoG      Int?
+  gorduraAlvoG    Int?
+  versao          Int         @default(1)
+  raizId          String?
+  status          StatusPlano @default(RASCUNHO)
+  inicioEm        DateTime?
+  fimEm           DateTime?
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+
+  refeicoes Refeicao[]
+
+  @@index([alunoId, status])
+  @@index([raizId])
+}
+
+model Refeicao {
+  id              String     @id @default(cuid())
+  planoDietaId    String
+  plano           PlanoDieta @relation(fields: [planoDietaId], references: [id], onDelete: Cascade)
+  nome            String
+  /// Horário sugerido, "HH:MM" no fuso do aluno.
+  horarioSugerido String?
+  ordem           Int
+
+  itens     ItemRefeicao[]
+  registros RegistroRefeicao[]
+
+  @@unique([planoDietaId, ordem])
+}
+
+model ItemRefeicao {
+  id          String   @id @default(cuid())
+  refeicaoId  String
+  refeicao    Refeicao @relation(fields: [refeicaoId], references: [id], onDelete: Cascade)
+  alimentoId  String
+  alimento    Alimento @relation(fields: [alimentoId], references: [id])
+  quantidadeG Decimal  @db.Decimal(7, 2)
+  observacao  String?
+  ordem       Int
+
+  @@unique([refeicaoId, ordem])
+  @@index([alimentoId])
+}
+
+enum StatusRefeicao {
+  FEITA
+  PARCIAL
+  PULADA
+}
+
+model RegistroRefeicao {
+  id         String         @id @default(cuid())
+  alunoId    String
+  aluno      User           @relation("RegistrosDeRefeicao", fields: [alunoId], references: [id])
+  refeicaoId String
+  refeicao   Refeicao       @relation(fields: [refeicaoId], references: [id], onDelete: Cascade)
+  data       DateTime       @db.Date
+  status     StatusRefeicao
+  comentario String?
+  criadoEm   DateTime       @default(now())
+
+  @@unique([alunoId, refeicaoId, data])
+  @@index([alunoId, data(sort: Desc)])
+}
+
+model MetaAgua {
+  id            String   @id @default(cuid())
+  alunoId       String   @unique
+  aluno         User     @relation("MetaDeAgua", fields: [alunoId], references: [id], onDelete: Cascade)
+  metaMlDia     Int
+  definidoPorId String?
+  /// Janela em que faz sentido lembrar de beber água — ninguém quer alerta às 3h.
+  horaInicio    Int      @default(7)
+  horaFim       Int      @default(22)
+  atualizadoEm  DateTime @updatedAt
+}
+
+model RegistroAgua {
+  id           String   @id @default(cuid())
+  alunoId      String
+  aluno        User     @relation("RegistrosDeAgua", fields: [alunoId], references: [id])
+  data         DateTime @db.Date
+  volumeMl     Int
+  registradoEm DateTime @default(now())
+
+  @@index([alunoId, data(sort: Desc)])
+  @@index([alunoId, registradoEm(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------

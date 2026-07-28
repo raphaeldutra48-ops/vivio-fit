@@ -14,6 +14,7 @@ import { FotosModule } from './modules/fotos/fotos.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
 import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
+import { NutricaoModule } from './modules/nutricao/nutricao.module';
 import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
 import { VinculosModule } from './modules/vinculos/vinculos.module';
@@ -33,6 +34,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     TreinosModule,
     FotosModule,
     NotificacoesModule,
+    NutricaoModule,
   ],
   controllers: [HealthController, MeController],
   providers: [
