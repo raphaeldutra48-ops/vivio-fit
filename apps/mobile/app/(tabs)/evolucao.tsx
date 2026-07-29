@@ -86,22 +86,31 @@ export default function Evolucao() {
         ))}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Abrir fotos de evolução"
-        onPress={() => router.push('/fotos')}
-        style={{
-          minHeight: 52,
-          borderRadius: raio.md,
-          backgroundColor: tema.superficie,
-          borderWidth: 1,
-          borderColor: tema.borda,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>📸 Fotos de evolução</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: espacamento.sm }}>
+        {[
+          { rotulo: '📈 Composição', destino: '/composicao' as const },
+          { rotulo: '📸 Fotos', destino: '/fotos' as const },
+        ].map((atalho) => (
+          <Pressable
+            key={atalho.destino}
+            accessibilityRole="button"
+            accessibilityLabel={`Abrir ${atalho.rotulo}`}
+            onPress={() => router.push(atalho.destino)}
+            style={{
+              flex: 1,
+              minHeight: 52,
+              borderRadius: raio.md,
+              backgroundColor: tema.superficie,
+              borderWidth: 1,
+              borderColor: tema.borda,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>{atalho.rotulo}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Text style={{ fontSize: tipografia.tamanho.lg, fontWeight: '600', color: tema.textoPrimario }}>
         Histórico

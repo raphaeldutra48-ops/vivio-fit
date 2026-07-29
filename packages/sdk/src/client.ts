@@ -17,8 +17,20 @@ import type {
   PlanoTreinoCompleto,
   PlanoTreinoResumo,
   ConsentimentoResumo,
+  AlimentoResumo,
   ConsultaAuditoria,
+  ConsultaEvolucao,
+  CriarPlanoDietaInput,
   DefinirLembreteInput,
+  DefinirMetaAguaInput,
+  EvolucaoCorporal,
+  ListarAlimentosQuery,
+  PlanoDietaCompleto,
+  PlanoDietaResumo,
+  RegistrarAguaInput,
+  RegistrarRefeicaoInput,
+  ResumoDeAgua,
+  SubstitutoSugerido,
   LembreteResumo,
   NotificacaoResumo,
   RegistrarDispositivoInput,
@@ -474,5 +486,78 @@ export class VivioClient {
         metodo: 'POST',
         corpo: dados,
       }),
+
+    /** Séries prontas para gráfico: peso, gordura, massa magra e circunferências. */
+    evolucao: (alunoId: string, consulta: Partial<ConsultaEvolucao> = {}): Promise<EvolucaoCorporal> =>
+      this.requisicao<EvolucaoCorporal>(`/alunos/${alunoId}/medidas/evolucao`, {
+        query: { de: consulta.de, ate: consulta.ate, limit: consulta.limit },
+      }),
+  };
+
+  // --- nutrição -------------------------------------------------------------
+
+  readonly alimentos = {
+    listar: (consulta: Partial<ListarAlimentosQuery> = {}): Promise<AlimentoResumo[]> =>
+      this.requisicao<AlimentoResumo[]>('/alimentos', {
+        query: { q: consulta.q, grupo: consulta.grupo, limit: consulta.limit },
+      }),
+
+    grupos: (): Promise<string[]> => this.requisicao<string[]>('/alimentos/grupos'),
+  };
+
+  readonly dietas = {
+    listar: (alunoId: string): Promise<PlanoDietaResumo[]> =>
+      this.requisicao<PlanoDietaResumo[]>(`/alunos/${alunoId}/planos-dieta`),
+
+    obterAtiva: (alunoId: string): Promise<PlanoDietaCompleto> =>
+      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta/ativo`),
+
+    criar: (alunoId: string, dados: CriarPlanoDietaInput): Promise<PlanoDietaCompleto> =>
+      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    novaVersao: (
+      alunoId: string,
+      planoId: string,
+      dados: CriarPlanoDietaInput,
+    ): Promise<PlanoDietaCompleto> =>
+      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta/${planoId}`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+
+    substitutos: (
+      alunoId: string,
+      itemId: string,
+      tolerancia?: number,
+    ): Promise<SubstitutoSugerido[]> =>
+      this.requisicao<SubstitutoSugerido[]>(
+        `/alunos/${alunoId}/itens-refeicao/${itemId}/substitutos`,
+        { query: { tolerancia } },
+      ),
+
+    registrarRefeicao: (alunoId: string, dados: RegistrarRefeicaoInput): Promise<unknown> =>
+      this.requisicao(`/alunos/${alunoId}/registros-refeicao`, { metodo: 'POST', corpo: dados }),
+
+    registrosDoDia: (alunoId: string, data?: string): Promise<
+      { id: string; refeicaoId: string; refeicaoNome: string; data: string; status: string }[]
+    > =>
+      this.requisicao(`/alunos/${alunoId}/registros-refeicao`, { query: { data } }),
+  };
+
+  readonly agua = {
+    resumo: (alunoId: string, data?: string): Promise<ResumoDeAgua> =>
+      this.requisicao<ResumoDeAgua>(`/alunos/${alunoId}/agua`, { query: { data } }),
+
+    registrar: (alunoId: string, dados: RegistrarAguaInput): Promise<ResumoDeAgua> =>
+      this.requisicao<ResumoDeAgua>(`/alunos/${alunoId}/agua`, { metodo: 'POST', corpo: dados }),
+
+    remover: (alunoId: string, registroId: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/agua/${registroId}`, { metodo: 'DELETE' }),
+
+    definirMeta: (alunoId: string, dados: DefinirMetaAguaInput): Promise<unknown> =>
+      this.requisicao(`/alunos/${alunoId}/agua/meta`, { metodo: 'PUT', corpo: dados }),
   };
 }

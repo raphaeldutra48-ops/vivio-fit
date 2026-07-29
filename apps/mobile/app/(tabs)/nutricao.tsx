@@ -1,0 +1,307 @@
+import {
+  VOLUMES_RAPIDOS_ML,
+  type PlanoDietaCompleto,
+  type ResumoDeAgua,
+} from '@vivio/contracts';
+import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { sdk } from '../../src/sdk';
+import { useSessao } from '../../src/sessao';
+
+const AZUL_NUTRICAO = '#3AA8C1';
+
+export default function Nutricao() {
+  const { usuario, tema } = useSessao();
+  const [dieta, setDieta] = useState<PlanoDietaCompleto | null>(null);
+  const [agua, setAgua] = useState<ResumoDeAgua | null>(null);
+  const [registros, setRegistros] = useState<Record<string, string>>({});
+  const [semDieta, setSemDieta] = useState(false);
+  const [expandida, setExpandida] = useState<string | null>(null);
+
+  async function recarregar() {
+    if (!usuario) return;
+    sdk.dietas
+      .obterAtiva(usuario.id)
+      .then((d) => {
+        setDieta(d);
+        setExpandida((atual) => atual ?? d.refeicoes[0]?.id ?? null);
+      })
+      .catch(() => setSemDieta(true));
+    sdk.agua.resumo(usuario.id).then(setAgua).catch(() => undefined);
+    sdk.dietas
+      .registrosDoDia(usuario.id)
+      .then((lista) =>
+        setRegistros(Object.fromEntries(lista.map((r) => [r.refeicaoId, r.status]))),
+      )
+      .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    void recarregar();
+  }, [usuario]);
+
+  async function beber(volumeMl: number) {
+    if (!usuario) return;
+    // Resposta otimista: o toque precisa parecer instantâneo.
+    setAgua((atual) =>
+      atual
+        ? {
+            ...atual,
+            consumidoMl: atual.consumidoMl + volumeMl,
+            percentual: Math.min(100, Math.round(((atual.consumidoMl + volumeMl) / atual.metaMlDia) * 100)),
+            minutosDesdeUltimoRegistro: 0,
+          }
+        : atual,
+    );
+    try {
+      setAgua(await sdk.agua.registrar(usuario.id, { volumeMl, data: new Date() }));
+    } catch {
+      void recarregar();
+    }
+  }
+
+  async function marcarRefeicao(refeicaoId: string, status: 'FEITA' | 'PULADA') {
+    if (!usuario) return;
+    const anterior = registros[refeicaoId];
+    const novo = anterior === status ? undefined : status;
+    setRegistros((r) => ({ ...r, [refeicaoId]: novo ?? '' }));
+    if (!novo) return;
+    await sdk.dietas
+      .registrarRefeicao(usuario.id, { refeicaoId, status: novo, data: new Date() })
+      .catch(() => void recarregar());
+  }
+
+  const cartao = {
+    backgroundColor: tema.superficie,
+    borderRadius: raio.lg,
+    borderWidth: 1,
+    borderColor: tema.borda,
+    padding: espacamento.lg,
+  };
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: tema.fundo }}
+      contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
+    >
+      {/* --- Água ---------------------------------------------------------- */}
+      {agua && (
+        <View style={{ ...cartao, gap: espacamento.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                Água hoje
+              </Text>
+              <Text
+                style={{
+                  color: tema.textoPrimario,
+                  fontSize: tipografia.tamanho['2xl'],
+                  fontWeight: '700',
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {(agua.consumidoMl / 1000).toFixed(1).replace('.', ',')} L
+                <Text style={{ fontSize: tipografia.tamanho.sm, color: tema.textoSecundario }}>
+                  {' '}
+                  / {(agua.metaMlDia / 1000).toFixed(1).replace('.', ',')} L
+                </Text>
+              </Text>
+            </View>
+            <Text style={{ color: AZUL_NUTRICAO, fontWeight: '700', fontSize: tipografia.tamanho.xl }}>
+              {agua.percentual}%
+            </Text>
+          </View>
+
+          {/* Barra de progresso */}
+          <View
+            accessibilityRole="progressbar"
+            accessibilityValue={{ min: 0, max: 100, now: agua.percentual }}
+            style={{ height: 10, borderRadius: raio.pill, backgroundColor: tema.fundo, overflow: 'hidden' }}
+          >
+            <View
+              style={{
+                width: `${agua.percentual}%`,
+                height: '100%',
+                backgroundColor: AZUL_NUTRICAO,
+                borderRadius: raio.pill,
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: espacamento.xs }}>
+            {VOLUMES_RAPIDOS_ML.map((ml) => (
+              <Pressable
+                key={ml}
+                accessibilityRole="button"
+                accessibilityLabel={`Registrar ${ml} mililitros de água`}
+                onPress={() => void beber(ml)}
+                style={{
+                  flex: 1,
+                  minHeight: alvoToqueMin,
+                  borderRadius: raio.md,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: AZUL_NUTRICAO,
+                }}
+              >
+                <Text style={{ color: AZUL_NUTRICAO, fontWeight: '700' }}>+{ml}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {agua.minutosDesdeUltimoRegistro !== null && agua.minutosDesdeUltimoRegistro >= 180 && (
+            <Text style={{ color: tema.alerta, fontSize: tipografia.tamanho.sm }}>
+              Você não bebe água há {Math.floor(agua.minutosDesdeUltimoRegistro / 60)}h.
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* --- Dieta --------------------------------------------------------- */}
+      {semDieta && (
+        <View style={cartao}>
+          <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>Sem plano alimentar</Text>
+          <Text style={{ color: tema.textoSecundario, marginTop: espacamento.xs }}>
+            Seu nutricionista ainda não montou ou ativou um plano.
+          </Text>
+        </View>
+      )}
+
+      {dieta && (
+        <>
+          <View style={{ ...cartao, gap: espacamento.sm }}>
+            <Text style={{ color: tema.textoPrimario, fontWeight: '700', fontSize: tipografia.tamanho.lg }}>
+              {dieta.nome}
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+              por {dieta.nutricionista.nome}
+            </Text>
+
+            <View style={{ flexDirection: 'row', marginTop: espacamento.sm }}>
+              {[
+                { rotulo: 'kcal', valor: Math.round(dieta.macrosTotais.kcal), alvo: dieta.kcalAlvo },
+                { rotulo: 'Prot', valor: Math.round(dieta.macrosTotais.proteinaG), alvo: dieta.proteinaAlvoG },
+                { rotulo: 'Carb', valor: Math.round(dieta.macrosTotais.carboidratoG), alvo: dieta.carboAlvoG },
+                { rotulo: 'Gord', valor: Math.round(dieta.macrosTotais.gorduraG), alvo: dieta.gorduraAlvoG },
+              ].map((m) => (
+                <View key={m.rotulo} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      color: tema.textoPrimario,
+                      fontSize: tipografia.tamanho.lg,
+                      fontWeight: '700',
+                      fontVariant: ['tabular-nums'],
+                    }}
+                  >
+                    {m.valor}
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                    {m.rotulo}
+                    {m.alvo !== null && m.alvo !== undefined ? ` / ${m.alvo}` : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {dieta.refeicoes.map((refeicao) => {
+            const aberta = expandida === refeicao.id;
+            const status = registros[refeicao.id];
+
+            return (
+              <View key={refeicao.id} style={{ ...cartao, gap: espacamento.sm }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: aberta }}
+                  accessibilityLabel={`${refeicao.nome}, ${Math.round(refeicao.macros.kcal)} calorias`}
+                  onPress={() => setExpandida(aberta ? null : refeicao.id)}
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+                      {refeicao.horarioSugerido ? `${refeicao.horarioSugerido} · ` : ''}
+                      {refeicao.nome}
+                    </Text>
+                    <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                      {Math.round(refeicao.macros.kcal)} kcal · P{Math.round(refeicao.macros.proteinaG)}{' '}
+                      C{Math.round(refeicao.macros.carboidratoG)} G{Math.round(refeicao.macros.gorduraG)}
+                    </Text>
+                  </View>
+                  <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.lg }}>
+                    {aberta ? '▾' : '▸'}
+                  </Text>
+                </Pressable>
+
+                {aberta && (
+                  <View style={{ gap: espacamento.xs, marginTop: espacamento.xs }}>
+                    {refeicao.itens.map((item) => (
+                      <View
+                        key={item.id}
+                        style={{ flexDirection: 'row', justifyContent: 'space-between', gap: espacamento.sm }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: tema.textoPrimario }}>{item.alimento.nome}</Text>
+                          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                            {item.quantidadeG} g
+                            {item.alimento.medidaCaseira && ` · ${item.alimento.medidaCaseira}`}
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            color: tema.textoSecundario,
+                            fontSize: tipografia.tamanho.sm,
+                            fontVariant: ['tabular-nums'],
+                          }}
+                        >
+                          {Math.round(item.macros.kcal)} kcal
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ flexDirection: 'row', gap: espacamento.xs, marginTop: espacamento.xs }}>
+                  {(['FEITA', 'PULADA'] as const).map((op) => {
+                    const marcado = status === op;
+                    const cor = op === 'FEITA' ? tema.sucesso : tema.textoSecundario;
+                    return (
+                      <Pressable
+                        key={op}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: marcado }}
+                        accessibilityLabel={`Marcar ${refeicao.nome} como ${op.toLowerCase()}`}
+                        onPress={() => void marcarRefeicao(refeicao.id, op)}
+                        style={{
+                          flex: 1,
+                          minHeight: alvoToqueMin,
+                          borderRadius: raio.md,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: 1,
+                          borderColor: marcado ? cor : tema.borda,
+                          backgroundColor: marcado ? cor : 'transparent',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: marcado ? tema.fundo : tema.textoSecundario,
+                            fontWeight: '600',
+                            fontSize: tipografia.tamanho.sm,
+                          }}
+                        >
+                          {op === 'FEITA' ? '✓ Fiz' : 'Pulei'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </>
+      )}
+    </ScrollView>
+  );
+}

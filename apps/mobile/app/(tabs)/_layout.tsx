@@ -37,6 +37,13 @@ export default function LayoutAbas() {
         }}
       />
       <Tabs.Screen
+        name="nutricao"
+        options={{
+          title: 'Nutrição',
+          tabBarIcon: ({ color }) => <Icone texto="🥗" cor={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="evolucao"
         options={{
           title: 'Evolução',

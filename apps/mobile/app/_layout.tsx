@@ -21,6 +21,8 @@ function Navegacao() {
         <Stack.Screen name="execucao/[sessaoId]" options={{ title: 'Treino em andamento' }} />
         <Stack.Screen name="fotos" options={{ title: 'Fotos de evolução' }} />
         <Stack.Screen name="lembretes" options={{ title: 'Lembretes' }} />
+        <Stack.Screen name="composicao" options={{ title: 'Composição corporal' }} />
+        <Stack.Screen name="medidas" options={{ title: 'Registrar medidas' }} />
       </Stack>
     </>
   );

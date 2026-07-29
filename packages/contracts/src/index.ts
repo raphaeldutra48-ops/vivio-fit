@@ -16,3 +16,4 @@ export * from './execucoes';
 export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';
+export * from './evolucao';
