@@ -3,7 +3,8 @@
 import { Papel } from '@vivio/contracts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { MenuLateral } from '../../components/MenuLateral';
 import { Botao } from '../../components/ui';
 import { useSessao } from '../../lib/sessao';
 
@@ -17,6 +18,7 @@ const NOME_DO_PAPEL: Partial<Record<Papel, string>> = {
 export default function LayoutProfissional({ children }: { children: React.ReactNode }) {
   const { usuario, carregando, sair } = useSessao();
   const router = useRouter();
+  const [gavetaAberta, setGavetaAberta] = useState(false);
 
   useEffect(() => {
     if (!carregando && !usuario) router.replace('/login');
@@ -33,18 +35,26 @@ export default function LayoutProfissional({ children }: { children: React.React
   return (
     <div className="min-h-dvh">
       <header
-        className="flex items-center justify-between border-b px-xl py-lg"
+        className="sticky top-0 z-20 flex items-center justify-between border-b px-lg py-md"
         style={{ borderColor: 'var(--vv-borda)', background: 'var(--vv-superficie)' }}
       >
-        <div className="flex items-center gap-xl">
+        <div className="flex items-center gap-md">
+          {/* Em telas estreitas o menu vira gaveta */}
+          <button
+            type="button"
+            aria-label={gavetaAberta ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={gavetaAberta}
+            onClick={() => setGavetaAberta((v) => !v)}
+            className="min-h-toque min-w-toque rounded-md border lg:hidden"
+            style={{ borderColor: 'var(--vv-borda)' }}
+          >
+            ☰
+          </button>
           <Link href="/alunos" className="text-lg font-bold">
             Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
           </Link>
-          <nav className="flex gap-lg text-sm">
-            <Link href="/alunos">Alunos</Link>
-            <Link href="/exercicios">Exercícios</Link>
-          </nav>
         </div>
+
         <div className="flex items-center gap-lg">
           <div className="text-right">
             <p className="text-sm font-semibold">{usuario.nome}</p>
@@ -57,7 +67,44 @@ export default function LayoutProfissional({ children }: { children: React.React
           </Botao>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl p-xl">{children}</main>
+
+      <div className="flex">
+        {/* Menu fixo no desktop */}
+        <aside
+          className="hidden w-[260px] shrink-0 border-r lg:block"
+          style={{
+            borderColor: 'var(--vv-borda)',
+            background: 'var(--vv-superficie)',
+            minHeight: 'calc(100dvh - 65px)',
+          }}
+        >
+          <div className="sticky top-[65px] max-h-[calc(100dvh-65px)] overflow-y-auto">
+            <MenuLateral papel={usuario.papel} />
+          </div>
+        </aside>
+
+        {/* Gaveta no mobile */}
+        {gavetaAberta && (
+          <div className="fixed inset-0 z-30 lg:hidden">
+            <button
+              aria-label="Fechar menu"
+              onClick={() => setGavetaAberta(false)}
+              className="absolute inset-0"
+              style={{ background: 'rgba(0,0,0,0.5)' }}
+            />
+            <aside
+              className="absolute left-0 top-0 h-full w-[280px] overflow-y-auto border-r"
+              style={{ borderColor: 'var(--vv-borda)', background: 'var(--vv-superficie)' }}
+            >
+              <MenuLateral papel={usuario.papel} aoNavegar={() => setGavetaAberta(false)} />
+            </aside>
+          </div>
+        )}
+
+        <main className="min-w-0 flex-1 p-xl">
+          <div className="mx-auto max-w-5xl">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

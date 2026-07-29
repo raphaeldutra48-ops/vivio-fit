@@ -20,6 +20,10 @@ import type {
   AlimentoResumo,
   ConsultaAuditoria,
   ConsultaEvolucao,
+  ConversaResumo,
+  EnviarMensagemInput,
+  ListarMensagensQuery,
+  MensagemResumo,
   CriarPlanoDietaInput,
   DefinirLembreteInput,
   DefinirMetaAguaInput,
@@ -473,6 +477,33 @@ export class VivioClient {
 
     marcarComoLida: (id: string): Promise<void> =>
       this.requisicao<void>(`/me/notificacoes/${id}/lida`, { metodo: 'PATCH' }),
+  };
+
+  // --- chat -----------------------------------------------------------------
+
+  readonly chat = {
+    listarConversas: (): Promise<ConversaResumo[]> =>
+      this.requisicao<ConversaResumo[]>('/conversas'),
+
+    abrir: (comUsuarioId: string): Promise<ConversaResumo> =>
+      this.requisicao<ConversaResumo>('/conversas', { metodo: 'POST', corpo: { comUsuarioId } }),
+
+    mensagens: (
+      conversaId: string,
+      consulta: Partial<ListarMensagensQuery> = {},
+    ): Promise<{ dados: MensagemResumo[]; proximoCursor: string | null }> =>
+      this.requisicao(`/conversas/${conversaId}/mensagens`, {
+        query: { cursor: consulta.cursor, limit: consulta.limit },
+      }),
+
+    enviar: (conversaId: string, dados: EnviarMensagemInput): Promise<MensagemResumo> =>
+      this.requisicao<MensagemResumo>(`/conversas/${conversaId}/mensagens`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    marcarVista: (conversaId: string): Promise<void> =>
+      this.requisicao<void>(`/conversas/${conversaId}/vista`, { metodo: 'POST' }),
   };
 
   // --- medidas ------------------------------------------------------------
