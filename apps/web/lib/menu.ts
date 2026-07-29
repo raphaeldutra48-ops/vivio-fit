@@ -165,7 +165,7 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Bioimpedância',
             href: '/avaliacao/bioimpedancia',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao:
               'Importa os dados da balança de bioimpedância e alimenta os gráficos de composição corporal.',
           },

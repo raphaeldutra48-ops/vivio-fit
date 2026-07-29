@@ -63,11 +63,16 @@ export default function FichaDoAluno() {
               .join(' · ')}
           </p>
         </div>
-        {!semConsentimento && (
-          <Link href={`/alunos/${alunoId}/treino/novo`}>
-            <Botao>Montar treino</Botao>
+        <div className="flex flex-wrap gap-md">
+          {!semConsentimento && (
+            <Link href={`/alunos/${alunoId}/treino/novo`}>
+              <Botao variante="neutra">Montar treino</Botao>
+            </Link>
+          )}
+          <Link href={`/alunos/${alunoId}/dieta`}>
+            <Botao>Montar dieta</Botao>
           </Link>
-        )}
+        </div>
       </header>
 
       <section>
