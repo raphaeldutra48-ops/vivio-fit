@@ -8,6 +8,7 @@ import { HealthController } from './health.controller';
 import { PrismaModule } from './infra/prisma.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
 import { FotosModule } from './modules/fotos/fotos.module';
@@ -35,6 +36,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     FotosModule,
     NotificacoesModule,
     NutricaoModule,
+    ChatModule,
   ],
   controllers: [HealthController, MeController],
   providers: [

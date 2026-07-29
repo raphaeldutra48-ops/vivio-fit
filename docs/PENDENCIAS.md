@@ -100,6 +100,16 @@ mesmo processo da API.
 desperdica consulta ao banco.
 **Pagar em:** quando houver Redis — mover para BullMQ com job unico.
 
+### 12. Suite de testes lenta contra o Neon gratuito
+**Assumida em:** Fase 2 (chat)
+**Estado:** a suite leva ~4 minutos. Sob carga, uma requisicao chega a 10s
+porque o compute gratuito do Neon escala a zero e limita. O timeout do vitest
+subiu para 90s so para lentidao de infra nao ser lida como bug.
+**Sintoma ja observado:** dois testes falharam por timeout numa rodada e
+passaram na seguinte, sem mudanca de codigo.
+**Pagar em:** junto com a pendencia 2 — branch de teste no Neon, e depois
+Postgres local no CI.
+
 ## Resolvidas
 
 ### Testes e2e mutavam os dados do seed — resolvida em C6

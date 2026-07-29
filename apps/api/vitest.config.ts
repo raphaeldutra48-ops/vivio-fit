@@ -9,8 +9,11 @@ export default defineConfig({
     root: './',
     include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
     environment: 'node',
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // O Neon do plano gratuito escala a zero e fica lento sob carga; com a
+    // suíte inteira, uma requisição chega a levar 10s. Margem generosa evita
+    // falha por lentidão de infraestrutura sendo lida como bug.
+    testTimeout: 90_000,
+    hookTimeout: 90_000,
     fileParallelism: false, // testes compartilham o mesmo banco
     // O scheduler roda a cada minuto; nos testes o disparo e chamado direto,
     // com horario injetado. Ligado, ele criaria notificacoes no meio do teste.

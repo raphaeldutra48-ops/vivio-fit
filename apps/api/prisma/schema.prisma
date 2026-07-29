@@ -83,6 +83,10 @@ model User {
   metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
   registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
 
+  conversasComoAluno Conversa[]             @relation("ConversasDoAluno")
+  participacoes      ParticipanteConversa[] @relation("ParticipacoesEmConversas")
+  mensagensEnviadas  Mensagem[]             @relation("MensagensEnviadas")
+
   @@index([papel, status])
 }
 
@@ -585,6 +589,72 @@ model RegistroAgua {
 
   @@index([alunoId, data(sort: Desc)])
   @@index([alunoId, registradoEm(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// 4.7 — Comunicação
+// ---------------------------------------------------------------------------
+
+enum TipoConversa {
+  /// Aluno e um profissional. Basta o vínculo ativo.
+  ALUNO_PROFISSIONAL
+  /// Os profissionais entre si, SEM o aluno. Exige consentimento MENSAGENS.
+  EQUIPE_CLINICA
+}
+
+/// Toda conversa orbita um aluno — é o que permite, na Fase 3, os três
+/// profissionais conversarem sobre o mesmo paciente.
+model Conversa {
+  id           String       @id @default(cuid())
+  tipo         TipoConversa
+  alunoId      String
+  aluno        User         @relation("ConversasDoAluno", fields: [alunoId], references: [id])
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime     @updatedAt
+
+  participantes ParticipanteConversa[]
+  mensagens     Mensagem[]
+
+  /// Uma conversa por tipo por aluno-profissional (o par vem do participante).
+  @@index([alunoId, tipo])
+}
+
+model ParticipanteConversa {
+  conversaId String
+  conversa   Conversa  @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation("ParticipacoesEmConversas", fields: [userId], references: [id], onDelete: Cascade)
+  entrouEm   DateTime  @default(now())
+  saiuEm     DateTime?
+  /// Última vez que abriu a conversa — base do contador de não lidas.
+  vistoEm    DateTime?
+
+  @@id([conversaId, userId])
+  @@index([userId, saiuEm])
+}
+
+enum TipoMensagem {
+  TEXTO
+  ARQUIVO
+  SISTEMA
+}
+
+model Mensagem {
+  id           String       @id @default(cuid())
+  conversaId   String
+  conversa     Conversa     @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  autorId      String
+  autor        User         @relation("MensagensEnviadas", fields: [autorId], references: [id])
+  tipo         TipoMensagem @default(TEXTO)
+  corpo        String?
+  chaveArquivo String?
+  /// Gerado no cliente: torna o envio idempotente, como no treino offline.
+  clienteUuid  String       @unique
+  enviadaEm    DateTime     @default(now())
+  editadaEm    DateTime?
+  removidaEm   DateTime?
+
+  @@index([conversaId, enviadaEm(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------
