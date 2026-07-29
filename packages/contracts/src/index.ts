@@ -19,3 +19,4 @@ export * from './nutricao';
 export * from './evolucao';
 export * from './chat';
 export * from './agenda';
+export * from './avaliacao';

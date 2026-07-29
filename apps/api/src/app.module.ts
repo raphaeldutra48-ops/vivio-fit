@@ -9,6 +9,7 @@ import { PrismaModule } from './infra/prisma.module';
 import { AgendaModule } from './modules/agenda/agenda.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AvaliacaoModule } from './modules/avaliacao/avaliacao.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
@@ -39,6 +40,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     NutricaoModule,
     ChatModule,
     AgendaModule,
+    AvaliacaoModule,
   ],
   controllers: [HealthController, MeController],
   providers: [

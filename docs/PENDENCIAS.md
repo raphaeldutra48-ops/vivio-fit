@@ -110,6 +110,15 @@ passaram na seguinte, sem mudanca de codigo.
 **Pagar em:** junto com a pendencia 2 — branch de teste no Neon, e depois
 Postgres local no CI.
 
+### 13. Testes ainda apagam medidas da Ana
+**Assumida em:** Fase 2
+**Estado:** o e2e de consentimento faz deleteMany de Medida para Ana e Bruno
+no afterAll. Depois de rodar a suite, os graficos de composicao corporal ficam
+vazios ate alguem semear de novo.
+**Por que sobrou:** em C6 corrigi so o teste de execucao; o de consentimento e
+os demais continuam usando as contas do seed.
+**Pagar em:** mesma correcao da pendencia 2 — cada teste cria o proprio aluno.
+
 ## Resolvidas
 
 ### Testes e2e mutavam os dados do seed — resolvida em C6

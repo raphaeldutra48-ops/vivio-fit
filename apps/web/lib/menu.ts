@@ -172,7 +172,7 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Adipometria',
             href: '/avaliacao/adipometria',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao:
               'Dobras cutâneas com cálculo de percentual de gordura pelos protocolos Pollock e Jackson-Pollock.',
           },

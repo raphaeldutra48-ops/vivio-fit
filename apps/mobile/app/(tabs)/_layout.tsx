@@ -44,6 +44,13 @@ export default function LayoutAbas() {
         }}
       />
       <Tabs.Screen
+        name="agenda"
+        options={{
+          title: 'Agenda',
+          tabBarIcon: ({ color }) => <Icone texto="📅" cor={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="evolucao"
         options={{
           title: 'Evolução',

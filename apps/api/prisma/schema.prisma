@@ -83,6 +83,9 @@ model User {
   metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
   registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
 
+  avaliacoesComoAluno     AvaliacaoFisica[]     @relation("AvaliacoesDoAluno")
+  avaliacoesFeitas        AvaliacaoFisica[]     @relation("AvaliacoesFeitas")
+
   agendaComoProfissional  Compromisso[]         @relation("AgendaDoProfissional")
   compromissosComoAluno   Compromisso[]         @relation("CompromissosDoAluno")
   disponibilidade         DisponibilidadeSlot[] @relation("DisponibilidadeDoProfissional")
@@ -594,6 +597,54 @@ model RegistroAgua {
 
   @@index([alunoId, data(sort: Desc)])
   @@index([alunoId, registradoEm(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Avaliação física — adipometria e bioimpedância
+// ---------------------------------------------------------------------------
+
+enum MetodoAvaliacao {
+  ADIPOMETRIA
+  BIOIMPEDANCIA
+  MANUAL
+}
+
+enum ProtocoloDobras {
+  POLLOCK_3
+  POLLOCK_7
+}
+
+/// Uma avaliação física. Guarda a ENTRADA (dobras ou leitura da balança) junto
+/// do resultado: sem isso, uma correção futura de fórmula não teria como
+/// recalcular o histórico, e o número antigo viraria dado órfão.
+model AvaliacaoFisica {
+  id                String           @id @default(cuid())
+  alunoId           String
+  aluno             User             @relation("AvaliacoesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  avaliadorId       String
+  avaliador         User             @relation("AvaliacoesFeitas", fields: [avaliadorId], references: [id])
+  data              DateTime         @db.Date
+  metodo            MetodoAvaliacao
+  protocolo         ProtocoloDobras?
+  sexo              String?
+  idade             Int?
+  pesoKg            Decimal          @db.Decimal(5, 2)
+  alturaCm          Int?
+  /// Dobras em milímetros, por ponto anatômico.
+  dobras            Json?
+  /// Campos extras da balança (água corporal, massa óssea, TMB, gordura visceral).
+  bioimpedancia     Json?
+  percentualGordura Decimal          @db.Decimal(4, 1)
+  massaGordaKg      Decimal          @db.Decimal(5, 2)
+  massaMagraKg      Decimal          @db.Decimal(5, 2)
+  densidadeCorporal Decimal?         @db.Decimal(6, 4)
+  somaDobrasMm      Decimal?         @db.Decimal(5, 1)
+  imc               Decimal?         @db.Decimal(4, 1)
+  observacao        String?
+  criadoEm          DateTime         @default(now())
+  deletadoEm        DateTime?
+
+  @@index([alunoId, data(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------

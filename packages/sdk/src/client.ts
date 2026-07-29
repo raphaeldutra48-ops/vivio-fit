@@ -18,7 +18,9 @@ import type {
   PlanoTreinoResumo,
   ConsentimentoResumo,
   AlimentoResumo,
+  AvaliacaoResumo,
   CompromissoResumo,
+  RegistrarAvaliacaoInput,
   ConsultaAgenda,
   ConsultaAuditoria,
   CriarBloqueioInput,
@@ -532,6 +534,20 @@ export class VivioClient {
 
     bloquear: (dados: CriarBloqueioInput): Promise<unknown> =>
       this.requisicao('/agenda/bloqueios', { metodo: 'POST', corpo: dados }),
+  };
+
+  // --- avaliação física -----------------------------------------------------
+
+  readonly avaliacoes = {
+    listar: (alunoId: string): Promise<AvaliacaoResumo[]> =>
+      this.requisicao<AvaliacaoResumo[]>(`/alunos/${alunoId}/avaliacoes`),
+
+    /** Salva e já atualiza a medida do dia — os gráficos refletem na hora. */
+    registrar: (alunoId: string, dados: RegistrarAvaliacaoInput): Promise<AvaliacaoResumo> =>
+      this.requisicao<AvaliacaoResumo>(`/alunos/${alunoId}/avaliacoes`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
   };
 
   // --- chat -----------------------------------------------------------------
