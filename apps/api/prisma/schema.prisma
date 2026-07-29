@@ -79,6 +79,7 @@ model User {
 
   dietasComoAluno         PlanoDieta[]       @relation("DietasDoAluno")
   dietasComoNutricionista PlanoDieta[]       @relation("DietasDoNutricionista")
+  modelosDeCardapio       ModeloCardapio[]   @relation("ModelosDoNutricionista")
   registrosDeRefeicao     RegistroRefeicao[] @relation("RegistrosDeRefeicao")
   metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
   registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
@@ -492,10 +493,61 @@ model Alimento {
   fonte        String   @default("TACO")
   criadoPorId  String?
 
-  itens ItemRefeicao[]
+  itens         ItemRefeicao[]
+  itensDeModelo ItemModelo[]  @relation("ItensDeModelo")
 
   @@index([nome])
   @@index([grupo])
+}
+
+/// Modelo de cardápio reutilizável, do nutricionista.
+///
+/// Mesma estrutura do PlanoDieta, mas sem aluno: é o molde. Aplicar num paciente
+/// cria um PlanoDieta de verdade, que depois pode ser ajustado sem mexer no molde.
+model ModeloCardapio {
+  id              String   @id @default(cuid())
+  nutricionistaId String
+  nutricionista   User     @relation("ModelosDoNutricionista", fields: [nutricionistaId], references: [id], onDelete: Cascade)
+  nome            String
+  descricao       String?
+  kcalAlvo        Int?
+  proteinaAlvoG   Int?
+  carboAlvoG      Int?
+  gorduraAlvoG    Int?
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  deletadoEm      DateTime?
+
+  refeicoes RefeicaoModelo[]
+
+  @@index([nutricionistaId, deletadoEm])
+}
+
+model RefeicaoModelo {
+  id              String         @id @default(cuid())
+  modeloId        String
+  modelo          ModeloCardapio @relation(fields: [modeloId], references: [id], onDelete: Cascade)
+  nome            String
+  horarioSugerido String?
+  ordem           Int
+
+  itens ItemModelo[]
+
+  @@unique([modeloId, ordem])
+}
+
+model ItemModelo {
+  id          String         @id @default(cuid())
+  refeicaoId  String
+  refeicao    RefeicaoModelo @relation(fields: [refeicaoId], references: [id], onDelete: Cascade)
+  alimentoId  String
+  alimento    Alimento       @relation("ItensDeModelo", fields: [alimentoId], references: [id])
+  quantidadeG Decimal        @db.Decimal(7, 2)
+  observacao  String?
+  ordem       Int
+
+  @@unique([refeicaoId, ordem])
+  @@index([alimentoId])
 }
 
 model PlanoDieta {

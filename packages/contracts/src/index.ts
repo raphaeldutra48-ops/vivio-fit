@@ -20,3 +20,5 @@ export * from './evolucao';
 export * from './chat';
 export * from './agenda';
 export * from './avaliacao';
+export * from './cardapios';
+export * from './compras';

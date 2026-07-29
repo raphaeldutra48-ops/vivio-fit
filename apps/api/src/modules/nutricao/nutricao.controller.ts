@@ -16,13 +16,24 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   EscopoDado,
   Papel,
+  aplicarModeloSchema,
   buscarSubstitutosSchema,
+  criarModeloCardapioSchema,
+  listaDeComprasSchema,
+  salvarComoModeloSchema,
   criarPlanoDietaSchema,
   definirMetaAguaSchema,
   listarAlimentosSchema,
   registrarAguaSchema,
   registrarRefeicaoSchema,
   type AlimentoResumo,
+  type AplicarModeloInput,
+  type CriarModeloCardapioInput,
+  type ListaDeCompras,
+  type ListaDeComprasQuery,
+  type ModeloCardapioCompleto,
+  type ModeloCardapioResumo,
+  type SalvarComoModeloInput,
   type BuscarSubstitutosQuery,
   type CriarPlanoDietaInput,
   type DefinirMetaAguaInput,
@@ -45,6 +56,8 @@ import { PapeisGuard } from '../../common/guards/papeis.guard';
 import { AuditoriaInterceptor } from '../../common/interceptors/auditoria.interceptor';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AguaService } from './agua.service';
+import { CardapiosService } from './cardapios.service';
+import { ComprasService } from './compras.service';
 import { AlimentosService } from './alimentos.service';
 import { DietasService } from './dietas.service';
 import { RefeicoesService } from './refeicoes.service';
@@ -86,6 +99,8 @@ export class NutricaoController {
     private readonly agua: AguaService,
     private readonly refeicoes: RefeicoesService,
     private readonly alimentos: AlimentosService,
+    private readonly compras: ComprasService,
+    private readonly cardapios: CardapiosService,
   ) {}
 
   // --- dieta ---------------------------------------------------------------
@@ -166,6 +181,27 @@ export class NutricaoController {
     return this.refeicoes.listarDoDia(alunoId, data ? new Date(data) : new Date());
   }
 
+  @Get('lista-de-compras')
+  @ApiOperation({ summary: 'Lista de compras do plano ativo, agrupada por seção de mercado' })
+  listaDeCompras(
+    @Param('alunoId') alunoId: string,
+    @Query(new ZodValidationPipe(listaDeComprasSchema)) consulta: ListaDeComprasQuery,
+  ): Promise<ListaDeCompras> {
+    return this.compras.gerar(alunoId, consulta.dias);
+  }
+
+  @Post('planos-dieta/do-modelo/:modeloId')
+  @Papeis(Papel.NUTRICIONISTA)
+  @ApiOperation({ summary: 'Cria o plano do paciente a partir de um molde' })
+  aplicarModelo(
+    @Param('alunoId') alunoId: string,
+    @Param('modeloId') modeloId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(aplicarModeloSchema)) dados: AplicarModeloInput,
+  ): Promise<PlanoDietaCompleto> {
+    return this.cardapios.aplicar(usuario.id, modeloId, alunoId, dados);
+  }
+
   // --- água ----------------------------------------------------------------
 
   @Get('agua')
@@ -206,5 +242,55 @@ export class NutricaoController {
     @Body(new ZodValidationPipe(definirMetaAguaSchema)) dados: DefinirMetaAguaInput,
   ) {
     return this.agua.definirMeta(alunoId, usuario.id, dados);
+  }
+}
+
+/** Modelos de cardápio: acervo do nutricionista, não é dado de aluno. */
+@ApiTags('cardapios')
+@ApiBearerAuth()
+@UseGuards(PapeisGuard)
+@Papeis(Papel.NUTRICIONISTA, Papel.ADMIN)
+@Controller('cardapios')
+export class CardapiosController {
+  constructor(private readonly cardapios: CardapiosService) {}
+
+  @Get()
+  listar(@UsuarioAtual() usuario: UsuarioAutenticado): Promise<ModeloCardapioResumo[]> {
+    return this.cardapios.listar(usuario.id);
+  }
+
+  @Get(':id')
+  obter(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+  ): Promise<ModeloCardapioCompleto> {
+    return this.cardapios.obter(usuario.id, id);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Cria um molde reutilizável de plano alimentar' })
+  criar(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(criarModeloCardapioSchema)) dados: CriarModeloCardapioInput,
+  ): Promise<ModeloCardapioCompleto> {
+    return this.cardapios.criar(usuario.id, dados);
+  }
+
+  @Post('do-plano')
+  @ApiOperation({ summary: 'Transforma um plano já entregue em molde' })
+  salvarComoModelo(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(salvarComoModeloSchema)) dados: SalvarComoModeloInput,
+  ): Promise<ModeloCardapioCompleto> {
+    return this.cardapios.salvarComoModelo(usuario.id, dados);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  async remover(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.cardapios.remover(usuario.id, id);
   }
 }

@@ -99,7 +99,7 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Cardápios',
             href: '/plano-alimentar/cardapios',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao:
               'Modelos de plano alimentar reutilizáveis, para montar a dieta de um paciente novo sem começar do zero.',
           },
@@ -182,7 +182,7 @@ export const MENU: BlocoDeMenu[] = [
         rotulo: 'Lista de compras',
         icone: '🛒',
         href: '/lista-de-compras',
-        estado: 'em-construcao',
+        estado: 'pronto',
         papeis: [Papel.NUTRICIONISTA, Papel.ADMIN],
         itens: [],
       },

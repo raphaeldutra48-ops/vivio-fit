@@ -18,7 +18,13 @@ import type {
   PlanoTreinoResumo,
   ConsentimentoResumo,
   AlimentoResumo,
+  AplicarModeloInput,
   AvaliacaoResumo,
+  CriarModeloCardapioInput,
+  ListaDeCompras,
+  ModeloCardapioCompleto,
+  ModeloCardapioResumo,
+  SalvarComoModeloInput,
   CompromissoResumo,
   RegistrarAvaliacaoInput,
   ConsultaAgenda,
@@ -547,6 +553,47 @@ export class VivioClient {
       this.requisicao<AvaliacaoResumo>(`/alunos/${alunoId}/avaliacoes`, {
         metodo: 'POST',
         corpo: dados,
+      }),
+  };
+
+  // --- cardápios e lista de compras ------------------------------------------
+
+  readonly cardapios = {
+    listar: (): Promise<ModeloCardapioResumo[]> =>
+      this.requisicao<ModeloCardapioResumo[]>('/cardapios'),
+
+    obter: (id: string): Promise<ModeloCardapioCompleto> =>
+      this.requisicao<ModeloCardapioCompleto>(`/cardapios/${id}`),
+
+    criar: (dados: CriarModeloCardapioInput): Promise<ModeloCardapioCompleto> =>
+      this.requisicao<ModeloCardapioCompleto>('/cardapios', { metodo: 'POST', corpo: dados }),
+
+    /** Transforma um plano já entregue a um paciente em molde reutilizável. */
+    salvarDoPlano: (dados: SalvarComoModeloInput): Promise<ModeloCardapioCompleto> =>
+      this.requisicao<ModeloCardapioCompleto>('/cardapios/do-plano', {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/cardapios/${id}`, { metodo: 'DELETE' }),
+
+    /** Cria o plano do paciente a partir do molde — os dois ficam independentes. */
+    aplicar: (
+      alunoId: string,
+      modeloId: string,
+      dados: AplicarModeloInput,
+    ): Promise<PlanoDietaCompleto> =>
+      this.requisicao<PlanoDietaCompleto>(
+        `/alunos/${alunoId}/planos-dieta/do-modelo/${modeloId}`,
+        { metodo: 'POST', corpo: dados },
+      ),
+  };
+
+  readonly listaDeCompras = {
+    gerar: (alunoId: string, dias = 7): Promise<ListaDeCompras> =>
+      this.requisicao<ListaDeCompras>(`/alunos/${alunoId}/lista-de-compras`, {
+        query: { dias },
       }),
   };
 
