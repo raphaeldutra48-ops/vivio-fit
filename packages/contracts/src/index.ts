@@ -18,3 +18,4 @@ export * from './notificacoes';
 export * from './nutricao';
 export * from './evolucao';
 export * from './chat';
+export * from './agenda';

@@ -18,7 +18,16 @@ import type {
   PlanoTreinoResumo,
   ConsentimentoResumo,
   AlimentoResumo,
+  CompromissoResumo,
+  ConsultaAgenda,
   ConsultaAuditoria,
+  CriarBloqueioInput,
+  CriarCompromissoInput,
+  DefinirDisponibilidadeInput,
+  HorarioLivre,
+  JanelaDisponivel,
+  MudarStatusInput,
+  RemarcarCompromissoInput,
   ConsultaEvolucao,
   ConversaResumo,
   EnviarMensagemInput,
@@ -477,6 +486,52 @@ export class VivioClient {
 
     marcarComoLida: (id: string): Promise<void> =>
       this.requisicao<void>(`/me/notificacoes/${id}/lida`, { metodo: 'PATCH' }),
+  };
+
+  // --- agenda ---------------------------------------------------------------
+
+  readonly agenda = {
+    listar: (consulta: ConsultaAgenda): Promise<CompromissoResumo[]> =>
+      this.requisicao<CompromissoResumo[]>('/agenda', {
+        query: {
+          de: consulta.de,
+          ate: consulta.ate,
+          incluirCancelados: consulta.incluirCancelados ? 'true' : undefined,
+        },
+      }),
+
+    /** Visão do aluno: os compromissos dele com qualquer profissional. */
+    meus: (de: string, ate: string): Promise<CompromissoResumo[]> =>
+      this.requisicao<CompromissoResumo[]>('/agenda/meus', { query: { de, ate } }),
+
+    horariosLivres: (data: string, duracaoMin?: number): Promise<HorarioLivre[]> =>
+      this.requisicao<HorarioLivre[]>('/agenda/horarios-livres', { query: { data, duracaoMin } }),
+
+    marcar: (dados: CriarCompromissoInput): Promise<CompromissoResumo> =>
+      this.requisicao<CompromissoResumo>('/agenda', { metodo: 'POST', corpo: dados }),
+
+    remarcar: (id: string, dados: RemarcarCompromissoInput): Promise<CompromissoResumo> =>
+      this.requisicao<CompromissoResumo>(`/agenda/${id}`, { metodo: 'PATCH', corpo: dados }),
+
+    mudarStatus: (id: string, dados: MudarStatusInput): Promise<CompromissoResumo> =>
+      this.requisicao<CompromissoResumo>(`/agenda/${id}/status`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+
+    listarDisponibilidade: (): Promise<JanelaDisponivel[]> =>
+      this.requisicao<JanelaDisponivel[]>('/agenda/disponibilidade'),
+
+    definirDisponibilidade: (
+      dados: DefinirDisponibilidadeInput,
+    ): Promise<JanelaDisponivel[]> =>
+      this.requisicao<JanelaDisponivel[]>('/agenda/disponibilidade', {
+        metodo: 'PUT',
+        corpo: dados,
+      }),
+
+    bloquear: (dados: CriarBloqueioInput): Promise<unknown> =>
+      this.requisicao('/agenda/bloqueios', { metodo: 'POST', corpo: dados }),
   };
 
   // --- chat -----------------------------------------------------------------

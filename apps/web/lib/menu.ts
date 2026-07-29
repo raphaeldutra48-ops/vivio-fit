@@ -56,7 +56,7 @@ export const MENU: BlocoDeMenu[] = [
     titulo: null,
     secoes: [
       { rotulo: 'Alunos', icone: '👥', href: '/alunos', estado: 'pronto', itens: [] },
-      { rotulo: 'Agenda', icone: '📅', href: '/agenda', estado: 'em-construcao', itens: [] },
+      { rotulo: 'Agenda', icone: '📅', href: '/agenda', estado: 'pronto', itens: [] },
       {
         rotulo: 'Controle financeiro',
         icone: '📈',

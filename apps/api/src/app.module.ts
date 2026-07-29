@@ -6,6 +6,7 @@ import { ErroFilter } from './common/filters/erro.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './infra/prisma.module';
+import { AgendaModule } from './modules/agenda/agenda.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -37,6 +38,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     NotificacoesModule,
     NutricaoModule,
     ChatModule,
+    AgendaModule,
   ],
   controllers: [HealthController, MeController],
   providers: [

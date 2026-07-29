@@ -83,6 +83,11 @@ model User {
   metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
   registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
 
+  agendaComoProfissional  Compromisso[]         @relation("AgendaDoProfissional")
+  compromissosComoAluno   Compromisso[]         @relation("CompromissosDoAluno")
+  disponibilidade         DisponibilidadeSlot[] @relation("DisponibilidadeDoProfissional")
+  bloqueiosDeAgenda       BloqueioAgenda[]      @relation("BloqueiosDoProfissional")
+
   conversasComoAluno Conversa[]             @relation("ConversasDoAluno")
   participacoes      ParticipanteConversa[] @relation("ParticipacoesEmConversas")
   mensagensEnviadas  Mensagem[]             @relation("MensagensEnviadas")
@@ -589,6 +594,84 @@ model RegistroAgua {
 
   @@index([alunoId, data(sort: Desc)])
   @@index([alunoId, registradoEm(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Agenda — atendimentos, avaliações e consultorias
+// ---------------------------------------------------------------------------
+
+enum TipoCompromisso {
+  AVALIACAO_FISICA
+  CONSULTA
+  RETORNO
+  TREINO_ACOMPANHADO
+  CONSULTORIA_ONLINE
+  OUTRO
+}
+
+enum StatusCompromisso {
+  AGENDADO
+  CONFIRMADO
+  REALIZADO
+  CANCELADO
+  NAO_COMPARECEU
+}
+
+/// Um atendimento marcado. Serve os três profissionais: o médico marca consulta,
+/// o nutricionista marca avaliação, o personal marca treino acompanhado.
+model Compromisso {
+  id             String            @id @default(cuid())
+  profissionalId String
+  profissional   User              @relation("AgendaDoProfissional", fields: [profissionalId], references: [id], onDelete: Cascade)
+  alunoId        String
+  aluno          User              @relation("CompromissosDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  tipo           TipoCompromisso
+  titulo         String?
+  inicioEm       DateTime
+  fimEm          DateTime
+  /// Presencial (endereço/sala) ou "Online".
+  local          String?
+  observacao     String?
+  status         StatusCompromisso @default(AGENDADO)
+  criadoPorId    String
+  canceladoEm    DateTime?
+  motivoCancelamento String?
+  criadoEm       DateTime          @default(now())
+  atualizadoEm   DateTime          @updatedAt
+
+  @@index([profissionalId, inicioEm])
+  @@index([alunoId, inicioEm])
+  @@index([status])
+}
+
+/// Janela semanal em que o profissional atende. Base para sugerir horários livres.
+model DisponibilidadeSlot {
+  id             String   @id @default(cuid())
+  profissionalId String
+  profissional   User     @relation("DisponibilidadeDoProfissional", fields: [profissionalId], references: [id], onDelete: Cascade)
+  /// 1 = segunda ... 7 = domingo
+  diaSemana      Int
+  /// "HH:MM" no fuso do profissional
+  horaInicio     String
+  horaFim        String
+  /// Duração padrão de um atendimento nesta janela, em minutos.
+  duracaoMin     Int      @default(60)
+  criadoEm       DateTime @default(now())
+
+  @@unique([profissionalId, diaSemana, horaInicio])
+}
+
+/// Férias, feriado, compromisso pessoal — some da lista de horários livres.
+model BloqueioAgenda {
+  id             String   @id @default(cuid())
+  profissionalId String
+  profissional   User     @relation("BloqueiosDoProfissional", fields: [profissionalId], references: [id], onDelete: Cascade)
+  inicioEm       DateTime
+  fimEm          DateTime
+  motivo         String?
+  criadoEm       DateTime @default(now())
+
+  @@index([profissionalId, inicioEm])
 }
 
 // ---------------------------------------------------------------------------
