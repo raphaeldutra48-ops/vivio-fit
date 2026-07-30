@@ -23,8 +23,10 @@ export function Simbolo({
   const traco = monocromatico ?? `url(#${idGradiente})`;
   const pontos = monocromatico ?? marca.acento;
 
+  // viewBox recortado no desenho real: no quadrado original o traçado ocupava
+  // 71% da largura e o símbolo parecia pequeno ao lado do texto.
   return (
-    <Svg width={tamanho} height={tamanho} viewBox="0 0 320 320">
+    <Svg width={tamanho} height={tamanho} viewBox="41 32 258 258">
       {!monocromatico && (
         <Defs>
           <LinearGradient id={idGradiente} x1="0%" y1="0%" x2="100%" y2="100%">

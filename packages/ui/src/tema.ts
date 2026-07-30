@@ -54,7 +54,9 @@ export const temaClaro: Tema = {
   clinicoTexto: cores.neutro[0],
 
   marcaTexto: cores.primaria[900],
-  marcaAcento: cores.acao[900],
+  // acao[800] e não [900]: o 900 dá 7,2:1 mas lê como marrom, e o "i" laranja é
+  // o acento da marca. O 800 passa com 5,13:1 e continua sendo laranja.
+  marcaAcento: cores.acao[800],
 
   sucesso: cores.feedback.sucesso,
   alerta: cores.feedback.alerta,

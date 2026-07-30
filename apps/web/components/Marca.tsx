@@ -25,7 +25,9 @@ export function Simbolo({
     <svg
       width={tamanho}
       height={tamanho}
-      viewBox="0 0 320 320"
+      // Recortado no desenho real, não no quadrado original: ali o traçado
+      // ocupava 71% da largura e o símbolo parecia pequeno ao lado do texto.
+      viewBox="41 32 258 258"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       focusable="false"
