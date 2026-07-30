@@ -146,19 +146,14 @@ conhecida (`Senha@123`), que não podem existir num ambiente real.
 
 Então:
 
-1. Acesse `https://<URL_WEB>` — você vai cair no login, sem conta nenhuma.
-2. Crie sua conta de profissional. Como não existe tela de cadastro ainda, use
-   o terminal:
+1. Acesse `https://<URL_WEB>/cadastrar` e crie sua conta de profissional —
+   escolha a profissão, informe o registro no conselho e a UF.
 
-```bash
-curl -X POST https://<URL_API>/api/v1/auth/registrar/profissional -H "Content-Type: application/json" -d "{\"nome\":\"Raphael\",\"email\":\"SEU@EMAIL\",\"senha\":\"UMA-SENHA-FORTE\",\"tipo\":\"PERSONAL\",\"registroConselho\":\"CREF 000000\",\"ufRegistro\":\"CE\"}"
-```
-
-3. **Confirme o e-mail.** Sem `SMTP_URL`, o link sai no log: no Railway, serviço
+2. **Confirme o e-mail.** Sem `SMTP_URL`, o link sai no log: no Railway, serviço
    `api` → **Deployments → View Logs**, procure `[Correio]`. Copie a URL e abra
    no navegador.
 
-4. **Ative o profissional.** Um profissional recém-criado nasce
+3. **Ative o profissional.** Um profissional recém-criado nasce
    `PENDENTE_VERIFICACAO` e **não consegue convidar aluno nenhum** — a
    verificação de registro no conselho ainda não tem tela (pendência 3). Rode
    pelo terminal do Railway (**api → ⋮ → Run command**) ou localmente com o

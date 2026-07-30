@@ -2,6 +2,7 @@
 
 import { Papel } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../components/ui';
@@ -85,6 +86,13 @@ export default function Login() {
             <Botao type="submit" disabled={enviando}>
               {enviando ? 'Entrando…' : 'Entrar'}
             </Botao>
+
+            <p className="text-center text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+              Ainda não tem conta?{' '}
+              <Link href="/cadastrar" className="underline">
+                Criar conta de profissional
+              </Link>
+            </p>
           </form>
         </Cartao>
 

@@ -158,6 +158,16 @@ export default function Login() {
             {enviando ? 'Entrando…' : 'Entrar'}
           </Text>
         </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/cadastrar')}
+          style={{ minHeight: alvoToqueMin, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
+            Ainda não tenho conta
+          </Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
