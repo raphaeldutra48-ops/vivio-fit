@@ -13,32 +13,33 @@ Tempo: ~40 min até estar no ar.
 
 ---
 
-## Etapa 1 — Código no GitHub (~10 min)
+## Etapa 1 — Código no GitHub (~5 min)
 
-O Railway constrói a partir de um repositório.
+**O repositório local já está pronto.** 31 commits na branch `main`, árvore
+limpa, nenhum `.env` versionado em commit nenhum (conferido no histórico
+inteiro). Falta só o repositório remoto — que depende da sua conta.
 
-Na pasta `vivio-fit`:
+1. Em [github.com/new](https://github.com/new), crie `vivio-fit` como
+   **Private**. Não marque nada em "Initialize this repository" — o histórico
+   já existe aqui e um README criado lá causaria conflito.
+
+2. Conecte e envie (troque `SEU-USUARIO`):
 
 ```bash
-git init -b main
+git remote add origin https://github.com/SEU-USUARIO/vivio-fit.git
 ```
 
 ```bash
-git add -A && git status --short | grep -i "\.env$" || echo "OK: nenhum .env sera commitado"
+git push -u origin main
 ```
 
-> A segunda linha é conferência: se aparecer algum `.env`, **pare** e me avise.
-> Ele tem a senha do banco.
+O GitHub vai pedir autenticação. Se pedir senha, use um **Personal Access
+Token** (Settings → Developer settings → Tokens), não a senha da conta — o
+GitHub não aceita senha em push desde 2021.
 
-```bash
-git commit -m "Vívio Fit — treino, nutrição e saúde integrados"
-```
-
-Agora crie o repositório no GitHub — **privado** — e conecte:
-
-```bash
-git remote add origin https://github.com/SEU-USUARIO/vivio-fit.git && git push -u origin main
-```
+> Privado importa: o schema do banco e as regras de negócio não precisam ser
+> públicos. O `.env` está no `.gitignore` e nunca foi commitado, mas repositório
+> público é superfície desnecessária.
 
 ---
 
