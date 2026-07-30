@@ -5,6 +5,7 @@ import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Marca } from '../../components/Marca';
 import { Aviso, Botao, Campo, Cartao } from '../../components/ui';
 import { sdk } from '../../lib/sdk';
 import { useSessao } from '../../lib/sessao';
@@ -57,8 +58,8 @@ export default function Login() {
   return (
     <main className="grid min-h-dvh place-items-center p-lg">
       <div className="w-full max-w-sm">
-        <h1 className="mb-xs text-2xl font-bold">
-          Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
+        <h1 className="mb-lg">
+          <Marca tamanho={40} id="login" descritivo />
         </h1>
         <p className="mb-xl text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
           Painel do profissional

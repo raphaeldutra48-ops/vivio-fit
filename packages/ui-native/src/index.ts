@@ -3,6 +3,7 @@ import {
   areaTemaClaro,
   areaTemaEscuro,
   espacamento,
+  marca,
   raio,
   temaClaro,
   temaEscuro,
@@ -10,7 +11,7 @@ import {
   type Tema,
 } from '@vivio/ui';
 
-export { alvoToqueMin, espacamento, raio, tipografia };
+export { alvoToqueMin, espacamento, marca, raio, tipografia };
 export type { Tema };
 
 export type NomeDeTema = 'claro' | 'escuro';

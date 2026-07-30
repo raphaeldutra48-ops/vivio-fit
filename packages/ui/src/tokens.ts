@@ -4,6 +4,28 @@
  * Não usar estes valores direto em componente — use os tokens semânticos de
  * `tema.ts`. Cor crua na tela é o que impede o tema escuro de funcionar.
  */
+/**
+ * Cores exatas da marca, como saem do arquivo da logo.
+ *
+ * Separadas da paleta de interface de propósito: aqui não se ajusta nada por
+ * contraste — é a identidade. Quando a logo precisa de contraste (sobre fundo
+ * escuro, por exemplo), troca-se a versão do símbolo, não a cor da marca.
+ */
+export const marca = {
+  /** Início do gradiente: o verde do símbolo. */
+  gradienteInicio: '#0F9D6D',
+  /** Fim do gradiente: azul profundo. */
+  gradienteFim: '#173B5E',
+  /** Os dois pontos do "V" — o acento da marca. */
+  acento: '#FF8C42',
+  /** Grafite do lettering "Vívio". */
+  lettering: '#2B2E33',
+  /** Cinza do descritivo "TREINO · NUTRIÇÃO · SAÚDE". */
+  descritivo: '#5B6670',
+  /** Símbolo sobre fundo colorido. */
+  claro: '#FAFAFA',
+} as const;
+
 export const cores = {
   /** Verde-esmeralda: saúde, vitalidade. Área de TREINO. */
   primaria: {

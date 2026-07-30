@@ -1,4 +1,4 @@
-import { cores } from './tokens';
+import { cores, marca } from './tokens';
 
 /**
  * Tokens semânticos. Componente usa ISTO, nunca a paleta crua.
@@ -25,6 +25,14 @@ export interface Tema {
   clinicoFundo: string;
   clinicoTexto: string;
 
+  /**
+   * Lettering da marca. O verde e o laranja puros da logo dão 3,3:1 e 2,2:1
+   * sobre fundo claro — o WCAG isenta logotipo, mas o nome no cabeçalho é
+   * texto que se lê. O símbolo mantém a cor original; o lettering usa estes.
+   */
+  marcaTexto: string;
+  marcaAcento: string;
+
   sucesso: string;
   alerta: string;
   erro: string;
@@ -45,6 +53,9 @@ export const temaClaro: Tema = {
   clinicoFundo: cores.secundaria[700],
   clinicoTexto: cores.neutro[0],
 
+  marcaTexto: cores.primaria[900],
+  marcaAcento: cores.acao[900],
+
   sucesso: cores.feedback.sucesso,
   alerta: cores.feedback.alerta,
   erro: cores.feedback.erro,
@@ -64,6 +75,9 @@ export const temaEscuro: Tema = {
   primariaTexto: cores.neutro[900],
   clinicoFundo: cores.secundaria[300],
   clinicoTexto: cores.secundaria[900],
+
+  marcaTexto: cores.primaria[300],
+  marcaAcento: cores.acao[300],
 
   sucesso: cores.primaria[500],
   alerta: '#F5A524',
@@ -126,4 +140,16 @@ export const paresDeContraste: Array<{
   { nome: 'escuro: área nutrição', frente: areaTemaEscuro.nutricao.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
   { nome: 'escuro: área clínico', frente: areaTemaEscuro.clinico.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
   { nome: 'escuro: área consultoria', frente: areaTemaEscuro.consultoria.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
+
+  // O lettering aparece como texto de verdade no cabeçalho e nas telas de
+  // entrada, então segue a régua de texto. As cores puras da logo reprovam aqui
+  // (3,3:1 e 2,2:1 no claro) — daí existirem `marcaTexto` e `marcaAcento`.
+  { nome: 'claro: "Fit" da marca', frente: temaClaro.marcaTexto, fundo: temaClaro.fundo, minimo: 4.5 },
+  { nome: 'claro: "i" de acento', frente: temaClaro.marcaAcento, fundo: temaClaro.fundo, minimo: 4.5 },
+  { nome: 'escuro: "Fit" da marca', frente: temaEscuro.marcaTexto, fundo: temaEscuro.fundo, minimo: 4.5 },
+  { nome: 'escuro: "i" de acento', frente: temaEscuro.marcaAcento, fundo: temaEscuro.fundo, minimo: 4.5 },
+  // O símbolo é forma gráfica, não texto: a régua é 3:1 (WCAG 1.4.11).
+  { nome: 'símbolo claro sobre o gradiente', frente: marca.claro, fundo: marca.gradienteInicio, minimo: 3 },
+  { nome: 'símbolo sobre fundo claro', frente: marca.gradienteInicio, fundo: temaClaro.fundo, minimo: 3 },
+  { nome: 'símbolo sobre fundo escuro', frente: marca.gradienteInicio, fundo: temaEscuro.fundo, minimo: 3 },
 ];

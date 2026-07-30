@@ -3,6 +3,7 @@
 import { Papel } from '@vivio/contracts';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { Marca } from '../../components/Marca';
 import { Aviso, Botao, Cartao } from '../../components/ui';
 import { sdk } from '../../lib/sdk';
 
@@ -40,8 +41,8 @@ function Confirmacao() {
   return (
     <main className="grid min-h-dvh place-items-center p-lg">
       <div className="w-full max-w-sm">
-        <h1 className="mb-xl text-2xl font-bold">
-          Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
+        <h1 className="mb-xl">
+          <Marca tamanho={36} id="verificar" />
         </h1>
 
         <Cartao>

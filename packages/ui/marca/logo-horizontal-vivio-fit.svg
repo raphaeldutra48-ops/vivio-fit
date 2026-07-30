@@ -1,0 +1,25 @@
+<svg width="900" height="280" viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="vGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F9D6D"></stop>
+      <stop offset="100%" stop-color="#173B5E"></stop>
+    </linearGradient>
+  </defs>
+
+  
+  <g transform="translate(30,20)">
+    <path d="M 60 40 L 90 120 L 108 75 L 126 165 L 144 100 L 160 240 L 260 40" fill="none" stroke="url(#vGrad)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"></path>
+    <circle cx="108" cy="75" r="10" fill="#FF8C42"></circle>
+    <circle cx="160" cy="264" r="19" fill="#FF8C42"></circle>
+  </g>
+
+  
+  <text x="345" y="168" font-family="&#39;Poppins&#39;,&#39;Montserrat&#39;,&#39;Segoe UI&#39;,sans-serif" font-size="98" font-weight="800" fill="#2B2E33" letter-spacing="-1">
+    Vív<tspan fill="#FF8C42">i</tspan>o<tspan font-weight="500" fill="#0F9D6D"> Fit</tspan>
+  </text>
+
+  
+  <text x="348" y="205" font-family="&#39;Poppins&#39;,&#39;Montserrat&#39;,&#39;Segoe UI&#39;,sans-serif" font-size="21" font-weight="500" fill="#5B6670" letter-spacing="4">
+    TREINO · NUTRIÇÃO · SAÚDE
+  </text>
+</svg>

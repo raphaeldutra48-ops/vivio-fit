@@ -4,6 +4,7 @@ import { Papel } from '@vivio/contracts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Marca } from '../../components/Marca';
 import { MenuLateral } from '../../components/MenuLateral';
 import { Botao } from '../../components/ui';
 import { useSessao } from '../../lib/sessao';
@@ -50,8 +51,8 @@ export default function LayoutProfissional({ children }: { children: React.React
           >
             ☰
           </button>
-          <Link href="/alunos" className="text-lg font-bold">
-            Vívio<span style={{ color: 'var(--vv-acao-fundo)' }}>Fit</span>
+          <Link href="/alunos" aria-label="Vívio Fit — início">
+            <Marca tamanho={26} id="cabecalho" />
           </Link>
         </div>
 

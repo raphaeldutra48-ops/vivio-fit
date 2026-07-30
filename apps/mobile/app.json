@@ -7,6 +7,12 @@
     "icon": "./assets/icon.png",
     "scheme": "viviofit",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAFAFA",
+      "dark": { "backgroundColor": "#0E1216" }
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "br.com.viviofit.app"

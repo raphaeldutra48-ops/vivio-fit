@@ -3,6 +3,7 @@ import { espacamento, raio, tipografia, alvoToqueMin } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Marca } from '../src/componentes/Marca';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -66,10 +67,8 @@ export default function Login() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, backgroundColor: tema.fundo, justifyContent: 'center', padding: espacamento.xl }}
     >
-      <Text style={{ fontSize: tipografia.tamanho['2xl'], fontWeight: '700', color: tema.textoPrimario }}>
-        Vívio<Text style={{ color: tema.acaoFundo }}>Fit</Text>
-      </Text>
-      <Text style={{ color: tema.textoSecundario, marginBottom: espacamento['2xl'] }}>
+      <Marca tamanho={42} id="login" tema={tema} />
+      <Text style={{ color: tema.textoSecundario, marginTop: espacamento.sm, marginBottom: espacamento['2xl'] }}>
         Seu treino, sua evolução.
       </Text>
 
