@@ -58,6 +58,15 @@ export const MENU: BlocoDeMenu[] = [
       { rotulo: 'Alunos', icone: '👥', href: '/alunos', estado: 'pronto', itens: [] },
       { rotulo: 'Agenda', icone: '📅', href: '/agenda', estado: 'pronto', itens: [] },
       {
+        // Liberar profissional é liberar acesso a dado de saúde de terceiros.
+        rotulo: 'Verificar profissionais',
+        icone: '🛡️',
+        href: '/admin/profissionais',
+        estado: 'pronto',
+        papeis: [Papel.ADMIN],
+        itens: [],
+      },
+      {
         rotulo: 'Controle financeiro',
         icone: '📈',
         href: '/financeiro',

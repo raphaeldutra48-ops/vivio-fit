@@ -13,21 +13,6 @@ Usam sufixo único por execução, então não colidem entre si.
 **Pagar em:** antes do CI (fim da Fase 0). O Neon tem branches — criar um branch
 `test` e apontar `DATABASE_URL` de teste para ele.
 
-### 3. Verificação de profissional não tem tela — só script
-**Assumida em:** B1
-**Estado:** `PerfilProfissional.verificadoEm` é **lido** (`vinculos.service.ts`
-barra quem não foi verificado) mas nada no app o **escreve** — só o seed. Sem
-tela de admin, a primeira conta criada em produção nasce travada: não convida
-aluno nenhum e não há saída pela interface.
-**Contorno:** `prisma/ativar-profissional.ts <email>` marca `verificadoEm` e
-deixa a conta ATIVA. Verificado ponta a ponta: antes o convite é recusado,
-depois passa. Não roda no start do contêiner de propósito — conferir CREF/CRN/CRM
-de gente real é decisão humana, não etapa de deploy.
-**Também aberto:** `verificadoPorId` guarda o id do admin sem foreign key,
-evitando uma terceira relação `User -> User` antes de existir a tela.
-**Pagar em:** painel admin — listar profissionais pendentes, mostrar o registro
-declarado e permitir aprovar/recusar com quem aprovou registrado.
-
 ### 4. Rate limit ausente
 **Assumida em:** B2
 **Estado:** `/auth/login` aceita tentativas ilimitadas.
@@ -189,6 +174,31 @@ que já existe e apontar por variável — nenhum serviço muda.
 **Enquanto isso:** avisar quem testar que as fotos são descartáveis.
 
 ## Resolvidas
+
+### Verificação de profissional ganhou painel — resolvida em 2026-07-30
+**Era:** `verificadoEm` era **lido** (`vinculos.service.ts` barra quem não foi
+verificado) mas nada no app o **escrevia** — só o seed. A primeira conta criada
+em produção nascia travada, sem convidar aluno nenhum e sem saída pela
+interface. O contorno era rodar `prisma/ativar-profissional.ts` no servidor a
+cada cadastro novo.
+**Correção:** `/admin/profissionais` com fila por status (aguardando, verificados,
+recusados), busca, e link direto para a consulta pública do CONFEF/CFN/CFM. A
+aprovação pede confirmação dizendo o que está em jogo — "esta pessoa passa a
+acessar dados de saúde de alunos" — e grava **quem** aprovou, agora com foreign
+key de verdade (`verificadoPor`), fechando também a metade do schema que estava
+aberta. A recusa exige motivo de ao menos 5 caracteres e o guarda: o
+profissional precisa saber o que corrigir. Aprovar depois de recusar limpa a
+recusa; recusar depois de aprovar revoga a verificação.
+**Verificado:** 12 testes e2e — inclusive que o personal não abre o painel, que
+o profissional não se autoverifica, e o que realmente importa: **antes da
+aprovação o convite a aluno é recusado, depois passa**. E operado no navegador
+pelos três estados.
+**Detalhe que o teste pegou:** eu esperava 403 no convite de profissional não
+verificado; o código responde 409 CONFLITO — que é mais correto, porque o papel
+está certo e o que falta é a verificação. O teste foi corrigido para afirmar o
+comportamento real.
+**Script mantido:** `ativar-profissional.ts` continua no repositório como saída
+de emergência, caso não exista nenhum admin acessível.
 
 ### Refresh token saiu do localStorage — resolvida em 2026-07-30
 **Era:** `apps/web` guardava access e refresh em `localStorage`. Um XSS lia o

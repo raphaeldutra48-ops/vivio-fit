@@ -58,6 +58,9 @@ import type {
   EscopoDado,
   LoginInput,
   MedidaResumo,
+  ListarProfissionaisQuery,
+  ProfissionalParaVerificar,
+  RecusarProfissionalInput,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -806,6 +809,32 @@ export class VivioClient {
       dados: MudarStatusPrescricaoInput,
     ): Promise<PrescricaoResumo> =>
       this.requisicao<PrescricaoResumo>(`/alunos/${alunoId}/prescricoes/${prescricaoId}/status`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+  };
+
+  // --- administração --------------------------------------------------------
+
+  /** Verificação de registro no conselho. Só o papel ADMIN alcança. */
+  readonly admin = {
+    listarProfissionais: (
+      consulta: Partial<ListarProfissionaisQuery> = {},
+    ): Promise<ProfissionalParaVerificar[]> =>
+      this.requisicao<ProfissionalParaVerificar[]>('/admin/profissionais', {
+        query: { status: consulta.status, q: consulta.q, limit: consulta.limit },
+      }),
+
+    contarPendentes: (): Promise<{ total: number }> =>
+      this.requisicao<{ total: number }>('/admin/profissionais/pendentes/total'),
+
+    verificar: (id: string): Promise<ProfissionalParaVerificar> =>
+      this.requisicao<ProfissionalParaVerificar>(`/admin/profissionais/${id}/verificar`, {
+        metodo: 'PATCH',
+      }),
+
+    recusar: (id: string, dados: RecusarProfissionalInput): Promise<ProfissionalParaVerificar> =>
+      this.requisicao<ProfissionalParaVerificar>(`/admin/profissionais/${id}/recusar`, {
         metodo: 'PATCH',
         corpo: dados,
       }),

@@ -153,17 +153,21 @@ Então:
    `api` → **Deployments → View Logs**, procure `[Correio]`. Copie a URL e abra
    no navegador.
 
-3. **Ative o profissional.** Um profissional recém-criado nasce
-   `PENDENTE_VERIFICACAO` e **não consegue convidar aluno nenhum** — a
-   verificação de registro no conselho ainda não tem tela (pendência 3). Rode
-   pelo terminal do Railway (**api → ⋮ → Run command**) ou localmente com o
-   `DATABASE_URL` de produção:
+3. **Ative o profissional.** Um profissional recém-criado nasce aguardando
+   verificação do registro no conselho e **não consegue convidar aluno nenhum**.
+
+   Como ainda não existe nenhum admin em produção, esta primeira vez é pelo
+   terminal do Railway (**api → ⋮ → Run command**):
 
 ```bash
 pnpm --filter @vivio/api exec tsx prisma/ativar-profissional.ts SEU@EMAIL
 ```
 
-Deve responder `Ativado: Raphael (PERSONAL) — CREF 000000/CE`.
+   Deve responder `Ativado: Raphael (PERSONAL) — CREF 000000/CE`.
+
+   **Só a primeira vez.** Depois, com uma conta ADMIN no banco, a verificação é
+   feita pela tela `/admin/profissionais`, que mostra a fila de quem aguarda,
+   o registro declarado e um link para a consulta pública do conselho.
 
 Agora entre em `https://<URL_WEB>` e você consegue convidar alunos.
 

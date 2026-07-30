@@ -36,6 +36,14 @@ describe('menuPara', () => {
     expect(hrefsDe(Papel.ALUNO)).toHaveLength(0);
   });
 
+  /** Verificar profissional libera acesso a dado de saúde — só o admin. */
+  it('só o admin vê a verificação de profissionais', () => {
+    expect(hrefsDe(Papel.ADMIN)).toContain('/admin/profissionais');
+    for (const papel of [Papel.PERSONAL, Papel.NUTRICIONISTA, Papel.MEDICO]) {
+      expect(hrefsDe(papel)).not.toContain('/admin/profissionais');
+    }
+  });
+
   it('não deixa seção virar um agrupador vazio', () => {
     for (const papel of [Papel.PERSONAL, Papel.NUTRICIONISTA, Papel.MEDICO, Papel.ADMIN]) {
       for (const bloco of menuPara(papel)) {

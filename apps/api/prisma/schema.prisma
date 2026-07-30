@@ -57,6 +57,7 @@ model User {
   perfilProfissional PerfilProfissional?
   sessoes            SessaoRefresh[]
   tokensDeVerificacao TokenVerificacaoEmail[]
+  profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
   // Vínculos: um mesmo User aparece de um lado ou do outro conforme o papel
   vinculosComoAluno        Vinculo[] @relation("VinculoAluno")
@@ -130,12 +131,20 @@ model PerfilProfissional {
   /// Sem isto, o profissional não pode receber vínculo.
   verificadoEm     DateTime?
   verificadoPorId  String?
+  /// Quem aprovou fica registrado: liberar acesso a dado de saúde é ato de
+  /// responsabilidade, e responsabilidade sem nome não existe.
+  verificadoPor    User?     @relation("ProfissionaisVerificados", fields: [verificadoPorId], references: [id], onDelete: SetNull)
+  /// Recusa é decisão registrada, não apagada: o profissional precisa saber
+  /// por que, e uma recusa não some quando ele reenvia os dados.
+  recusadoEm       DateTime?
+  motivoRecusa     String?
   notaMedia        Decimal?  @db.Decimal(3, 2)
   totalAvaliacoes  Int       @default(0)
   criadoEm         DateTime  @default(now())
   atualizadoEm     DateTime  @updatedAt
 
   @@unique([tipo, registroConselho, ufRegistro])
+  @@index([verificadoEm, recusadoEm])
 }
 
 enum StatusVinculo {
