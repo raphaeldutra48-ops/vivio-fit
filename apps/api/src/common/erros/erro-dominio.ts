@@ -35,6 +35,20 @@ export class ErroDominio extends HttpException {
     return new ErroDominio(CodigoErro.CREDENCIAIS_INVALIDAS, 'E-mail ou senha incorretos.', 401);
   }
 
+  /**
+   * 403 e não 401: a credencial está certa, o que falta é a confirmação. O
+   * cliente precisa distinguir para oferecer "reenviar e-mail" em vez de
+   * pedir a senha de novo.
+   */
+  static emailNaoVerificado(email: string): ErroDominio {
+    return new ErroDominio(
+      CodigoErro.EMAIL_NAO_VERIFICADO,
+      'Confirme seu e-mail para entrar. Enviamos um link no cadastro.',
+      403,
+      { email },
+    );
+  }
+
   static emailJaCadastrado(): ErroDominio {
     return new ErroDominio(CodigoErro.EMAIL_JA_CADASTRADO, 'Este e-mail já está em uso.', 409);
   }

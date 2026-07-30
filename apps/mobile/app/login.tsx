@@ -3,6 +3,7 @@ import { espacamento, raio, tipografia, alvoToqueMin } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
 export default function Login() {
@@ -11,10 +12,14 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  const [faltaConfirmar, setFaltaConfirmar] = useState(false);
+  const [reenviado, setReenviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   async function enviar() {
     setErro(null);
+    setFaltaConfirmar(false);
+    setReenviado(false);
     setEnviando(true);
     try {
       const usuario = await entrar(email.trim(), senha);
@@ -25,6 +30,10 @@ export default function Login() {
       // "/" cai em app/(tabs)/index.tsx — grupos entre parênteses não entram na URL.
       router.replace('/');
     } catch (e) {
+      if (e instanceof ErroApi && e.codigo === 'EMAIL_NAO_VERIFICADO') {
+        setFaltaConfirmar(true);
+        return;
+      }
       setErro(
         e instanceof ErroApi && e.codigo === 'CREDENCIAIS_INVALIDAS'
           ? 'E-mail ou senha incorretos.'
@@ -33,6 +42,12 @@ export default function Login() {
     } finally {
       setEnviando(false);
     }
+  }
+
+  async function reenviar() {
+    await sdk.auth.reenviarVerificacao({ email: email.trim() }).catch(() => undefined);
+    // A API não diz se o e-mail existe; a tela não inventa o que ela não disse.
+    setReenviado(true);
   }
 
   const estiloCampo = {
@@ -85,6 +100,46 @@ export default function Login() {
         </View>
 
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
+
+        {faltaConfirmar && (
+          <View
+            style={{
+              backgroundColor: tema.superficie,
+              borderRadius: raio.md,
+              borderWidth: 1,
+              borderColor: tema.borda,
+              padding: espacamento.lg,
+              gap: espacamento.sm,
+            }}
+          >
+            <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
+              Confirme seu e-mail
+            </Text>
+            <Text style={{ color: tema.textoSecundario }}>
+              {reenviado
+                ? 'Se existir uma conta pendente para este e-mail, o link já está a caminho. Confira também o spam.'
+                : 'Enviamos um link quando a conta foi criada. Ele precisa ser aberto antes do primeiro acesso.'}
+            </Text>
+            {!reenviado && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void reenviar()}
+                style={{
+                  minHeight: alvoToqueMin,
+                  borderRadius: raio.md,
+                  borderWidth: 1,
+                  borderColor: tema.borda,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+                  Reenviar o link
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <Pressable
           accessibilityRole="button"

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 
 describe('Execução de treino (e2e)', () => {
   let app: INestApplication;
@@ -41,12 +42,14 @@ describe('Execução de treino (e2e)', () => {
     // instável: qualquer treino feito no app (ou por outro teste) virava "a
     // última execução" e quebrava as asserções da coluna ANTERIOR.
     const emailAluno = `execucao.${Date.now().toString(36)}@exemplo.com`;
-    const registro = await request(app.getHttpServer())
-      .post(url('/auth/registrar/aluno'))
-      .send({ nome: 'Aluno de Execução', email: emailAluno, senha, dataNascimento: '1996-02-10' })
-      .expect(201);
-    tokenAna = registro.body.accessToken;
-    idAna = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(app.getHttpServer(), {
+      nome: 'Aluno de Execução',
+      email: emailAluno,
+      senha,
+      dataNascimento: '1996-02-10',
+    });
+    tokenAna = registro.accessToken;
+    idAna = registro.usuario.id;
 
     const convite = await request(app.getHttpServer())
       .post(url('/vinculos/convidar'))

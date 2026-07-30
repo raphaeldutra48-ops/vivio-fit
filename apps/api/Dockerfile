@@ -1,0 +1,57 @@
+# Imagem da API. Contexto de build = raiz do monorepo (não esta pasta),
+# porque o pnpm precisa do workspace inteiro para resolver as dependências.
+#
+#   docker build -f apps/api/Dockerfile -t vivio-api .
+#
+FROM node:22-slim AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+# corepack usa a versão fixada em "packageManager" do package.json da raiz.
+RUN corepack enable
+# O engine do Prisma é linkado contra OpenSSL; a imagem slim não traz.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+# --- dependências -----------------------------------------------------------
+# Só os manifestos primeiro: enquanto eles não mudarem, o Docker reaproveita
+# a camada de instalação inteira.
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY apps/mobile/package.json apps/mobile/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/sdk/package.json packages/sdk/
+COPY packages/ui/package.json packages/ui/
+COPY packages/ui-native/package.json packages/ui-native/
+COPY packages/config/package.json packages/config/
+RUN pnpm install --frozen-lockfile
+
+# --- build ------------------------------------------------------------------
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# O client do Prisma é gerado a partir do schema — precisa vir antes do compile.
+RUN pnpm --filter @vivio/api exec prisma generate
+RUN pnpm exec turbo run build --filter=@vivio/api
+
+# --- produção ---------------------------------------------------------------
+FROM base AS runner
+ENV NODE_ENV=production
+# Usuário sem privilégios: a imagem node já traz "node" (uid 1000).
+USER node
+WORKDIR /app
+
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=node:node /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/
+
+WORKDIR /app/apps/api
+EXPOSE 3333
+
+# `migrate deploy` (não `dev`): aplica as migrações existentes e nunca gera
+# nem apaga nada. Rodar no start garante que o banco acompanha a imagem.
+CMD ["sh", "-c", "node ../../node_modules/prisma/build/index.js migrate deploy && node dist/main.js"]

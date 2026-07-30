@@ -58,12 +58,23 @@ import type {
   EscopoDado,
   LoginInput,
   MedidaResumo,
+  CriarModeloPrescricaoInput,
+  CriarPrescritivelInput,
+  EmitirPrescricaoInput,
+  ListarPrescritiveisQuery,
+  ModeloPrescricaoResumo,
+  MudarStatusPrescricaoInput,
+  PrescricaoResumo,
+  PrescritivelResumo,
   ParDeTokens,
   RegistrarAlunoInput,
   RegistrarExecucaoInput,
   RegistrarMedidaInput,
   RegistrarProfissionalInput,
+  ReenviarVerificacaoInput,
   RespostaAutenticacao,
+  RespostaRegistro,
+  VerificarEmailInput,
   ResumoAluno,
   StatusVinculo,
   UsuarioAutenticado,
@@ -84,6 +95,15 @@ export interface OpcoesCliente {
   aoAtualizarTokens?: (tokens: ParDeTokens) => void | Promise<void>;
   /** Chamado quando a sessão morreu de vez e o usuário precisa logar de novo. */
   aoPerderSessao?: () => void | Promise<void>;
+  /**
+   * Navegador: o refresh token fica num cookie httpOnly que o JavaScript não
+   * enxerga, e só o access token de 15 minutos vive em memória. Um XSS passa a
+   * conseguir no máximo esses 15 minutos, em vez dos 30 dias do refresh.
+   *
+   * Não usar no mobile: não há cookie jar, e o SecureStore já é armazenamento
+   * do sistema operacional, fora do alcance do JavaScript.
+   */
+  usarCookieDeRefresh?: boolean;
   fetch?: typeof fetch;
 }
 
@@ -139,11 +159,13 @@ export class VivioClient {
 
     this.renovacaoEmCurso = (async () => {
       const atuais = await this.obterTokens();
-      if (!atuais?.refreshToken) return false;
+      // No modo cookie o token não está aqui — quem decide se há sessão é o
+      // navegador, mandando (ou não) o cookie.
+      if (!this.opcoes.usarCookieDeRefresh && !atuais?.refreshToken) return false;
       try {
         const par = await this.requisicao<ParDeTokens>('/auth/refresh', {
           metodo: 'POST',
-          corpo: { refreshToken: atuais.refreshToken },
+          corpo: this.opcoes.usarCookieDeRefresh ? {} : { refreshToken: atuais!.refreshToken },
           autenticada: false,
           jaTentouRenovar: true,
         });
@@ -171,6 +193,8 @@ export class VivioClient {
 
     const cabecalhos: Record<string, string> = {};
     if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
+    // É este cabeçalho que faz a API devolver o refresh em cookie em vez do corpo.
+    if (this.opcoes.usarCookieDeRefresh) cabecalhos['X-Vivio-Cliente'] = 'web';
     if (autenticada) {
       const tokens = await this.obterTokens();
       if (tokens) cabecalhos['Authorization'] = `Bearer ${tokens.accessToken}`;
@@ -182,6 +206,8 @@ export class VivioClient {
         method: metodo,
         headers: cabecalhos,
         body: corpo === undefined ? undefined : JSON.stringify(corpo),
+        // Sem isto o navegador não manda o cookie para outra origem.
+        credentials: this.opcoes.usarCookieDeRefresh ? 'include' : 'same-origin',
       });
     } catch (erro) {
       throw new ErroApi(
@@ -221,8 +247,24 @@ export class VivioClient {
   // --- auth ---------------------------------------------------------------
 
   readonly auth = {
-    registrarAluno: async (dados: RegistrarAlunoInput): Promise<RespostaAutenticacao> => {
-      const r = await this.requisicao<RespostaAutenticacao>('/auth/registrar/aluno', {
+    /** Não guarda tokens: o cadastro não abre sessão até o e-mail ser confirmado. */
+    registrarAluno: (dados: RegistrarAlunoInput): Promise<RespostaRegistro> =>
+      this.requisicao<RespostaRegistro>('/auth/registrar/aluno', {
+        metodo: 'POST',
+        corpo: dados,
+        autenticada: false,
+      }),
+
+    registrarProfissional: (dados: RegistrarProfissionalInput): Promise<RespostaRegistro> =>
+      this.requisicao<RespostaRegistro>('/auth/registrar/profissional', {
+        metodo: 'POST',
+        corpo: dados,
+        autenticada: false,
+      }),
+
+    /** Confirma o e-mail pelo token do link — é aqui que a sessão começa. */
+    verificarEmail: async (dados: VerificarEmailInput): Promise<RespostaAutenticacao> => {
+      const r = await this.requisicao<RespostaAutenticacao>('/auth/verificar-email', {
         metodo: 'POST',
         corpo: dados,
         autenticada: false,
@@ -231,17 +273,12 @@ export class VivioClient {
       return r;
     },
 
-    registrarProfissional: async (
-      dados: RegistrarProfissionalInput,
-    ): Promise<RespostaAutenticacao> => {
-      const r = await this.requisicao<RespostaAutenticacao>('/auth/registrar/profissional', {
+    reenviarVerificacao: (dados: ReenviarVerificacaoInput): Promise<void> =>
+      this.requisicao<void>('/auth/reenviar-verificacao', {
         metodo: 'POST',
         corpo: dados,
         autenticada: false,
-      });
-      await this.guardar(r);
-      return r;
-    },
+      }),
 
     login: async (dados: LoginInput): Promise<RespostaAutenticacao> => {
       const r = await this.requisicao<RespostaAutenticacao>('/auth/login', {
@@ -255,10 +292,12 @@ export class VivioClient {
 
     logout: async (): Promise<void> => {
       const tokens = await this.obterTokens();
-      if (tokens?.refreshToken) {
+      // No modo cookie o corpo vai vazio de propósito: o servidor revoga pelo
+      // cookie e o apaga na mesma resposta.
+      if (this.opcoes.usarCookieDeRefresh || tokens?.refreshToken) {
         await this.requisicao<void>('/auth/logout', {
           metodo: 'POST',
-          corpo: { refreshToken: tokens.refreshToken },
+          corpo: this.opcoes.usarCookieDeRefresh ? {} : { refreshToken: tokens!.refreshToken },
           autenticada: false,
         });
       }
@@ -708,5 +747,67 @@ export class VivioClient {
 
     definirMeta: (alunoId: string, dados: DefinirMetaAguaInput): Promise<unknown> =>
       this.requisicao(`/alunos/${alunoId}/agua/meta`, { metodo: 'PUT', corpo: dados }),
+  };
+
+  // --- prescrições ----------------------------------------------------------
+
+  /** Catálogo do profissional: suplementos, fitoterápicos, medicamentos. */
+  readonly prescritiveis = {
+    listar: (consulta: Partial<ListarPrescritiveisQuery> = {}): Promise<PrescritivelResumo[]> =>
+      this.requisicao<PrescritivelResumo[]>('/prescritiveis', {
+        query: { q: consulta.q, tipo: consulta.tipo, limit: consulta.limit },
+      }),
+
+    criar: (dados: CriarPrescritivelInput): Promise<PrescritivelResumo> =>
+      this.requisicao<PrescritivelResumo>('/prescritiveis', { metodo: 'POST', corpo: dados }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/prescritiveis/${id}`, { metodo: 'DELETE' }),
+  };
+
+  readonly modelosPrescricao = {
+    listar: (): Promise<ModeloPrescricaoResumo[]> =>
+      this.requisicao<ModeloPrescricaoResumo[]>('/modelos-prescricao'),
+
+    criar: (dados: CriarModeloPrescricaoInput): Promise<ModeloPrescricaoResumo> =>
+      this.requisicao<ModeloPrescricaoResumo>('/modelos-prescricao', {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/modelos-prescricao/${id}`, { metodo: 'DELETE' }),
+  };
+
+  readonly prescricoes = {
+    listar: (alunoId: string): Promise<PrescricaoResumo[]> =>
+      this.requisicao<PrescricaoResumo[]>(`/alunos/${alunoId}/prescricoes`),
+
+    emitir: (alunoId: string, dados: EmitirPrescricaoInput): Promise<PrescricaoResumo> =>
+      this.requisicao<PrescricaoResumo>(`/alunos/${alunoId}/prescricoes`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    /** Não edita: cria a versão seguinte e arquiva a anterior. */
+    substituir: (
+      alunoId: string,
+      prescricaoId: string,
+      dados: EmitirPrescricaoInput,
+    ): Promise<PrescricaoResumo> =>
+      this.requisicao<PrescricaoResumo>(
+        `/alunos/${alunoId}/prescricoes/${prescricaoId}/substituir`,
+        { metodo: 'POST', corpo: dados },
+      ),
+
+    mudarStatus: (
+      alunoId: string,
+      prescricaoId: string,
+      dados: MudarStatusPrescricaoInput,
+    ): Promise<PrescricaoResumo> =>
+      this.requisicao<PrescricaoResumo>(`/alunos/${alunoId}/prescricoes/${prescricaoId}/status`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
   };
 }

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 
 /**
  * Usa as contas do seed, que existem justamente para representar os três
@@ -178,16 +179,13 @@ describe('Vínculos e CareLinkGuard (e2e)', () => {
     let idVinculo: string;
 
     it('cria um aluno novo', async () => {
-      const r = await request(app.getHttpServer())
-        .post(url('/auth/registrar/aluno'))
-        .send({
-          nome: 'Aluno Novo',
-          email: emailNovoAluno,
-          senha,
-          dataNascimento: '1998-08-08',
-        })
-        .expect(201);
-      tokenNovoAluno = r.body.accessToken;
+      const r = await criarAlunoVerificado(app.getHttpServer(), {
+        nome: 'Aluno Novo',
+        email: emailNovoAluno,
+        senha,
+        dataNascimento: '1998-08-08',
+      });
+      tokenNovoAluno = r.accessToken;
     });
 
     it('personal convida o aluno e o vínculo nasce PENDENTE', async () => {

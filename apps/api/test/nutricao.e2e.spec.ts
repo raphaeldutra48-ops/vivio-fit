@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 import { AguaService } from '../src/modules/nutricao/agua.service';
 
 describe('Nutrição (e2e)', () => {
@@ -42,12 +43,14 @@ describe('Nutrição (e2e)', () => {
     tokenPersonal = await entrar('personal@viviofit.com.br');
 
     const email = `nutricao.${sufixo}@exemplo.com`;
-    const registro = await request(servidor)
-      .post(url('/auth/registrar/aluno'))
-      .send({ nome: 'Aluno Nutrição', email, senha, dataNascimento: '1993-09-20' })
-      .expect(201);
-    tokenAluno = registro.body.accessToken;
-    idAluno = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(servidor, {
+      nome: 'Aluno Nutrição',
+      email,
+      senha,
+      dataNascimento: '1993-09-20',
+    });
+    tokenAluno = registro.accessToken;
+    idAluno = registro.usuario.id;
 
     // Vínculo com a nutricionista E com o personal, para provar que ler é
     // permitido aos dois, mas escrever a dieta não.

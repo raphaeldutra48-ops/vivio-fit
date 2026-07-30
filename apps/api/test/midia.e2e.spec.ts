@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 
 /** Imagem PNG 1x1 válida — suficiente para exercitar o fluxo de upload. */
 const PNG_1X1 = Buffer.from(
@@ -49,12 +50,14 @@ describe('Mídia, vídeo de exercício e fotos de evolução (e2e)', () => {
 
     // Aluno exclusivo deste teste (ver pendência resolvida em C6).
     const email = `midia.${sufixo}@exemplo.com`;
-    const registro = await request(servidor)
-      .post(url('/auth/registrar/aluno'))
-      .send({ nome: 'Aluno Mídia', email, senha, dataNascimento: '1994-03-15' })
-      .expect(201);
-    tokenAluno = registro.body.accessToken;
-    idAluno = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(servidor, {
+      nome: 'Aluno Mídia',
+      email,
+      senha,
+      dataNascimento: '1994-03-15',
+    });
+    tokenAluno = registro.accessToken;
+    idAluno = registro.usuario.id;
 
     const convite = await request(servidor)
       .post(url('/vinculos/convidar'))

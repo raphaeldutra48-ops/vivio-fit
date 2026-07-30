@@ -56,6 +56,7 @@ model User {
   perfilAluno        PerfilAluno?
   perfilProfissional PerfilProfissional?
   sessoes            SessaoRefresh[]
+  tokensDeVerificacao TokenVerificacaoEmail[]
 
   // Vínculos: um mesmo User aparece de um lado ou do outro conforme o papel
   vinculosComoAluno        Vinculo[] @relation("VinculoAluno")
@@ -83,6 +84,11 @@ model User {
   registrosDeRefeicao     RegistroRefeicao[] @relation("RegistrosDeRefeicao")
   metaDeAgua              MetaAgua?          @relation("MetaDeAgua")
   registrosDeAgua         RegistroAgua[]     @relation("RegistrosDeAgua")
+
+  prescricoesComoAluno    Prescricao[]          @relation("PrescricoesDoAluno")
+  prescricoesEmitidas     Prescricao[]          @relation("PrescricoesEmitidas")
+  modelosDePrescricao     ModeloPrescricao[]    @relation("ModelosDePrescricao")
+  itensPrescritiveis      ItemPrescritivel[]    @relation("ItensPrescritiveis")
 
   avaliacoesComoAluno     AvaliacaoFisica[]     @relation("AvaliacoesDoAluno")
   avaliacoesFeitas        AvaliacaoFisica[]     @relation("AvaliacoesFeitas")
@@ -652,6 +658,140 @@ model RegistroAgua {
 }
 
 // ---------------------------------------------------------------------------
+// Prescrições — suplementos, fitoterápicos e orientações
+// ---------------------------------------------------------------------------
+
+enum TipoPrescritivel {
+  SUPLEMENTO
+  FITOTERAPICO
+  MEDICAMENTO
+  ORIENTACAO
+}
+
+enum EscopoPrescritivel {
+  GLOBAL
+  PRIVADO
+}
+
+/// Catálogo do que pode ser prescrito. GLOBAL é curado pelo admin; PRIVADO
+/// pertence ao profissional que cadastrou.
+model ItemPrescritivel {
+  id               String             @id @default(cuid())
+  nome             String
+  tipo             TipoPrescritivel
+  /// Ex.: "cápsula 500 mg", "pote 900 g", "solução 20 mg/mL".
+  apresentacao     String?
+  principioAtivo   String?
+  /// Texto livre — a bula não cabe num enum.
+  contraindicacoes String?
+  observacao       String?
+  escopo           EscopoPrescritivel @default(PRIVADO)
+  criadoPorId      String?
+  criadoPor        User?              @relation("ItensPrescritiveis", fields: [criadoPorId], references: [id])
+  criadoEm         DateTime           @default(now())
+  atualizadoEm     DateTime           @updatedAt
+  deletadoEm       DateTime?
+
+  itensDeModelo    ItemModeloPrescricao[]
+  itensPrescritos  ItemPrescricao[]
+
+  @@index([tipo, escopo])
+  @@index([criadoPorId])
+}
+
+/// Modelo reutilizável de prescrição, com posologia já definida.
+model ModeloPrescricao {
+  id           String   @id @default(cuid())
+  prescritorId String
+  prescritor   User     @relation("ModelosDePrescricao", fields: [prescritorId], references: [id], onDelete: Cascade)
+  nome         String
+  descricao    String?
+  orientacoes  String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  deletadoEm   DateTime?
+
+  itens ItemModeloPrescricao[]
+
+  @@index([prescritorId, deletadoEm])
+}
+
+model ItemModeloPrescricao {
+  id            String           @id @default(cuid())
+  modeloId      String
+  modelo        ModeloPrescricao @relation(fields: [modeloId], references: [id], onDelete: Cascade)
+  prescritivelId String
+  prescritivel  ItemPrescritivel @relation(fields: [prescritivelId], references: [id])
+  dose          Decimal?         @db.Decimal(8, 2)
+  unidade       String?
+  frequencia    String?
+  horarios      String[]         @default([])
+  duracaoDias   Int?
+  via           String?
+  observacao    String?
+  ordem         Int
+
+  @@unique([modeloId, ordem])
+  @@index([prescritivelId])
+}
+
+enum StatusPrescricao {
+  ATIVA
+  SUSPENSA
+  ENCERRADA
+  SUBSTITUIDA
+}
+
+/// Prescrição emitida a um paciente.
+///
+/// É registro clínico: NUNCA é editada no lugar. Mudar a conduta cria uma
+/// versão nova e marca a anterior como SUBSTITUIDA — o histórico precisa
+/// mostrar o que estava valendo em cada data.
+model Prescricao {
+  id           String           @id @default(cuid())
+  alunoId      String
+  aluno        User             @relation("PrescricoesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  prescritorId String
+  prescritor   User             @relation("PrescricoesEmitidas", fields: [prescritorId], references: [id])
+  data         DateTime         @db.Date
+  validaAte    DateTime?        @db.Date
+  orientacoes  String?
+  versao       Int              @default(1)
+  raizId       String?
+  status       StatusPrescricao @default(ATIVA)
+  encerradaEm  DateTime?
+  motivoEncerramento String?
+  criadoEm     DateTime         @default(now())
+
+  itens ItemPrescricao[]
+
+  @@index([alunoId, status])
+  @@index([raizId])
+}
+
+model ItemPrescricao {
+  id             String           @id @default(cuid())
+  prescricaoId   String
+  prescricao     Prescricao       @relation(fields: [prescricaoId], references: [id], onDelete: Cascade)
+  prescritivelId String
+  prescritivel   ItemPrescritivel @relation(fields: [prescritivelId], references: [id])
+  /// Congelado no momento da emissão: renomear o item do catálogo depois não
+  /// pode alterar o que foi prescrito.
+  nomeNoMomento  String
+  dose           Decimal?         @db.Decimal(8, 2)
+  unidade        String?
+  frequencia     String?
+  horarios       String[]         @default([])
+  duracaoDias    Int?
+  via            String?
+  observacao     String?
+  ordem          Int
+
+  @@unique([prescricaoId, ordem])
+  @@index([prescritivelId])
+}
+
+// ---------------------------------------------------------------------------
 // Avaliação física — adipometria e bioimpedância
 // ---------------------------------------------------------------------------
 
@@ -918,6 +1058,23 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+/// Token de confirmação de e-mail. Mesmo tratamento do refresh: só o hash é
+/// persistido, então vazar o banco não permite confirmar e-mail de ninguém.
+model TokenVerificacaoEmail {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// O e-mail alvo fica registrado: se a pessoa trocar de e-mail antes de
+  /// confirmar, o token antigo não vale para o endereço novo.
+  email     String
+  tokenHash String    @unique
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime  @default(now())
+
+  @@index([userId, usadoEm])
+}
+
 model SessaoRefresh {
   id         String    @id @default(cuid())
   familiaId  String

@@ -1,7 +1,14 @@
 'use client';
 
-import { EmConstrucao } from '../../../../components/EmConstrucao';
+import { CatalogoPrescritivel } from '../../../../components/CatalogoPrescritivel';
 
-export default function Pagina() {
-  return <EmConstrucao />;
+export default function Suplementos() {
+  return (
+    <CatalogoPrescritivel
+      tipo="SUPLEMENTO"
+      titulo="Suplementos"
+      subtitulo="Seu catálogo. O que estiver aqui pode ser prescrito na ficha do paciente."
+      exemploNome="Creatina monoidratada"
+    />
+  );
 }

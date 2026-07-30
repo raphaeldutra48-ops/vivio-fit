@@ -8,6 +8,7 @@ import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
 import { estaNaHora, momentoLocal } from '../src/modules/notificacoes/agenda';
 import { NotificacoesService } from '../src/modules/notificacoes/notificacoes.service';
+import { criarAlunoVerificado } from './apoio';
 
 describe('Lembretes (e2e)', () => {
   let app: INestApplication;
@@ -35,17 +36,14 @@ describe('Lembretes (e2e)', () => {
     notificacoes = app.get(NotificacoesService);
     servidor = app.getHttpServer();
 
-    const registro = await request(servidor)
-      .post(url('/auth/registrar/aluno'))
-      .send({
-        nome: 'Aluno Lembrete',
-        email: `lembrete.${sufixo}@exemplo.com`,
-        senha,
-        dataNascimento: '1997-06-01',
-      })
-      .expect(201);
-    token = registro.body.accessToken;
-    idAluno = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(servidor, {
+      nome: 'Aluno Lembrete',
+      email: `lembrete.${sufixo}@exemplo.com`,
+      senha,
+      dataNascimento: '1997-06-01',
+    });
+    token = registro.accessToken;
+    idAluno = registro.usuario.id;
   });
 
   afterAll(async () => {

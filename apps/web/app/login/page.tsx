@@ -5,6 +5,7 @@ import { ErroApi } from '@vivio/sdk';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../components/ui';
+import { sdk } from '../../lib/sdk';
 import { useSessao } from '../../lib/sessao';
 
 export default function Login() {
@@ -14,10 +15,14 @@ export default function Login() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [faltaConfirmar, setFaltaConfirmar] = useState(false);
+  const [reenviado, setReenviado] = useState(false);
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     setErro(null);
+    setFaltaConfirmar(false);
+    setReenviado(false);
     setEnviando(true);
     try {
       const usuario = await entrar(email, senha);
@@ -28,6 +33,10 @@ export default function Login() {
       router.push('/alunos');
     } catch (e) {
       // O código é estável; o texto da API pode mudar sem quebrar a tela.
+      if (e instanceof ErroApi && e.codigo === 'EMAIL_NAO_VERIFICADO') {
+        setFaltaConfirmar(true);
+        return;
+      }
       setErro(
         e instanceof ErroApi && e.codigo === 'CREDENCIAIS_INVALIDAS'
           ? 'E-mail ou senha incorretos.'
@@ -36,6 +45,12 @@ export default function Login() {
     } finally {
       setEnviando(false);
     }
+  }
+
+  async function reenviar() {
+    await sdk.auth.reenviarVerificacao({ email }).catch(() => undefined);
+    // Sempre "enviado": a API não diz se o e-mail existe, e a tela não inventa.
+    setReenviado(true);
   }
 
   return (
@@ -72,6 +87,30 @@ export default function Login() {
             </Botao>
           </form>
         </Cartao>
+
+        {faltaConfirmar && (
+          <div className="mt-lg">
+            <Cartao>
+              <p className="mb-xs font-semibold">Confirme seu e-mail</p>
+              <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                Enviamos um link para <strong>{email}</strong> quando a conta foi criada. Ele
+                precisa ser aberto antes do primeiro acesso.
+              </p>
+              <div className="mt-lg">
+                {reenviado ? (
+                  <Aviso tipo="info">
+                    Se existir uma conta pendente para este e-mail, o link já está a caminho.
+                    Confira também a caixa de spam.
+                  </Aviso>
+                ) : (
+                  <Botao type="button" variante="neutra" onClick={reenviar}>
+                    Reenviar o link
+                  </Botao>
+                )}
+              </div>
+            </Cartao>
+          </div>
+        )}
       </div>
     </main>
   );

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 
 describe('Agenda (e2e)', () => {
   let app: INestApplication;
@@ -39,12 +40,14 @@ describe('Agenda (e2e)', () => {
     idNutri = (await prisma.user.findUniqueOrThrow({ where: { email: 'nutri@viviofit.com.br' } })).id;
 
     const email = `agenda.${sufixo}@exemplo.com`;
-    const registro = await request(servidor)
-      .post(url('/auth/registrar/aluno'))
-      .send({ nome: 'Paciente Agenda', email, senha, dataNascimento: '1992-04-04' })
-      .expect(201);
-    tokenAluno = registro.body.accessToken;
-    idAluno = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(servidor, {
+      nome: 'Paciente Agenda',
+      email,
+      senha,
+      dataNascimento: '1992-04-04',
+    });
+    tokenAluno = registro.accessToken;
+    idAluno = registro.usuario.id;
 
     // Vínculo só com a nutricionista — o personal fica sem, de propósito.
     const convite = await request(servidor)

@@ -22,3 +22,4 @@ export * from './agenda';
 export * from './avaliacao';
 export * from './cardapios';
 export * from './compras';
+export * from './prescricoes';

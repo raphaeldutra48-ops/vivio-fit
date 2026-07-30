@@ -138,22 +138,31 @@ export default function Inicio() {
         )}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Configurar lembretes"
-        onPress={() => router.push('/lembretes')}
-        style={{
-          minHeight: 52,
-          borderRadius: raio.md,
-          backgroundColor: tema.superficie,
-          borderWidth: 1,
-          borderColor: tema.borda,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>⏰ Lembretes</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: espacamento.md }}>
+        {[
+          { rotulo: '⏰ Lembretes', destino: '/lembretes', descricao: 'Configurar lembretes' },
+          { rotulo: '📋 Prescrições', destino: '/prescricoes', descricao: 'Minhas prescrições' },
+        ].map((atalho) => (
+          <Pressable
+            key={atalho.destino}
+            accessibilityRole="button"
+            accessibilityLabel={atalho.descricao}
+            onPress={() => router.push(atalho.destino)}
+            style={{
+              flex: 1,
+              minHeight: 52,
+              borderRadius: raio.md,
+              backgroundColor: tema.superficie,
+              borderWidth: 1,
+              borderColor: tema.borda,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>{atalho.rotulo}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Pressable accessibilityRole="button" onPress={() => void sair()} style={{ paddingVertical: espacamento.md }}>
         <Text style={{ color: tema.textoSecundario, textAlign: 'center' }}>Sair da conta</Text>

@@ -6,10 +6,12 @@ import type {
   RegistrarAlunoInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
+  RespostaRegistro,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { ContextoRequisicao, TokenService } from './token.service';
+import { VerificacaoEmailService } from './verificacao-email.service';
 
 /** argon2id com parâmetros acima do mínimo — é senha de conta com dado de saúde. */
 const OPCOES_ARGON = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
@@ -19,7 +21,28 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly verificacao: VerificacaoEmailService,
   ) {}
+
+  /** Cadastro não abre sessão: dispara a confirmação e devolve só o essencial. */
+  private async concluirRegistro(usuario: {
+    id: string;
+    email: string;
+    nome: string;
+    papel: Papel;
+  }): Promise<RespostaRegistro> {
+    const tokenDeVerificacao = await this.verificacao.gerarEEnviar(usuario);
+    return {
+      usuario: {
+        id: usuario.id,
+        email: usuario.email,
+        nome: usuario.nome,
+        papel: usuario.papel,
+      },
+      precisaConfirmarEmail: true,
+      ...(tokenDeVerificacao ? { tokenDeVerificacao } : {}),
+    };
+  }
 
   private async montarResposta(
     usuario: { id: string; email: string; nome: string; papel: Papel; emailVerifEm: Date | null },
@@ -38,10 +61,7 @@ export class AuthService {
     };
   }
 
-  async registrarAluno(
-    dados: RegistrarAlunoInput,
-    ctx: ContextoRequisicao,
-  ): Promise<RespostaAutenticacao> {
+  async registrarAluno(dados: RegistrarAlunoInput): Promise<RespostaRegistro> {
     const senhaHash = await hash(dados.senha, OPCOES_ARGON);
     try {
       const usuario = await this.prisma.user.create({
@@ -61,7 +81,7 @@ export class AuthService {
           },
         },
       });
-      return this.montarResposta(usuario, ctx);
+      return this.concluirRegistro(usuario);
     } catch (erro) {
       throw this.traduzirErroDePrisma(erro);
     }
@@ -72,10 +92,7 @@ export class AuthService {
    * cadastro, mas só recebe vínculo depois que o admin conferir o registro no
    * conselho. Ninguém vira "médico" aqui só preenchendo um formulário.
    */
-  async registrarProfissional(
-    dados: RegistrarProfissionalInput,
-    ctx: ContextoRequisicao,
-  ): Promise<RespostaAutenticacao> {
+  async registrarProfissional(dados: RegistrarProfissionalInput): Promise<RespostaRegistro> {
     const senhaHash = await hash(dados.senha, OPCOES_ARGON);
     try {
       const usuario = await this.prisma.user.create({
@@ -97,10 +114,16 @@ export class AuthService {
           },
         },
       });
-      return this.montarResposta(usuario, ctx);
+      return this.concluirRegistro(usuario);
     } catch (erro) {
       throw this.traduzirErroDePrisma(erro);
     }
+  }
+
+  /** Confirmação bem-sucedida já abre a sessão: o link prova posse do e-mail. */
+  async confirmarEmail(token: string, ctx: ContextoRequisicao): Promise<RespostaAutenticacao> {
+    const usuario = await this.verificacao.verificar(token);
+    return this.montarResposta(usuario, ctx);
   }
 
   async login(dados: LoginInput, ctx: ContextoRequisicao): Promise<RespostaAutenticacao> {
@@ -121,6 +144,10 @@ export class AuthService {
     ) {
       throw ErroDominio.papelNaoAutorizado('Sua conta está suspensa.');
     }
+
+    // Só depois de conferir a senha: responder isto antes diria a qualquer um
+    // quais e-mails existem na base.
+    if (!usuario.emailVerifEm) throw ErroDominio.emailNaoVerificado(usuario.email);
 
     await this.prisma.user.update({
       where: { id: usuario.id },

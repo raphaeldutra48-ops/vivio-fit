@@ -38,8 +38,12 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/**
+ * Opcional porque a web não manda o token: ele viaja no cookie httpOnly, fora
+ * do alcance do JavaScript. O mobile continua enviando no corpo.
+ */
 export const refreshSchema = z.object({
-  refreshToken: z.string().min(20),
+  refreshToken: z.string().min(20).optional(),
 });
 export type RefreshInput = z.infer<typeof refreshSchema>;
 
@@ -66,3 +70,25 @@ export interface ParDeTokens {
 export interface RespostaAutenticacao extends ParDeTokens {
   usuario: UsuarioAutenticado & { emailVerificado: boolean };
 }
+
+/**
+ * Resposta do cadastro. Não traz tokens de propósito: se trouxesse, quem
+ * cadastrasse com o e-mail de outra pessoa já entraria, e a confirmação viraria
+ * enfeite. A sessão só nasce quando o e-mail é confirmado.
+ */
+export interface RespostaRegistro {
+  usuario: { id: string; email: string; nome: string; papel: Papel };
+  precisaConfirmarEmail: true;
+  /** Só fora de produção: permite confirmar sem abrir caixa de entrada. */
+  tokenDeVerificacao?: string;
+}
+
+export const verificarEmailSchema = z.object({
+  token: z.string().min(10).max(200),
+});
+export type VerificarEmailInput = z.infer<typeof verificarEmailSchema>;
+
+export const reenviarVerificacaoSchema = z.object({
+  email: z.string().email().max(160),
+});
+export type ReenviarVerificacaoInput = z.infer<typeof reenviarVerificacaoSchema>;

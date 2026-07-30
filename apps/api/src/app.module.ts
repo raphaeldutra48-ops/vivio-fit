@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import cookieParser from 'cookie-parser';
 import { ErroFilter } from './common/filters/erro.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthController } from './health.controller';
@@ -18,6 +19,7 @@ import { MedidasModule } from './modules/medidas/medidas.module';
 import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
 import { NutricaoModule } from './modules/nutricao/nutricao.module';
+import { PrescricoesModule } from './modules/prescricoes/prescricoes.module';
 import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
 import { VinculosModule } from './modules/vinculos/vinculos.module';
@@ -41,6 +43,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     ChatModule,
     AgendaModule,
     AvaliacaoModule,
+    PrescricoesModule,
   ],
   controllers: [HealthController, MeController],
   providers: [
@@ -49,4 +52,14 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     { provide: APP_FILTER, useClass: ErroFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * O parser de cookie fica aqui, e não no `main.ts`, porque os testes montam a
+   * aplicação pelo módulo e nunca passam pelo bootstrap. No `main.ts` ele
+   * existiria em produção e faltaria no teste — que é justamente onde a
+   * diferença passaria despercebida.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(cookieParser()).forRoutes('*');
+  }
+}

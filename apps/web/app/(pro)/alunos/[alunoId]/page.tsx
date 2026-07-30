@@ -1,6 +1,6 @@
 'use client';
 
-import type { PlanoTreinoResumo, ResumoAluno } from '@vivio/contracts';
+import { Papel, type PlanoTreinoResumo, type ResumoAluno } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { areaTemaClaro } from '@vivio/ui';
 import Link from 'next/link';
@@ -8,9 +8,13 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
+import { useSessao } from '../../../../lib/sessao';
+
+const PRESCRITORES: Papel[] = [Papel.NUTRICIONISTA, Papel.MEDICO, Papel.ADMIN];
 
 export default function FichaDoAluno() {
   const { alunoId } = useParams<{ alunoId: string }>();
+  const { usuario } = useSessao();
   const [aluno, setAluno] = useState<ResumoAluno | null>(null);
   const [planos, setPlanos] = useState<PlanoTreinoResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
@@ -67,6 +71,11 @@ export default function FichaDoAluno() {
           {!semConsentimento && (
             <Link href={`/alunos/${alunoId}/treino/novo`}>
               <Botao variante="neutra">Montar treino</Botao>
+            </Link>
+          )}
+          {usuario && PRESCRITORES.includes(usuario.papel) && (
+            <Link href={`/alunos/${alunoId}/prescricoes`}>
+              <Botao variante="neutra">Prescrever</Botao>
             </Link>
           )}
           <Link href={`/alunos/${alunoId}/dieta`}>

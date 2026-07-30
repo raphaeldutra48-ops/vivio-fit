@@ -1,28 +1,22 @@
-import { VivioClient, type TokensArmazenados } from '@vivio/sdk';
+import { VivioClient } from '@vivio/sdk';
 
-const CHAVE = 'vivio.tokens';
-
-function ler(): TokensArmazenados | null {
-  if (typeof window === 'undefined') return null;
-  const bruto = window.localStorage.getItem(CHAVE);
-  return bruto ? (JSON.parse(bruto) as TokensArmazenados) : null;
-}
-
-function gravar(tokens: TokensArmazenados | null): void {
-  if (typeof window === 'undefined') return;
-  if (tokens) window.localStorage.setItem(CHAVE, JSON.stringify(tokens));
-  else window.localStorage.removeItem(CHAVE);
-}
-
-export const limparTokens = (): void => gravar(null);
-
+/**
+ * Nada de token em `localStorage`.
+ *
+ * O refresh de 30 dias mora num cookie httpOnly emitido pela API — o
+ * JavaScript da página não consegue lê-lo, então um XSS não consegue roubá-lo.
+ * O access token de 15 minutos fica só na memória do cliente e some ao recarregar;
+ * na volta, o SDK troca o cookie por um par novo sozinho.
+ */
 export const sdk = new VivioClient({
   baseUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333',
-  carregarTokens: ler,
-  aoAtualizarTokens: (par) =>
-    gravar({ accessToken: par.accessToken, refreshToken: par.refreshToken }),
+  usarCookieDeRefresh: true,
   aoPerderSessao: () => {
-    gravar(null);
-    if (typeof window !== 'undefined') window.location.href = '/login';
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
   },
 });
+
+/** Sessão encerrada: o cookie quem apaga é o servidor, no /auth/logout. */
+export const limparTokens = (): void => sdk.definirTokens(null);

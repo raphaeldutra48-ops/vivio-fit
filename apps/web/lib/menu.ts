@@ -141,20 +141,29 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Modelos de prescrições',
             href: '/prescricoes/modelos',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao: 'Modelos reutilizáveis de prescrição, com posologia e orientações.',
           },
           {
             rotulo: 'Suplementos',
             href: '/prescricoes/suplementos',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao: 'Cadastro de suplementos com dose, horário e forma de uso.',
           },
           {
             rotulo: 'Fitoterápicos',
             href: '/prescricoes/fitoterapicos',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao: 'Cadastro de fitoterápicos com posologia e contraindicações.',
+          },
+          {
+            // Prescrever medicamento é privativo do médico (CRM) — a API recusa
+            // de qualquer forma, mas nem mostrar o caminho é mais honesto.
+            rotulo: 'Medicamentos',
+            href: '/prescricoes/medicamentos',
+            estado: 'pronto',
+            papeis: [Papel.MEDICO, Papel.ADMIN],
+            descricao: 'Cadastro de medicamentos com princípio ativo e apresentação.',
           },
         ],
       },
@@ -216,7 +225,12 @@ export function menuPara(papel: Papel): BlocoDeMenu[] {
 
   return MENU.map((bloco) => ({
     ...bloco,
-    secoes: bloco.secoes.filter((s) => podeVer(s.papeis)),
+    secoes: bloco.secoes
+      .filter((s) => podeVer(s.papeis))
+      // Subitens também têm papel próprio: Medicamentos, por exemplo, só o médico.
+      .map((s) => ({ ...s, itens: s.itens.filter((i) => podeVer(i.papeis)) }))
+      // Seção que era só um agrupador e ficou sem nenhum subitem some.
+      .filter((s) => s.itens.length > 0 || s.href),
   })).filter((bloco) => bloco.secoes.length > 0);
 }
 

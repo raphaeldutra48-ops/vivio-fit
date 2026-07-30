@@ -1,0 +1,34 @@
+# Tudo que não deve entrar no contexto de build.
+# node_modules em especial: são centenas de MB que o Dockerfile reinstala.
+node_modules
+**/node_modules
+
+# Artefatos de build — reconstruídos dentro da imagem
+dist
+**/dist
+.next
+**/.next
+.turbo
+**/.turbo
+**/*.tsbuildinfo
+
+# Segredos. O .env local não pode virar camada de imagem.
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Só interessa a quem desenvolve.
+# apps/mobile fica: o pnpm precisa de todos os workspaces do lockfile para
+# instalar com --frozen-lockfile. São poucos KB de código.
+.git
+.gitignore
+**/.expo
+docs
+**/*.md
+**/test
+**/*.spec.ts
+**/*.spec.tsx
+
+# Mídia enviada em desenvolvimento (driver de armazenamento local)
+apps/api/media

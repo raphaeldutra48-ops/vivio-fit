@@ -5,16 +5,6 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 
 ## Abertas
 
-### 1. Verificação de e-mail não bloqueia o login
-**Assumida em:** B2
-**Estado:** conta de aluno nasce `ATIVA` com `emailVerifEm = null`. A API devolve
-`usuario.emailVerificado: false`, mas nada é bloqueado.
-**Por quê:** confirmar e-mail exige serviço de envio, que só entra junto com o
-push (C8). Bloquear agora deixaria o ambiente de desenvolvimento inutilizável.
-**Pagar em:** C8, junto com a infraestrutura de notificação.
-**Risco enquanto aberta:** cadastro com e-mail de terceiro. Baixo em dev, **não
-aceitável em produção** — não lançar sem isso.
-
 ### 2. Teste roda contra o banco de desenvolvimento
 **Assumida em:** B2
 **Estado:** os e2e criam e apagam usuários no mesmo Neon usado para desenvolver.
@@ -23,27 +13,26 @@ Usam sufixo único por execução, então não colidem entre si.
 **Pagar em:** antes do CI (fim da Fase 0). O Neon tem branches — criar um branch
 `test` e apontar `DATABASE_URL` de teste para ele.
 
-### 3. `PerfilProfissional.verificadoPorId` sem relação declarada
+### 3. Verificação de profissional não tem tela — só script
 **Assumida em:** B1
-**Estado:** guarda o id do admin que verificou, mas sem foreign key.
-**Por quê:** evitar uma terceira relação `User -> User` no schema antes de existir
-a tela de verificação do admin.
-**Pagar em:** quando o painel admin de verificação for construído.
+**Estado:** `PerfilProfissional.verificadoEm` é **lido** (`vinculos.service.ts`
+barra quem não foi verificado) mas nada no app o **escreve** — só o seed. Sem
+tela de admin, a primeira conta criada em produção nasce travada: não convida
+aluno nenhum e não há saída pela interface.
+**Contorno:** `prisma/ativar-profissional.ts <email>` marca `verificadoEm` e
+deixa a conta ATIVA. Verificado ponta a ponta: antes o convite é recusado,
+depois passa. Não roda no start do contêiner de propósito — conferir CREF/CRN/CRM
+de gente real é decisão humana, não etapa de deploy.
+**Também aberto:** `verificadoPorId` guarda o id do admin sem foreign key,
+evitando uma terceira relação `User -> User` antes de existir a tela.
+**Pagar em:** painel admin — listar profissionais pendentes, mostrar o registro
+declarado e permitir aprovar/recusar com quem aprovou registrado.
 
 ### 4. Rate limit ausente
 **Assumida em:** B2
 **Estado:** `/auth/login` aceita tentativas ilimitadas.
 **Por quê:** rate limit distribuído precisa de Redis, que chega no C8.
 **Pagar em:** C8. Enquanto isso, argon2id já torna força bruta cara.
-
-### 5. Tokens no localStorage (web)
-**Assumida em:** C3
-**Estado:** `apps/web` guarda access e refresh token em `localStorage`.
-**Por quê:** simples e suficiente para desenvolver; cookie httpOnly exigiria o
-backend emitindo `Set-Cookie` e tratamento de CSRF.
-**Risco:** XSS na web consegue ler o refresh token de 30 dias.
-**Pagar em:** antes do lançamento. Migrar o refresh token para cookie httpOnly
-+ SameSite=Lax e manter só o access token em memória.
 
 ### 6. Reordenação por arrastar não implementada
 **Assumida em:** C3
@@ -119,7 +108,129 @@ vazios ate alguem semear de novo.
 os demais continuam usando as contas do seed.
 **Pagar em:** mesma correcao da pendencia 2 — cada teste cria o proprio aluno.
 
+### 14. A web so tem teste do menu
+**Assumida em:** Prescricoes
+**Estado:** apps/web ganhou vitest, mas o unico arquivo testado e `lib/menu.ts`
+(logica pura). Nenhum componente e renderizado em teste — nao ha jsdom nem
+testing-library instalados. Toda verificacao de tela ate agora foi operando o
+navegador na mao.
+**Por que aceitei:** o que quebrou de verdade nesta fase foi regra em dado
+(`ItemDeMenu.papeis` existia no tipo e nunca era aplicado — Medicamentos
+aparecia para a nutricionista). Teste de logica pega isso; teste de render nao
+pegaria mais barato.
+**Risco:** regressao de formulario passa despercebida — por exemplo, o editor
+de posologia enviar string vazia onde o schema espera ausencia.
+**Pagar em:** quando existir o segundo formulario com a mesma complexidade do
+`EditorDeItensPrescritos`, instalar jsdom + testing-library e cobrir os dois.
+
+### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
+**Assumida em:** verificação de e-mail
+**Estado:** o driver SMTP está escrito e é escolhido sozinho quando `SMTP_URL`
+está definida. Sem ela, o `CorreioDeLog` imprime a mensagem no log — que é o
+comportamento certo em dev e **inaceitável em produção**: ninguém receberia o
+link e ninguém conseguiria entrar.
+**Pagar em:** no deploy. Contratar o provedor (Resend, SES, Postmark…), colar a
+URL em `SMTP_URL` e `EMAIL_REMETENTE` nas variáveis do Railway, e conferir que
+`WEB_PUBLIC_URL` aponta para o domínio real — é ela que monta o link.
+**Como verificar:** cadastrar uma conta e receber o e-mail de fato.
+
+### 16. Falha de SMTP é engolida
+**Assumida em:** verificação de e-mail
+**Estado:** `CorreioSmtp.enviar` captura o erro e apenas registra no log. Um
+cadastro com provedor fora do ar responde 201 como se tudo tivesse dado certo, e
+a pessoa fica esperando um e-mail que não vem.
+**Por que aceitei:** a alternativa imediata era derrubar o cadastro já gravado
+no banco por causa de uma falha externa, o que é pior. O reenvio na tela de
+entrada é a saída manual.
+**Pagar em:** quando existir fila (Redis, pendência 11) — enfileirar o envio com
+retentativa em vez de tentar uma vez dentro da requisição.
+
+### 17. `COOKIE_SAMESITE` precisa virar `none` se web e API não forem do mesmo site
+**Assumida em:** cookie httpOnly
+**Estado:** o cookie sai com `SameSite=Lax`, que só acompanha requisições
+same-site. Porta não conta para "site", então `localhost:3000` → `localhost:3333`
+funciona, e em produção funciona se forem subdomínios do mesmo domínio
+(`app.viviofit.com.br` e `api.viviofit.com.br`).
+**Risco:** hospedar a web na Vercel e a API no Railway são sites diferentes — o
+cookie simplesmente não é enviado e ninguém mantém sessão. A env
+`COOKIE_SAMESITE=none` cobre o caso, **mas** `None` desliga a proteção CSRF que
+o `Lax` dava de graça: aí `/auth/refresh` e `/auth/logout` passam a precisar de
+token anti-CSRF.
+**Pagar em:** na decisão de hospedagem. Preferir domínios irmãos e continuar com
+`Lax` é mais simples e mais seguro do que implementar anti-CSRF.
+
+### 18. Imagens Docker nunca foram construídas
+**Assumida em:** preparação do deploy
+**Estado:** `apps/api/Dockerfile` e `apps/web/Dockerfile` estão escritos, mas
+esta máquina não tem Docker — nenhum `docker build` rodou.
+**O que foi verificado sem ele:** os comandos que as imagens executam
+(`turbo run build --filter=@vivio/api` e `--filter=@vivio/web`), a geração do
+bundle standalone do Next e sua execução real em `apps/web/server.js`, a recusa
+da API a subir sem `ORIGENS_PERMITIDAS`, e o CORS respondendo só à origem
+conhecida.
+**O que continua sem prova:** o `pnpm install --frozen-lockfile` dentro do
+contêiner, o `prisma generate` com o engine linkado contra a OpenSSL da imagem
+slim, e os caminhos dos `COPY`.
+**Pagar em:** no primeiro deploy — o log do Railway aponta a linha exata se algo
+estiver errado.
+
+### 19. Mídia em disco de contêiner é apagada a cada deploy
+**Assumida em:** preparação do deploy (dívida que existia sem estar registrada)
+**Estado:** o driver de armazenamento padrão grava em `MEDIA_DIR`, no disco
+local. Em desenvolvimento isso é o certo. No Railway o sistema de arquivos do
+contêiner é efêmero: **cada deploy apaga as fotos de evolução dos alunos**, e o
+banco fica com registros apontando para arquivos que não existem mais.
+**Por que só apareceu agora:** o driver foi feito com a abstração pronta para
+S3 desde o começo, e em desenvolvimento nada some — o problema só existe onde o
+contêiner é recriado.
+**Pagar em:** antes de qualquer usuário real subir foto. Criar bucket (Cloudflare
+R2 tem 10 GB grátis e não cobra egresso), implementar o driver S3 na interface
+que já existe e apontar por variável — nenhum serviço muda.
+**Enquanto isso:** avisar quem testar que as fotos são descartáveis.
+
 ## Resolvidas
+
+### Refresh token saiu do localStorage — resolvida em 2026-07-30
+**Era:** `apps/web` guardava access e refresh em `localStorage`. Um XSS lia o
+refresh de 30 dias e mantinha a sessão indefinidamente.
+**Correção:** o refresh passou a viajar em cookie `httpOnly`, `SameSite=Lax`,
+`Path=/api/v1/auth`, e é **removido do corpo** da resposta — deixá-lo ali
+tornaria o cookie inútil. O access token de 15 minutos vive só na memória do
+`VivioClient`; ao recarregar a página o SDK troca o cookie por um par novo
+sozinho. Quem pede esse modo é o cliente, pelo cabeçalho `X-Vivio-Cliente: web`;
+sem ele a API responde como antes, que é o que o mobile precisa (SecureStore =
+Keychain/Keystore, fora do alcance do JavaScript, e sem cookie jar).
+**Efeito no ataque:** um XSS na web pega no máximo 15 minutos de access token,
+em vez de 30 dias renováveis.
+**Detalhe que só o teste pegou:** o `cookieParser` estava no `main.ts`, por onde
+os testes não passam — teste e produção rodavam configurações diferentes.
+Passou para `AppModule.configure`.
+**Verificado:** 27 testes em `auth.e2e.spec.ts` (cookie httpOnly com os
+atributos certos, rotação só com cookie, recusa sem cookie e sem corpo, cookie
+apagado quando a rotação falha, logout revogando pelo cookie, e o mobile
+continuando a receber no corpo) e, no navegador, login → `localStorage` vazio e
+`document.cookie` vazio → reload mantendo a sessão → logout derrubando de vez.
+**Ainda aberto:** pendência 17 — a escolha de hospedagem decide se `Lax` basta.
+
+### Verificação de e-mail não bloqueava o login — resolvida em 2026-07-30
+**Era:** a conta nascia com `emailVerifEm = null` e nada era bloqueado. Pior: o
+próprio cadastro já devolvia o par de tokens, então quem usasse o e-mail de
+outra pessoa entrava na hora e nunca precisava do link.
+**Correção:** `TokenVerificacaoEmail` guarda só o hash (mesmo tratamento do
+refresh), vale 24h e serve uma vez só; pedir outro invalida o anterior, com 60s
+de intervalo mínimo entre envios. O cadastro passou a responder
+`RespostaRegistro` **sem tokens** e o login recusa com `EMAIL_NAO_VERIFICADO`
+(403, depois de conferir a senha — antes disso vazaria quais e-mails existem).
+Confirmar o link já abre a sessão, porque abrir o link prova a posse do e-mail.
+O driver de envio segue o padrão do push: `CorreioDeLog` sem `SMTP_URL`,
+`CorreioSmtp` com ela.
+**Migração:** contas anteriores foram marcadas como verificadas — trancá-las
+retroativamente não protegeria ninguém e derrubaria todo mundo.
+**Verificado:** 21 testes em `auth.e2e.spec.ts` (bloqueio, link inventado, link
+usado duas vezes, expirado, reenvio invalidando o anterior, reenvio que não
+revela se o e-mail existe) e o fluxo inteiro operado no navegador.
+**Ainda aberto:** pendências 15 e 16 — falta a credencial de SMTP e a
+retentativa de envio.
 
 ### Testes e2e mutavam os dados do seed — resolvida em C6
 **Era:** os e2e usavam as contas do seed. O teste de execução ativava um plano

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarAlunoVerificado } from './apoio';
 
 describe('Cardápios e lista de compras (e2e)', () => {
   let app: INestApplication;
@@ -37,12 +38,14 @@ describe('Cardápios e lista de compras (e2e)', () => {
     ).body.accessToken;
 
     const email = `cardapio.${sufixo}@exemplo.com`;
-    const registro = await request(servidor)
-      .post(url('/auth/registrar/aluno'))
-      .send({ nome: 'Paciente Cardápio', email, senha, dataNascimento: '1990-05-05' })
-      .expect(201);
-    tokenAluno = registro.body.accessToken;
-    idAluno = registro.body.usuario.id;
+    const registro = await criarAlunoVerificado(servidor, {
+      nome: 'Paciente Cardápio',
+      email,
+      senha,
+      dataNascimento: '1990-05-05',
+    });
+    tokenAluno = registro.accessToken;
+    idAluno = registro.usuario.id;
 
     const convite = await request(servidor)
       .post(url('/vinculos/convidar'))
