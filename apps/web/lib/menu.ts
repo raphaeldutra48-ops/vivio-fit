@@ -70,7 +70,7 @@ export const MENU: BlocoDeMenu[] = [
         rotulo: 'Controle financeiro',
         icone: '📈',
         href: '/financeiro',
-        estado: 'em-construcao',
+        estado: 'pronto',
         itens: [],
       },
       {

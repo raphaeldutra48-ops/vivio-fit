@@ -59,6 +59,8 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
+  cobrancasEmitidas  Cobranca[]              @relation("CobrancasEmitidas")
+  cobrancasComoAluno Cobranca[]              @relation("CobrancasDoAluno")
   materiais          Material[]              @relation("MateriaisDoAutor")
   materiaisRecebidos MaterialCompartilhado[] @relation("MateriaisRecebidos")
   receitas           Receita[]        @relation("ReceitasDoAutor")
@@ -1077,6 +1079,48 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+enum StatusCobranca {
+  PENDENTE
+  PAGA
+  CANCELADA
+}
+
+enum FormaPagamento {
+  PIX
+  DINHEIRO
+  CARTAO
+  TRANSFERENCIA
+  OUTRO
+}
+
+/// Cobrança de um aluno. Controle manual: quem pagou, quem deve, quanto entrou.
+///
+/// "Atrasada" não é status guardado — é PENDENTE com vencimento no passado.
+/// Guardar exigiria um job diário só para virar a chave, e um job que falha
+/// deixaria o financeiro mentindo.
+model Cobranca {
+  id             String         @id @default(cuid())
+  profissionalId String
+  profissional   User           @relation("CobrancasEmitidas", fields: [profissionalId], references: [id], onDelete: Cascade)
+  alunoId        String
+  aluno          User           @relation("CobrancasDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  descricao      String
+  /// Em centavos. Dinheiro em ponto flutuante acumula erro de arredondamento.
+  valorCentavos  Int
+  vencimento     DateTime       @db.Date
+  status         StatusCobranca @default(PENDENTE)
+  pagaEm         DateTime?
+  formaPagamento FormaPagamento?
+  observacao     String?
+  /// Agrupa as parcelas geradas juntas, para desfazer a série inteira.
+  loteId         String?
+  criadoEm       DateTime       @default(now())
+  atualizadoEm   DateTime       @updatedAt
+
+  @@index([profissionalId, status, vencimento])
+  @@index([alunoId, vencimento(sort: Desc)])
+}
+
 enum TipoMaterial {
   ARQUIVO
   LINK

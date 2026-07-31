@@ -74,6 +74,11 @@ import type {
   CriarMaterialInput,
   MaterialDoAluno,
   MaterialResumo,
+  CobrancaResumo,
+  ConsultaFinanceiro,
+  CriarCobrancaInput,
+  RegistrarPagamentoInput,
+  ResumoFinanceiro,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -855,6 +860,37 @@ export class VivioClient {
 
     remover: (id: string): Promise<void> =>
       this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
+  };
+
+  // --- financeiro -----------------------------------------------------------
+
+  readonly financeiro = {
+    resumo: (consulta: Partial<ConsultaFinanceiro> = {}): Promise<ResumoFinanceiro> =>
+      this.requisicao<ResumoFinanceiro>('/financeiro', {
+        query: { mes: consulta.mes, alunoId: consulta.alunoId, situacao: consulta.situacao },
+      }),
+
+    /** Devolve a cobrança e as parcelas geradas junto. */
+    criar: (dados: CriarCobrancaInput): Promise<CobrancaResumo[]> =>
+      this.requisicao<CobrancaResumo[]>('/financeiro/cobrancas', {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    registrarPagamento: (id: string, dados: RegistrarPagamentoInput): Promise<CobrancaResumo> =>
+      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/pagar`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+
+    estornar: (id: string): Promise<CobrancaResumo> =>
+      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/estornar`, { metodo: 'PATCH' }),
+
+    cancelar: (id: string): Promise<CobrancaResumo> =>
+      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/cancelar`, { metodo: 'PATCH' }),
+
+    remover: (id: string): Promise<{ removidas: number }> =>
+      this.requisicao<{ removidas: number }>(`/financeiro/cobrancas/${id}`, { metodo: 'DELETE' }),
   };
 
   // --- materiais ------------------------------------------------------------

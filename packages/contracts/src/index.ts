@@ -28,3 +28,4 @@ export * from './anamnese';
 export * from './receitas';
 export * from './relatorios';
 export * from './materiais';
+export * from './financeiro';
