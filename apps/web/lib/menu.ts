@@ -217,7 +217,7 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Modelos de anamnese',
             href: '/cadastros/anamnese',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao: 'Questionários de anamnese personalizados por tipo de atendimento.',
           },
         ],

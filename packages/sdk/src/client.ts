@@ -61,6 +61,10 @@ import type {
   ListarProfissionaisQuery,
   ProfissionalParaVerificar,
   RecusarProfissionalInput,
+  AnamneseResumo,
+  AplicarAnamneseInput,
+  ModeloAnamneseResumo,
+  SalvarModeloAnamneseInput,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -812,6 +816,40 @@ export class VivioClient {
         metodo: 'PATCH',
         corpo: dados,
       }),
+  };
+
+  // --- anamnese -------------------------------------------------------------
+
+  /** Questionários do profissional. O modelo em si não é dado de aluno. */
+  readonly modelosAnamnese = {
+    listar: (): Promise<ModeloAnamneseResumo[]> =>
+      this.requisicao<ModeloAnamneseResumo[]>('/modelos-anamnese'),
+
+    criar: (dados: SalvarModeloAnamneseInput): Promise<ModeloAnamneseResumo> =>
+      this.requisicao<ModeloAnamneseResumo>('/modelos-anamnese', { metodo: 'POST', corpo: dados }),
+
+    atualizar: (id: string, dados: SalvarModeloAnamneseInput): Promise<ModeloAnamneseResumo> =>
+      this.requisicao<ModeloAnamneseResumo>(`/modelos-anamnese/${id}`, {
+        metodo: 'PATCH',
+        corpo: dados,
+      }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/modelos-anamnese/${id}`, { metodo: 'DELETE' }),
+  };
+
+  readonly anamneses = {
+    listar: (alunoId: string): Promise<AnamneseResumo[]> =>
+      this.requisicao<AnamneseResumo[]>(`/alunos/${alunoId}/anamneses`),
+
+    aplicar: (alunoId: string, dados: AplicarAnamneseInput): Promise<AnamneseResumo> =>
+      this.requisicao<AnamneseResumo>(`/alunos/${alunoId}/anamneses`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    remover: (alunoId: string, id: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/anamneses/${id}`, { metodo: 'DELETE' }),
   };
 
   // --- administração --------------------------------------------------------

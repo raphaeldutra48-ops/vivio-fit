@@ -59,6 +59,10 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
+  modelosDeAnamnese  ModeloAnamnese[] @relation("ModelosDeAnamnese")
+  anamnesesComoAluno Anamnese[]       @relation("AnamnesesDoAluno")
+  anamnesesAplicadas Anamnese[]       @relation("AnamnesesAplicadas")
+
   // Vínculos: um mesmo User aparece de um lado ou do outro conforme o papel
   vinculosComoAluno        Vinculo[] @relation("VinculoAluno")
   vinculosComoProfissional Vinculo[] @relation("VinculoProfissional")
@@ -1067,6 +1071,87 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+enum TipoPergunta {
+  TEXTO
+  TEXTO_LONGO
+  SIM_NAO
+  ESCOLHA_UNICA
+  ESCOLHA_MULTIPLA
+  NUMERO
+  DATA
+}
+
+/// Questionário que o profissional monta uma vez e aplica a vários pacientes.
+model ModeloAnamnese {
+  id            String            @id @default(cuid())
+  profissionalId String
+  profissional  User              @relation("ModelosDeAnamnese", fields: [profissionalId], references: [id], onDelete: Cascade)
+  nome          String
+  descricao     String?
+  perguntas     PerguntaAnamnese[]
+  anamneses     Anamnese[]
+  deletadoEm    DateTime?
+  criadoEm      DateTime          @default(now())
+  atualizadoEm  DateTime          @updatedAt
+
+  @@index([profissionalId, deletadoEm])
+}
+
+model PerguntaAnamnese {
+  id         String         @id @default(cuid())
+  modeloId   String
+  modelo     ModeloAnamnese @relation(fields: [modeloId], references: [id], onDelete: Cascade)
+  texto      String
+  tipo       TipoPergunta
+  /// Só para ESCOLHA_UNICA e ESCOLHA_MULTIPLA.
+  opcoes     String[]       @default([])
+  obrigatoria Boolean       @default(false)
+  /// Texto de apoio abaixo da pergunta ("liste também os suplementos").
+  ajuda      String?
+  ordem      Int
+  respostas  RespostaAnamnese[]
+
+  @@index([modeloId, ordem])
+}
+
+/// Anamnese aplicada a um paciente. Dado de saúde: escopo CLINICO.
+model Anamnese {
+  id             String    @id @default(cuid())
+  alunoId        String
+  aluno          User      @relation("AnamnesesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  profissionalId String
+  profissional   User      @relation("AnamnesesAplicadas", fields: [profissionalId], references: [id], onDelete: Cascade)
+  modeloId       String?
+  modelo         ModeloAnamnese? @relation(fields: [modeloId], references: [id], onDelete: SetNull)
+  /// Congelado na aplicação: renomear o modelo depois não muda o histórico.
+  nomeNoMomento  String
+  observacao     String?
+  respondidaEm   DateTime  @default(now())
+  respostas      RespostaAnamnese[]
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  @@index([alunoId, respondidaEm])
+}
+
+model RespostaAnamnese {
+  id            String            @id @default(cuid())
+  anamneseId    String
+  anamnese      Anamnese          @relation(fields: [anamneseId], references: [id], onDelete: Cascade)
+  perguntaId    String?
+  pergunta      PerguntaAnamnese? @relation(fields: [perguntaId], references: [id], onDelete: SetNull)
+  /// Pergunta e tipo congelados: editar o modelo não pode reescrever o que a
+  /// pessoa respondeu, nem mudar como a resposta deve ser lida.
+  perguntaNoMomento String
+  tipoNoMomento  TipoPergunta
+  /// Resposta em texto. Múltipla escolha usa `valores`.
+  valor          String?
+  valores        String[]          @default([])
+  ordem          Int
+
+  @@index([anamneseId, ordem])
+}
+
 /// Token de confirmação de e-mail. Mesmo tratamento do refresh: só o hash é
 /// persistido, então vazar o banco não permite confirmar e-mail de ninguém.
 model TokenVerificacaoEmail {

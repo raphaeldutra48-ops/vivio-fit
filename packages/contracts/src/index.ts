@@ -24,3 +24,4 @@ export * from './cardapios';
 export * from './compras';
 export * from './prescricoes';
 export * from './admin';
+export * from './anamnese';

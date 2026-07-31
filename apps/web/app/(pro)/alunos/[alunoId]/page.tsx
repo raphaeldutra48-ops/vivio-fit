@@ -73,6 +73,9 @@ export default function FichaDoAluno() {
               <Botao variante="neutra">Montar treino</Botao>
             </Link>
           )}
+          <Link href={`/alunos/${alunoId}/anamnese`}>
+            <Botao variante="neutra">Anamnese</Botao>
+          </Link>
           {usuario && PRESCRITORES.includes(usuario.papel) && (
             <Link href={`/alunos/${alunoId}/prescricoes`}>
               <Botao variante="neutra">Prescrever</Botao>

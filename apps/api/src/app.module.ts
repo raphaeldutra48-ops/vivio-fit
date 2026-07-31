@@ -20,6 +20,7 @@ import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
 import { NutricaoModule } from './modules/nutricao/nutricao.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AnamneseModule } from './modules/anamnese/anamnese.module';
 import { PrescricoesModule } from './modules/prescricoes/prescricoes.module';
 import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
@@ -46,6 +47,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     AvaliacaoModule,
     PrescricoesModule,
     AdminModule,
+    AnamneseModule,
   ],
   controllers: [HealthController, MeController],
   providers: [
