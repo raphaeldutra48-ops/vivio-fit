@@ -19,6 +19,7 @@ const PASTA_POR_TIPO: Record<TipoMidia, string> = {
   VIDEO_EXERCICIO: 'exercicios',
   FOTO_EVOLUCAO: 'evolucao',
   AVATAR: 'avatares',
+  MATERIAL: 'materiais',
 };
 
 const EXTENSAO_POR_MIME: Record<string, string> = {
@@ -29,6 +30,11 @@ const EXTENSAO_POR_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/heic': 'heic',
+  'application/pdf': 'pdf',
+  'audio/mpeg': 'mp3',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/csv': 'csv',
 };
 
 @Injectable()

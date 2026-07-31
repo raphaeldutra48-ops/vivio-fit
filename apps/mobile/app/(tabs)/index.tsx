@@ -142,6 +142,7 @@ export default function Inicio() {
         {[
           { rotulo: '⏰ Lembretes', destino: '/lembretes', descricao: 'Configurar lembretes' },
           { rotulo: '📋 Prescrições', destino: '/prescricoes', descricao: 'Minhas prescrições' },
+          { rotulo: '📁 Materiais', destino: '/materiais', descricao: 'Materiais recebidos' },
         ].map((atalho) => (
           <Pressable
             key={atalho.destino}

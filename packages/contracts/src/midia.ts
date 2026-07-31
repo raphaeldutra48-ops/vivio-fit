@@ -5,6 +5,8 @@ export const TipoMidia = {
   VIDEO_EXERCICIO: 'VIDEO_EXERCICIO',
   FOTO_EVOLUCAO: 'FOTO_EVOLUCAO',
   AVATAR: 'AVATAR',
+  /** Biblioteca do profissional: e-book, planilha, vídeo de apoio. */
+  MATERIAL: 'MATERIAL',
 } as const;
 export type TipoMidia = (typeof TipoMidia)[keyof typeof TipoMidia];
 
@@ -23,6 +25,22 @@ export const LIMITES_MIDIA: Record<
   AVATAR: {
     tamanhoMaximoBytes: 5 * 1024 * 1024,
     mimesAceitos: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  MATERIAL: {
+    tamanhoMaximoBytes: 200 * 1024 * 1024,
+    // Lista fechada de propósito: o arquivo vai para a mão do aluno, e aceitar
+    // qualquer mimeType convidaria a subir executável.
+    mimesAceitos: [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'video/mp4',
+      'audio/mpeg',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/csv',
+    ],
   },
 };
 

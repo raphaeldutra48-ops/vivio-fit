@@ -94,7 +94,7 @@ export const MENU: BlocoDeMenu[] = [
         itens: [],
       },
       { rotulo: 'Chat', icone: '💬', href: '/chat', estado: 'pronto', itens: [] },
-      { rotulo: 'Materiais', icone: '📁', href: '/materiais', estado: 'em-construcao', itens: [] },
+      { rotulo: 'Materiais', icone: '📁', href: '/materiais', estado: 'pronto', itens: [] },
     ],
   },
   {

@@ -70,6 +70,10 @@ import type {
   SalvarReceitaInput,
   SalvarRefeicaoInput,
   RelatorioDaCarteira,
+  CompartilharMaterialInput,
+  CriarMaterialInput,
+  MaterialDoAluno,
+  MaterialResumo,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -851,6 +855,35 @@ export class VivioClient {
 
     remover: (id: string): Promise<void> =>
       this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
+  };
+
+  // --- materiais ------------------------------------------------------------
+
+  readonly materiais = {
+    listar: (etiqueta?: string): Promise<MaterialResumo[]> =>
+      this.requisicao<MaterialResumo[]>('/materiais', { query: { etiqueta } }),
+
+    /** Visão do aluno: só o que foi compartilhado com ele. */
+    meus: (): Promise<MaterialDoAluno[]> => this.requisicao<MaterialDoAluno[]>('/materiais/meus'),
+
+    criar: (dados: CriarMaterialInput): Promise<MaterialResumo> =>
+      this.requisicao<MaterialResumo>('/materiais', { metodo: 'POST', corpo: dados }),
+
+    /** Link assinado e curto — o arquivo nunca fica público. */
+    abrir: (id: string): Promise<UrlAssinada> =>
+      this.requisicao<UrlAssinada>(`/materiais/${id}/abrir`),
+
+    compartilhar: (id: string, dados: CompartilharMaterialInput): Promise<MaterialResumo> =>
+      this.requisicao<MaterialResumo>(`/materiais/${id}/compartilhar`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    descompartilhar: (id: string, alunoId: string): Promise<void> =>
+      this.requisicao<void>(`/materiais/${id}/compartilhar/${alunoId}`, { metodo: 'DELETE' }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/materiais/${id}`, { metodo: 'DELETE' }),
   };
 
   // --- relatórios -----------------------------------------------------------

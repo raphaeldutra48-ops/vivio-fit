@@ -59,6 +59,8 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
+  materiais          Material[]              @relation("MateriaisDoAutor")
+  materiaisRecebidos MaterialCompartilhado[] @relation("MateriaisRecebidos")
   receitas           Receita[]        @relation("ReceitasDoAutor")
   refeicoesSalvas    RefeicaoSalva[]  @relation("RefeicoesDoAutor")
   modelosDeAnamnese  ModeloAnamnese[] @relation("ModelosDeAnamnese")
@@ -1075,6 +1077,54 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+enum TipoMaterial {
+  ARQUIVO
+  LINK
+}
+
+/// Biblioteca do profissional: e-books, planilhas, vídeos, links.
+///
+/// O material é do profissional; o que define quem vê é `MaterialCompartilhado`.
+/// Sem compartilhamento explícito, nenhum aluno alcança — mesmo com vínculo.
+model Material {
+  id            String       @id @default(cuid())
+  autorId       String
+  autor         User         @relation("MateriaisDoAutor", fields: [autorId], references: [id], onDelete: Cascade)
+  titulo        String
+  descricao     String?
+  tipo          TipoMaterial
+  /// Chave no armazenamento (tipo ARQUIVO). Entrega sempre por link assinado.
+  chave         String?
+  nomeArquivo   String?
+  mimeType      String?
+  tamanhoBytes  Int?
+  /// URL externa (tipo LINK) — vídeo do YouTube, artigo, planilha na nuvem.
+  url           String?
+  /// Etiquetas livres para o profissional organizar: "hipertrofia", "receitas".
+  etiquetas     String[]     @default([])
+  deletadoEm    DateTime?
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
+
+  compartilhamentos MaterialCompartilhado[]
+
+  @@index([autorId, deletadoEm])
+}
+
+model MaterialCompartilhado {
+  id          String   @id @default(cuid())
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  alunoId     String
+  aluno       User     @relation("MateriaisRecebidos", fields: [alunoId], references: [id], onDelete: Cascade)
+  compartilhadoEm DateTime @default(now())
+  /// Quando o aluno abriu pela primeira vez — o profissional sabe se chegou.
+  vistoEm     DateTime?
+
+  @@unique([materialId, alunoId])
+  @@index([alunoId, compartilhadoEm(sort: Desc)])
+}
+
 /// Preparação com ingredientes e modo de preparo. Os macros saem da soma dos
 /// ingredientes dividida pelo rendimento — nunca digitados à mão.
 model Receita {
