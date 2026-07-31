@@ -115,14 +115,14 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Refeições',
             href: '/plano-alimentar/refeicoes',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao:
               'Refeições prontas (café da manhã padrão, pré-treino) para encaixar em qualquer cardápio.',
           },
           {
             rotulo: 'Receitas',
             href: '/plano-alimentar/receitas',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao:
               'Receitas com modo de preparo e macros calculados a partir dos ingredientes.',
           },

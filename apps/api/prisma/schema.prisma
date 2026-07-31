@@ -59,6 +59,8 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
+  receitas           Receita[]        @relation("ReceitasDoAutor")
+  refeicoesSalvas    RefeicaoSalva[]  @relation("RefeicoesDoAutor")
   modelosDeAnamnese  ModeloAnamnese[] @relation("ModelosDeAnamnese")
   anamnesesComoAluno Anamnese[]       @relation("AnamnesesDoAluno")
   anamnesesAplicadas Anamnese[]       @relation("AnamnesesAplicadas")
@@ -514,6 +516,8 @@ model Alimento {
 
   itens         ItemRefeicao[]
   itensDeModelo ItemModelo[]  @relation("ItensDeModelo")
+  ingredientesDeReceita IngredienteReceita[] @relation("IngredientesDeReceita")
+  itensDeRefeicaoSalva  ItemRefeicaoSalva[]  @relation("ItensDeRefeicaoSalva")
 
   @@index([nome])
   @@index([grupo])
@@ -1071,6 +1075,79 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+/// Preparação com ingredientes e modo de preparo. Os macros saem da soma dos
+/// ingredientes dividida pelo rendimento — nunca digitados à mão.
+model Receita {
+  id            String  @id @default(cuid())
+  autorId       String
+  autor         User    @relation("ReceitasDoAutor", fields: [autorId], references: [id], onDelete: Cascade)
+  nome          String
+  descricao     String?
+  modoPreparo   String?
+  /// Quantas porções a receita inteira rende.
+  rendePorcoes  Decimal @default(1) @db.Decimal(6, 2)
+  /// Nome da porção como o aluno entende: "1 fatia", "1 concha".
+  nomeDaPorcao  String?
+  tempoMinutos  Int?
+  deletadoEm    DateTime?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  ingredientes IngredienteReceita[]
+  itensDeRefeicao ItemRefeicaoSalva[]
+
+  @@index([autorId, deletadoEm])
+}
+
+model IngredienteReceita {
+  id          String   @id @default(cuid())
+  receitaId   String
+  receita     Receita  @relation(fields: [receitaId], references: [id], onDelete: Cascade)
+  alimentoId  String
+  alimento    Alimento @relation("IngredientesDeReceita", fields: [alimentoId], references: [id])
+  quantidadeG Decimal  @db.Decimal(7, 2)
+  observacao  String?
+  ordem       Int
+
+  @@index([receitaId, ordem])
+}
+
+/// Refeição avulsa reutilizável — "Café da manhã 400 kcal" que serve em vários
+/// cardápios. Diferente de `RefeicaoModelo`, que só existe dentro de um cardápio.
+model RefeicaoSalva {
+  id              String   @id @default(cuid())
+  autorId         String
+  autor           User     @relation("RefeicoesDoAutor", fields: [autorId], references: [id], onDelete: Cascade)
+  nome            String
+  horarioSugerido String?
+  observacao      String?
+  deletadoEm      DateTime?
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  itens ItemRefeicaoSalva[]
+
+  @@index([autorId, deletadoEm])
+}
+
+/// Item de refeição salva: ou um alimento com gramas, ou uma receita com
+/// porções. Um dos dois, nunca os dois — garantido no serviço.
+model ItemRefeicaoSalva {
+  id          String        @id @default(cuid())
+  refeicaoId  String
+  refeicao    RefeicaoSalva @relation(fields: [refeicaoId], references: [id], onDelete: Cascade)
+  alimentoId  String?
+  alimento    Alimento?     @relation("ItensDeRefeicaoSalva", fields: [alimentoId], references: [id])
+  receitaId   String?
+  receita     Receita?      @relation(fields: [receitaId], references: [id])
+  quantidadeG Decimal?      @db.Decimal(7, 2)
+  porcoes     Decimal?      @db.Decimal(6, 2)
+  observacao  String?
+  ordem       Int
+
+  @@index([refeicaoId, ordem])
+}
+
 enum TipoPergunta {
   TEXTO
   TEXTO_LONGO

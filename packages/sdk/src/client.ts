@@ -65,6 +65,10 @@ import type {
   AplicarAnamneseInput,
   ModeloAnamneseResumo,
   SalvarModeloAnamneseInput,
+  ReceitaResumo,
+  RefeicaoSalvaResumo,
+  SalvarReceitaInput,
+  SalvarRefeicaoInput,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -816,6 +820,36 @@ export class VivioClient {
         metodo: 'PATCH',
         corpo: dados,
       }),
+  };
+
+  // --- receitas e refeições --------------------------------------------------
+
+  readonly receitas = {
+    listar: (q?: string): Promise<ReceitaResumo[]> =>
+      this.requisicao<ReceitaResumo[]>('/receitas', { query: { q } }),
+
+    criar: (dados: SalvarReceitaInput): Promise<ReceitaResumo> =>
+      this.requisicao<ReceitaResumo>('/receitas', { metodo: 'POST', corpo: dados }),
+
+    atualizar: (id: string, dados: SalvarReceitaInput): Promise<ReceitaResumo> =>
+      this.requisicao<ReceitaResumo>(`/receitas/${id}`, { metodo: 'PATCH', corpo: dados }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/receitas/${id}`, { metodo: 'DELETE' }),
+  };
+
+  readonly refeicoesSalvas = {
+    listar: (): Promise<RefeicaoSalvaResumo[]> =>
+      this.requisicao<RefeicaoSalvaResumo[]>('/refeicoes'),
+
+    criar: (dados: SalvarRefeicaoInput): Promise<RefeicaoSalvaResumo> =>
+      this.requisicao<RefeicaoSalvaResumo>('/refeicoes', { metodo: 'POST', corpo: dados }),
+
+    atualizar: (id: string, dados: SalvarRefeicaoInput): Promise<RefeicaoSalvaResumo> =>
+      this.requisicao<RefeicaoSalvaResumo>(`/refeicoes/${id}`, { metodo: 'PATCH', corpo: dados }),
+
+    remover: (id: string): Promise<void> =>
+      this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
   };
 
   // --- anamnese -------------------------------------------------------------
