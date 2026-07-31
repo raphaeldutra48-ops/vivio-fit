@@ -69,6 +69,7 @@ import type {
   RefeicaoSalvaResumo,
   SalvarReceitaInput,
   SalvarRefeicaoInput,
+  RelatorioDaCarteira,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -850,6 +851,14 @@ export class VivioClient {
 
     remover: (id: string): Promise<void> =>
       this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
+  };
+
+  // --- relatórios -----------------------------------------------------------
+
+  readonly relatorios = {
+    /** Cada linha traz só o que aquele aluno autorizou este profissional a ver. */
+    carteira: (dias?: number): Promise<RelatorioDaCarteira> =>
+      this.requisicao<RelatorioDaCarteira>('/relatorios/carteira', { query: { dias } }),
   };
 
   // --- anamnese -------------------------------------------------------------

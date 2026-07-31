@@ -26,3 +26,4 @@ export * from './prescricoes';
 export * from './admin';
 export * from './anamnese';
 export * from './receitas';
+export * from './relatorios';

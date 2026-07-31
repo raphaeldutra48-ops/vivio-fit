@@ -80,7 +80,7 @@ export const MENU: BlocoDeMenu[] = [
         estado: 'em-construcao',
         itens: [],
       },
-      { rotulo: 'Relatórios', icone: '📊', href: '/relatorios', estado: 'em-construcao', itens: [] },
+      { rotulo: 'Relatórios', icone: '📊', href: '/relatorios', estado: 'pronto', itens: [] },
     ],
   },
   {
