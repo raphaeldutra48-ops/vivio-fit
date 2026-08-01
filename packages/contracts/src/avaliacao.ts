@@ -160,3 +160,56 @@ export const FAIXAS_GORDURA: Record<
 export function faixaDeGordura(percentual: number, sexo: SexoBiologico): string {
   return FAIXAS_GORDURA[sexo].find((f) => percentual <= f.ate)?.rotulo ?? 'Acima';
 }
+
+// --- Equações ---------------------------------------------------------------
+
+/**
+ * As equações moram aqui, e não no `apps/api`, porque a tela de adipometria
+ * mostra o percentual enquanto o profissional digita — sem ida e volta a cada
+ * dobra. Enquanto isso era uma cópia manual dentro da página, existiam dois
+ * conjuntos de coeficientes clínicos para manter iguais, e o dia em que
+ * divergissem a prévia diria um número e o gravado seria outro.
+ *
+ * É a mesma regra do cabeçalho deste pacote: usado pelo backend E por um
+ * cliente, mora aqui.
+ *
+ * São estimativas de campo, validadas para população adulta não atleta. Não
+ * substituem DEXA nem diagnóstico.
+ */
+
+export class ErroDeCalculo extends Error {}
+
+/** Fora desta faixa o resultado não é fisiologicamente plausível. */
+export const PERCENTUAL_MIN = 1;
+export const PERCENTUAL_MAX = 70;
+
+/** Siri (1961): converte densidade corporal em percentual de gordura. */
+export function siri(densidade: number): number {
+  if (densidade <= 0) throw new ErroDeCalculo('Densidade corporal inválida.');
+  return 495 / densidade - 450;
+}
+
+/**
+ * Jackson & Pollock — densidade corporal a partir do somatório de dobras (mm)
+ * e da idade (anos). Cada combinação protocolo × sexo tem coeficientes próprios.
+ */
+export function densidadeCorporal(
+  protocolo: ProtocoloDobras,
+  sexo: SexoBiologico,
+  somaMm: number,
+  idade: number,
+): number {
+  const s = somaMm;
+  const s2 = s * s;
+
+  if (protocolo === ProtocoloDobras.POLLOCK_3) {
+    // Jackson & Pollock (1978) homens: peitoral, abdominal, coxa
+    if (sexo === 'M') return 1.10938 - 0.0008267 * s + 0.0000016 * s2 - 0.0002574 * idade;
+    // Jackson, Pollock & Ward (1980) mulheres: tríceps, supra-ilíaca, coxa
+    return 1.0994921 - 0.0009929 * s + 0.0000023 * s2 - 0.0001392 * idade;
+  }
+
+  // Pollock 7 dobras
+  if (sexo === 'M') return 1.112 - 0.00043499 * s + 0.00000055 * s2 - 0.00028826 * idade;
+  return 1.097 - 0.00046971 * s + 0.00000056 * s2 - 0.00012828 * idade;
+}

@@ -5,42 +5,25 @@ import {
   ProtocoloDobras,
   ROTULO_DOBRA,
   ROTULO_PROTOCOLO,
-  faixaDeGordura,
   type AvaliacaoResumo,
-  type Dobra,
   type SexoBiologico,
   type VinculoResumo,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
+import {
+  corpoDaAvaliacao,
+  erroVisivel,
+  previaDaAvaliacao,
+  problemaDaAltura,
+  problemaDaDobra,
+  problemaDaIdade,
+  problemaDoPeso,
+  problemasDaAvaliacao,
+  type EntradaNaTela,
+} from '../../../../lib/adipometria';
 import { sdk } from '../../../../lib/sdk';
-
-/**
- * Réplica local das equações, só para a prévia enquanto o profissional digita.
- * O número que vale é o que o servidor devolve ao salvar — este existe para o
- * resultado aparecer sem ida e volta a cada dobra digitada.
- */
-function previaPercentual(
-  protocolo: ProtocoloDobras,
-  sexo: SexoBiologico,
-  soma: number,
-  idade: number,
-): number | null {
-  if (soma <= 0 || idade <= 0) return null;
-  const s2 = soma * soma;
-  const d =
-    protocolo === ProtocoloDobras.POLLOCK_3
-      ? sexo === 'M'
-        ? 1.10938 - 0.0008267 * soma + 0.0000016 * s2 - 0.0002574 * idade
-        : 1.0994921 - 0.0009929 * soma + 0.0000023 * s2 - 0.0001392 * idade
-      : sexo === 'M'
-        ? 1.112 - 0.00043499 * soma + 0.00000055 * s2 - 0.00028826 * idade
-        : 1.097 - 0.00046971 * soma + 0.00000056 * s2 - 0.00012828 * idade;
-
-  const percentual = 495 / d - 450;
-  return percentual > 1 && percentual < 70 ? Math.round(percentual * 10) / 10 : null;
-}
 
 export default function Adipometria() {
   const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
@@ -76,17 +59,17 @@ export default function Adipometria() {
       .catch(() => setHistorico([]));
   }, [alunoId, mensagem]);
 
-  const soma = useMemo(
-    () => exigidas.reduce((total, d) => total + (Number(dobras[d]?.replace(',', '.')) || 0), 0),
-    [exigidas, dobras],
+  const entrada: EntradaNaTela = useMemo(
+    () => ({ protocolo, sexo, idade, peso, altura, dobras }),
+    [protocolo, sexo, idade, peso, altura, dobras],
   );
 
-  const previa = previaPercentual(protocolo, sexo, soma, Number(idade) || 0);
-  const pesoNum = Number(peso.replace(',', '.')) || 0;
-  const massaGorda = previa !== null && pesoNum > 0 ? (pesoNum * previa) / 100 : null;
-
-  const completo =
-    alunoId !== '' && pesoNum > 0 && exigidas.every((d) => Number(dobras[d]?.replace(',', '.')) > 0);
+  const previa = useMemo(() => previaDaAvaliacao(entrada), [entrada]);
+  const problemas = useMemo(
+    () => problemasDaAvaliacao(alunoId, entrada),
+    [alunoId, entrada],
+  );
+  const completo = problemas.length === 0;
 
   async function salvar() {
     if (!completo) return;
@@ -94,18 +77,7 @@ export default function Adipometria() {
     setErro(null);
     setMensagem(null);
     try {
-      const r = await sdk.avaliacoes.registrar(alunoId, {
-        metodo: 'ADIPOMETRIA',
-        data: new Date(),
-        protocolo,
-        sexo,
-        idade: Number(idade),
-        pesoKg: pesoNum,
-        alturaCm: altura ? Number(altura) : undefined,
-        dobras: Object.fromEntries(
-          exigidas.map((d) => [d, Number(dobras[d]!.replace(',', '.'))]),
-        ) as Record<Dobra, number>,
-      });
+      const r = await sdk.avaliacoes.registrar(alunoId, corpoDaAvaliacao(entrada, new Date()));
       setMensagem(
         `Avaliação salva: ${r.resultado.percentualGordura}% de gordura. Os gráficos do aluno já refletem o resultado.`,
       );
@@ -196,12 +168,21 @@ export default function Adipometria() {
                 rotulo="Idade (anos)"
                 type="number"
                 value={idade}
+                erro={erroVisivel(idade, problemaDaIdade(idade))}
                 onChange={(e) => setIdade(e.target.value)}
               />
-              <Campo rotulo="Peso (kg)" value={peso} onChange={(e) => setPeso(e.target.value)} />
+              <Campo
+                rotulo="Peso (kg)"
+                inputMode="decimal"
+                value={peso}
+                erro={erroVisivel(peso, problemaDoPeso(peso))}
+                onChange={(e) => setPeso(e.target.value)}
+              />
               <Campo
                 rotulo="Altura (cm) — opcional"
+                inputMode="decimal"
                 value={altura}
+                erro={erroVisivel(altura, problemaDaAltura(altura))}
                 onChange={(e) => setAltura(e.target.value)}
               />
             </div>
@@ -218,6 +199,7 @@ export default function Adipometria() {
                   rotulo={`${ROTULO_DOBRA[d]} (mm)`}
                   inputMode="decimal"
                   value={dobras[d] ?? ''}
+                  erro={erroVisivel(dobras[d], problemaDaDobra(dobras[d]))}
                   onChange={(e) => setDobras((atual) => ({ ...atual, [d]: e.target.value }))}
                 />
               ))}
@@ -228,10 +210,19 @@ export default function Adipometria() {
             </p>
           </Cartao>
 
-          <div>
-            <Botao disabled={!completo || salvando} onClick={() => void salvar()}>
-              {salvando ? 'Salvando…' : 'Salvar avaliação'}
-            </Botao>
+          <div className="flex flex-col gap-sm">
+            {problemas.length > 0 && (
+              <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+                {problemas.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+            <div>
+              <Botao disabled={!completo || salvando} onClick={() => void salvar()}>
+                {salvando ? 'Salvando…' : 'Salvar avaliação'}
+              </Botao>
+            </div>
           </div>
         </div>
 
@@ -241,39 +232,54 @@ export default function Adipometria() {
               Resultado
             </p>
             <p className="text-2xl font-bold tabular-nums">
-              {previa !== null ? `${previa}%` : '—'}
+              {previa ? `${previa.percentualGordura}%` : '—'}
               <span className="text-sm font-normal" style={{ color: 'var(--vv-texto-secundario)' }}>
                 {' '}
                 de gordura
               </span>
             </p>
-            {previa !== null && (
+            {previa ? (
               <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                Faixa: {faixaDeGordura(previa, sexo)}
+                Faixa: {previa.faixa}
+              </p>
+            ) : (
+              /*
+                Antes a prévia calculava com o que houvesse: duas de três dobras
+                davam soma menor, densidade maior e um percentual BAIXO na tela —
+                plausível e errado. O servidor sempre recusou meio protocolo;
+                agora a tela recusa também, e diz por quê.
+              */
+              <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                Preencha as {exigidas.length} dobras e a idade para ver o resultado.
               </p>
             )}
 
             <dl className="mt-md flex flex-col gap-xs text-sm">
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Soma das dobras</dt>
-                <dd className="tabular-nums">{soma > 0 ? `${soma} mm` : '—'}</dd>
+                <dd className="tabular-nums">{previa ? `${previa.somaMm} mm` : '—'}</dd>
               </div>
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa gorda</dt>
                 <dd className="tabular-nums">
-                  {massaGorda !== null ? `${massaGorda.toFixed(1)} kg` : '—'}
+                  {previa?.massaGordaKg !== null && previa?.massaGordaKg !== undefined
+                    ? `${previa.massaGordaKg.toFixed(1)} kg`
+                    : '—'}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa magra</dt>
                 <dd className="tabular-nums">
-                  {massaGorda !== null ? `${(pesoNum - massaGorda).toFixed(1)} kg` : '—'}
+                  {previa?.massaMagraKg !== null && previa?.massaMagraKg !== undefined
+                    ? `${previa.massaMagraKg.toFixed(1)} kg`
+                    : '—'}
                 </dd>
               </div>
             </dl>
 
             <p className="mt-md text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
-              Prévia local. O valor gravado é calculado no servidor.
+              Prévia local, pela mesma equação que a API executa. O valor gravado é calculado no
+              servidor.
             </p>
           </Cartao>
 

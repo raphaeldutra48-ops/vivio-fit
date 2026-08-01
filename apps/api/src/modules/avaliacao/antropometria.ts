@@ -1,57 +1,29 @@
 import {
   DOBRAS_DO_PROTOCOLO,
-  ProtocoloDobras,
+  ErroDeCalculo,
+  PERCENTUAL_MAX,
+  PERCENTUAL_MIN,
+  densidadeCorporal,
+  siri,
   type Dobra,
+  type ProtocoloDobras,
   type ResultadoComposicao,
   type SexoBiologico,
 } from '@vivio/contracts';
 
 /**
- * Cálculo de composição corporal por dobras cutâneas.
+ * Composição corporal por dobras cutâneas — a parte que precisa do servidor.
  *
- * Fica isolado de propósito: é a única parte do app onde um erro de fórmula
- * vira um número clínico errado na tela do paciente. Sem banco, sem HTTP —
- * entrada e saída puras, testáveis diretamente.
+ * As equações em si (Jackson & Pollock e Siri) moram em `@vivio/contracts`,
+ * porque a tela de adipometria também as executa para mostrar o percentual
+ * enquanto o profissional digita. Duas cópias de coeficiente clínico é o tipo
+ * de duplicação que diverge em silêncio.
  *
- * Caminho: somatório das dobras -> densidade corporal (Jackson & Pollock) ->
- * percentual de gordura (Siri).
- *
- * São equações de ESTIMATIVA de campo, validadas para população adulta não
- * atleta. Não substituem DEXA nem diagnóstico.
+ * O que sobra aqui é o que só o servidor faz: exigir o protocolo completo,
+ * recusar o implausível e montar o resultado gravado.
  */
 
-export class ErroDeCalculo extends Error {}
-
-/** Siri (1961): converte densidade corporal em percentual de gordura. */
-export function siri(densidade: number): number {
-  if (densidade <= 0) throw new ErroDeCalculo('Densidade corporal inválida.');
-  return 495 / densidade - 450;
-}
-
-/**
- * Jackson & Pollock — densidade corporal a partir do somatório de dobras (mm)
- * e da idade (anos). Cada combinação protocolo × sexo tem coeficientes próprios.
- */
-export function densidadeCorporal(
-  protocolo: ProtocoloDobras,
-  sexo: SexoBiologico,
-  somaMm: number,
-  idade: number,
-): number {
-  const s = somaMm;
-  const s2 = s * s;
-
-  if (protocolo === ProtocoloDobras.POLLOCK_3) {
-    // Jackson & Pollock (1978) homens: peitoral, abdominal, coxa
-    if (sexo === 'M') return 1.10938 - 0.0008267 * s + 0.0000016 * s2 - 0.0002574 * idade;
-    // Jackson, Pollock & Ward (1980) mulheres: tríceps, supra-ilíaca, coxa
-    return 1.0994921 - 0.0009929 * s + 0.0000023 * s2 - 0.0001392 * idade;
-  }
-
-  // Pollock 7 dobras
-  if (sexo === 'M') return 1.112 - 0.00043499 * s + 0.00000055 * s2 - 0.00028826 * idade;
-  return 1.097 - 0.00046971 * s + 0.00000056 * s2 - 0.00012828 * idade;
-}
+export { ErroDeCalculo, densidadeCorporal, siri };
 
 const arredondar = (v: number, casas = 2): number => {
   const fator = 10 ** casas;
@@ -88,7 +60,7 @@ export function calcularPorDobras(entrada: EntradaAdipometria): ResultadoComposi
 
   // Fora desta faixa o resultado não é fisiologicamente plausível — sinal de
   // dobra digitada errada (vírgula trocada, cm no lugar de mm).
-  if (percentual < 1 || percentual > 70) {
+  if (percentual < PERCENTUAL_MIN || percentual > PERCENTUAL_MAX) {
     throw new ErroDeCalculo(
       'O resultado ficou fora da faixa plausível. Confira as dobras — os valores são em milímetros.',
     );

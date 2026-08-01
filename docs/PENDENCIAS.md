@@ -99,13 +99,21 @@ digita antes de mandar (é onde o bug mora), não onde ela só exibe. Formulári
 que só passa `value` adiante não precisa de teste de render — o typecheck já
 cobre.
 **Já coberto desde então:** a reordenação das duas telas (`Reordenavel.test.tsx`),
-a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`) e o editor de
-plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`), que era a
-candidata anterior e cobrou o preço previsto — ver a resolvida de 2026-08-01.
-**Candidata seguinte:** a adipometria. É a tela com mais transformação por tecla
-do app — sete dobras cutâneas viram densidade e depois percentual de gordura por
-protocolo — e hoje nada garante que uma dobra apagada não vire zero no meio da
-fórmula, que é o mesmo defeito que o plano alimentar tinha.
+a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`), o editor de
+plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`) e a
+adipometria (`lib/adipometria.spec.ts` + `teste/adipometria.test.tsx`) — as duas
+últimas eram as candidatas anteriores e as duas cobraram o preço previsto. Ver as
+resolvidas de 2026-08-01.
+**Candidata seguinte: a bioimpedância**, e desta vez não é palpite — o defeito já
+foi lido no código. `apps/web/app/(pro)/avaliacao/bioimpedancia/page.tsx` tem
+`const numero = (chave) => Number(valores[chave]?.replace(',','.')) || 0`, o mesmo
+`|| 0` que acabou de ser tirado das outras duas, e um `completo` que só confere
+`peso > 0 && gordura > 0`. As oito faixas do `avaliacaoBioimpedanciaSchema`
+(percentual 1–70, massa óssea 0,5–10, TMB inteira 500–5000…) não são conferidas em
+lugar nenhum, e o `opcional()` devolve `numero()` — então um campo opcional com
+lixo digitado vira `0` e é recusado pelo `.min()` como se alguém tivesse errado de
+propósito. É a mesma família das outras duas, então `lib/adipometria.ts` já é o
+molde.
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
@@ -187,6 +195,49 @@ carrega — o modelo de dados não muda.
 o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
 ## Resolvidas
+
+### A equação de composição corporal virou um lugar só — resolvida em 2026-08-01
+**Era:** a adipometria, candidata seguinte da pendência 14b. E o que o teste
+encontrou primeiro não foi um bug de campo: era **a equação clínica escrita duas
+vezes**. `apps/api/.../antropometria.ts` tinha Jackson & Pollock e Siri; a página
+`avaliacao/adipometria/page.tsx` tinha uma cópia manual dos mesmos coeficientes,
+para mostrar o percentual enquanto o profissional digita sem ida e volta à API.
+Dois conjuntos de coeficientes clínicos para manter iguais — e o `index.ts` do
+`packages/contracts` diz, em letra de fôrma, "se um tipo é usado pelo backend E
+por um cliente, ele mora aqui. Nada de duplicar definição em apps/*". É a mesma
+história da regra de consentimento, que já tinha divergido uma vez.
+**Correção:** `siri`, `densidadeCorporal`, `ErroDeCalculo` e os limites de
+plausibilidade passaram para `packages/contracts/src/avaliacao.ts`, ao lado de
+`DOBRAS_DO_PROTOCOLO` e `faixaDeGordura`, que já moravam lá. O `antropometria.ts`
+importa e reexporta — fica com o que só o servidor faz: exigir o protocolo
+completo, recusar o implausível e montar o resultado gravado. **Os 15 testes da
+API não foram tocados e continuam passando**, que é a prova de que a mudança não
+mexeu em nenhum número.
+**O bug que a duplicação escondia, e que era o pior de todos:** a prévia da tela
+somava as dobras com `Number(texto) || 0` e calculava com o que houvesse. Com
+duas de três dobras preenchidas, a soma sai menor, a densidade sai maior e a tela
+mostra um percentual **baixo** — plausível e errado. No caso testado no navegador:
+9,1% com duas dobras contra 13,6% com as três. O servidor **sempre** recusou meio
+protocolo (`calcularPorDobras` lança se faltar dobra, e o comentário lá explica
+exatamente por quê); a tela é que mostrava assim mesmo. Agora ela recusa também,
+e diz "Preencha as 3 dobras e a idade para ver o resultado".
+**Outros três defeitos, achados ao escrever o teste:** a idade entra na equação e
+não era conferida em lugar nenhum (`completo` não a olhava — 150 anos ia direto
+para o 400); o peso só era conferido como `> 0`, contra um schema que exige 20–400
+kg; e a altura fazia `Number(altura)` **sem** trocar a vírgula, ao contrário do
+peso logo acima — "175,5" virava `NaN` e era enviado como `null`.
+**Decisão de interface:** o erro só pinta o campo depois que alguém digitou algo
+(`erroVisivel`). A tela abre com peso e dobras vazios; recebê-la toda vermelha
+seria ranzinza sem informar nada. Quem cobra o que falta é a lista acima do botão.
+**Verificado:** 26 testes de unidade em `lib/adipometria.spec.ts` — inclusive que
+meio protocolo devolve `null`, que a prévia confere com a equação publicada
+(coeficientes literais no teste, como no da API) e que massa gorda + magra fecham
+com o peso — e 7 de render em `teste/adipometria.test.tsx`. Suíte da web: **120
+testes**. Operado no navegador: duas dobras deixaram o resultado em "—" com o
+botão travado, a terceira trouxe 13,6% / faixa Bom / 45 mm / 10,9 + 69,1 = 80 kg,
+e 150 mm numa dobra pintou "entre 1 e 100 mm" no campo. Nada foi salvo.
+**Ainda aberto:** pendência 14b — a bioimpedância é a próxima, com o mesmo `|| 0`
+já localizado.
 
 ### O editor de plano alimentar ganhou teste — e ele achou um bug — resolvida em 2026-08-01
 **Era:** a candidata seguinte da pendência 14b. O campo de gramas é texto (tem de
