@@ -90,7 +90,7 @@ export const MENU: BlocoDeMenu[] = [
         rotulo: 'Site profissional',
         icone: '🌐',
         href: '/site-profissional',
-        estado: 'em-construcao',
+        estado: 'pronto',
         itens: [],
       },
       { rotulo: 'Chat', icone: '💬', href: '/chat', estado: 'pronto', itens: [] },
@@ -211,7 +211,7 @@ export const MENU: BlocoDeMenu[] = [
           {
             rotulo: 'Meu perfil',
             href: '/cadastros/perfil',
-            estado: 'em-construcao',
+            estado: 'pronto',
             descricao: 'Seus dados, registro no conselho e especialidades.',
           },
           {
@@ -222,7 +222,7 @@ export const MENU: BlocoDeMenu[] = [
           },
         ],
       },
-      { rotulo: 'Ajuda', icone: '❓', href: '/ajuda', estado: 'em-construcao', itens: [] },
+      { rotulo: 'Ajuda', icone: '❓', href: '/ajuda', estado: 'pronto', itens: [] },
     ],
   },
 ];

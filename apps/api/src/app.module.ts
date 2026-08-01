@@ -24,9 +24,11 @@ import { AnamneseModule } from './modules/anamnese/anamnese.module';
 import { FinanceiroModule } from './modules/financeiro/financeiro.module';
 import { MateriaisModule } from './modules/materiais/materiais.module';
 import { RelatoriosModule } from './modules/relatorios/relatorios.module';
+import { SiteModule } from './modules/site/site.module';
 import { PrescricoesModule } from './modules/prescricoes/prescricoes.module';
 import { TreinosModule } from './modules/treinos/treinos.module';
 import { MeController } from './modules/users/me.controller';
+import { PerfilService } from './modules/users/perfil.service';
 import { VinculosModule } from './modules/vinculos/vinculos.module';
 
 @Module({
@@ -54,12 +56,14 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     RelatoriosModule,
     MateriaisModule,
     FinanceiroModule,
+    SiteModule,
   ],
   controllers: [HealthController, MeController],
   providers: [
     // Autenticação é o padrão. Rota aberta exige @Publico() explícito.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_FILTER, useClass: ErroFilter },
+    PerfilService,
   ],
 })
 export class AppModule implements NestModule {

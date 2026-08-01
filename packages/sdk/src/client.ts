@@ -79,6 +79,13 @@ import type {
   CriarCobrancaInput,
   RegistrarPagamentoInput,
   ResumoFinanceiro,
+  EnviarPedidoInput,
+  PaginaPublica,
+  PedidoResumo,
+  PerfilPublicoResumo,
+  SalvarPerfilPublicoInput,
+  AtualizarPerfilInput,
+  MeuPerfil,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -330,6 +337,12 @@ export class VivioClient {
 
   readonly me = {
     obter: (): Promise<UsuarioAutenticado> => this.requisicao<UsuarioAutenticado>('/me'),
+
+    perfil: (): Promise<MeuPerfil> => this.requisicao<MeuPerfil>('/me/perfil'),
+
+    /** Trocar o registro no conselho revoga a verificação. */
+    atualizarPerfil: (dados: AtualizarPerfilInput): Promise<MeuPerfil> =>
+      this.requisicao<MeuPerfil>('/me/perfil', { metodo: 'PATCH', corpo: dados }),
   };
 
   // --- vínculos -----------------------------------------------------------
@@ -860,6 +873,32 @@ export class VivioClient {
 
     remover: (id: string): Promise<void> =>
       this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
+  };
+
+  // --- site profissional ----------------------------------------------------
+
+  readonly site = {
+    meu: (): Promise<PerfilPublicoResumo | null> =>
+      this.requisicao<PerfilPublicoResumo | null>('/site'),
+
+    salvar: (dados: SalvarPerfilPublicoInput): Promise<PerfilPublicoResumo> =>
+      this.requisicao<PerfilPublicoResumo>('/site', { metodo: 'PUT', corpo: dados }),
+
+    listarPedidos: (): Promise<PedidoResumo[]> => this.requisicao<PedidoResumo[]>('/site/pedidos'),
+
+    marcarAtendido: (id: string): Promise<void> =>
+      this.requisicao<void>(`/site/pedidos/${id}/atendido`, { metodo: 'PATCH' }),
+
+    /** Página pública — sem autenticação, é o ponto do recurso. */
+    porSlug: (slug: string): Promise<PaginaPublica> =>
+      this.requisicao<PaginaPublica>(`/p/${slug}`, { autenticada: false }),
+
+    enviarPedido: (slug: string, dados: EnviarPedidoInput): Promise<void> =>
+      this.requisicao<void>(`/p/${slug}/contato`, {
+        metodo: 'POST',
+        corpo: dados,
+        autenticada: false,
+      }),
   };
 
   // --- financeiro -----------------------------------------------------------

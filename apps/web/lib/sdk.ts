@@ -8,7 +8,13 @@ import { VivioClient } from '@vivio/sdk';
  * quem acabou de clicar no link de confirmação do e-mail, que é exatamente
  * quem nunca está autenticado.
  */
-const ROTAS_PUBLICAS = ['/login', '/cadastrar', '/verificar-email'];
+const ROTAS_PUBLICAS = [
+  '/login',
+  '/cadastrar',
+  '/verificar-email',
+  // Página do profissional: existe justamente para quem não tem conta.
+  '/p/',
+];
 
 const emRotaPublica = (): boolean =>
   typeof window !== 'undefined' &&

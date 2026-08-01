@@ -29,3 +29,5 @@ export * from './receitas';
 export * from './relatorios';
 export * from './materiais';
 export * from './financeiro';
+export * from './site';
+export * from './perfil';

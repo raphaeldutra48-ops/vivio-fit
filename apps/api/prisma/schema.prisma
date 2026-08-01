@@ -59,6 +59,7 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
+  perfilPublico      PerfilPublico?          @relation("PerfilPublicoDoProfissional")
   cobrancasEmitidas  Cobranca[]              @relation("CobrancasEmitidas")
   cobrancasComoAluno Cobranca[]              @relation("CobrancasDoAluno")
   materiais          Material[]              @relation("MateriaisDoAutor")
@@ -1079,6 +1080,50 @@ model Notificacao {
 /// Cada login abre uma "família". Cada refresh emite um token novo e marca o
 /// anterior como usado. Se um token JÁ USADO for reapresentado, significa que
 /// vazou: revogamos a família inteira e forçamos novo login.
+/// Página pública do profissional, para captar aluno.
+///
+/// Só vai ao ar se o registro no conselho estiver verificado — página pública
+/// dizendo "médico" sem verificação seria a plataforma emprestando credibilidade
+/// a quem não comprovou nada.
+model PerfilPublico {
+  id             String   @id @default(cuid())
+  profissionalId String   @unique
+  profissional   User     @relation("PerfilPublicoDoProfissional", fields: [profissionalId], references: [id], onDelete: Cascade)
+  /// Endereço da página: /p/{slug}. Único em toda a plataforma.
+  slug           String   @unique
+  titulo         String
+  apresentacao   String?
+  cidade         String?
+  uf             String?
+  /// Atendimento online, presencial ou os dois.
+  atendeOnline   Boolean  @default(true)
+  atendePresencial Boolean @default(false)
+  whatsapp       String?
+  instagram      String?
+  /// Desligado = a página responde 404 sem apagar o conteúdo.
+  publicado      Boolean  @default(false)
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  pedidos PedidoDeContato[]
+}
+
+/// Alguém interessado que preencheu o formulário da página pública.
+model PedidoDeContato {
+  id         String   @id @default(cuid())
+  perfilId   String
+  perfil     PerfilPublico @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  nome       String
+  email      String
+  telefone   String?
+  mensagem   String?
+  /// O profissional marca quando já respondeu.
+  atendidoEm DateTime?
+  criadoEm   DateTime @default(now())
+
+  @@index([perfilId, criadoEm(sort: Desc)])
+}
+
 enum StatusCobranca {
   PENDENTE
   PAGA
