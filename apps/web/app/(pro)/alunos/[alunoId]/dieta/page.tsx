@@ -1,73 +1,27 @@
 'use client';
 
-import type { AlimentoResumo, Macros } from '@vivio/contracts';
+import type { AlimentoResumo } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../../components/ui';
+import {
+  corDaMeta,
+  corpoDoPlano,
+  macrosDaPorcao,
+  macrosDaRefeicao,
+  metaEmNumero,
+  problemaDaQuantidade,
+  problemasDoPlano,
+  quantidadeEmGramas,
+  somar,
+  type MetasNaTela,
+  type RefeicaoNaTela,
+} from '../../../../../lib/dieta';
 import { sdk } from '../../../../../lib/sdk';
 
-interface ItemNaTela {
-  chave: string;
-  alimento: AlimentoResumo;
-  quantidadeG: string;
-}
-
-interface RefeicaoNaTela {
-  nome: string;
-  horario: string;
-  itens: ItemNaTela[];
-}
-
 const AZUL_NUTRICAO = '#2A8CA3';
-
-/**
- * Cálculo local, espelhando `macros.ts` do servidor.
- *
- * A tabela guarda tudo por 100 g, então prescrever 150 g é regra de três. O
- * total gravado é sempre recalculado no servidor — este aqui existe para o
- * número mudar enquanto o nutricionista digita, sem ida e volta a cada tecla.
- */
-function macrosDaPorcao(alimento: AlimentoResumo, gramas: number): Macros {
-  const f = gramas / 100;
-  const r = (v: number) => Math.round(v * f * 100) / 100;
-  return {
-    kcal: r(alimento.porcao100g.kcal),
-    proteinaG: r(alimento.porcao100g.proteinaG),
-    carboidratoG: r(alimento.porcao100g.carboidratoG),
-    gorduraG: r(alimento.porcao100g.gorduraG),
-    fibraG: r(alimento.porcao100g.fibraG),
-  };
-}
-
-function somar(lista: Macros[]): Macros {
-  const t = lista.reduce(
-    (s, m) => ({
-      kcal: s.kcal + m.kcal,
-      proteinaG: s.proteinaG + m.proteinaG,
-      carboidratoG: s.carboidratoG + m.carboidratoG,
-      gorduraG: s.gorduraG + m.gorduraG,
-      fibraG: s.fibraG + m.fibraG,
-    }),
-    { kcal: 0, proteinaG: 0, carboidratoG: 0, gorduraG: 0, fibraG: 0 },
-  );
-  const r = (v: number) => Math.round(v * 100) / 100;
-  return {
-    kcal: r(t.kcal),
-    proteinaG: r(t.proteinaG),
-    carboidratoG: r(t.carboidratoG),
-    gorduraG: r(t.gorduraG),
-    fibraG: r(t.fibraG),
-  };
-}
-
-/** Verde dentro de ±5% da meta, laranja fora. Sem meta, neutro. */
-function corDaMeta(atual: number, alvo: number | null): string {
-  if (!alvo) return 'var(--vv-texto-secundario)';
-  const desvio = Math.abs(atual - alvo) / alvo;
-  return desvio <= 0.05 ? 'var(--vv-sucesso)' : 'var(--vv-alerta)';
-}
 
 export default function MontarDieta() {
   const { alunoId } = useParams<{ alunoId: string }>();
@@ -96,18 +50,19 @@ export default function MontarDieta() {
       .catch(() => setErro('Não foi possível carregar a tabela de alimentos.'));
   }, [busca]);
 
-  const macrosPorRefeicao = useMemo(
-    () =>
-      refeicoes.map((r) =>
-        somar(
-          r.itens.map((i) =>
-            macrosDaPorcao(i.alimento, Number(i.quantidadeG.replace(',', '.')) || 0),
-          ),
-        ),
-      ),
-    [refeicoes],
+  const metas: MetasNaTela = useMemo(
+    () => ({ kcal: kcalAlvo, proteina: proteinaAlvo, carbo: carboAlvo, gordura: gorduraAlvo }),
+    [kcalAlvo, proteinaAlvo, carboAlvo, gorduraAlvo],
   );
+
+  const macrosPorRefeicao = useMemo(() => refeicoes.map(macrosDaRefeicao), [refeicoes]);
   const total = useMemo(() => somar(macrosPorRefeicao), [macrosPorRefeicao]);
+
+  const problemas = useMemo(
+    () => problemasDoPlano(nome, refeicoes, metas),
+    [nome, refeicoes, metas],
+  );
+  const podeSalvar = problemas.length === 0;
 
   function adicionar(alimento: AlimentoResumo) {
     setRefeicoes((atual) =>
@@ -146,32 +101,12 @@ export default function MontarDieta() {
     );
   }
 
-  const podeSalvar =
-    nome.trim().length >= 2 &&
-    refeicoes.every((r) => r.itens.length > 0) &&
-    refeicoes.some((r) => r.itens.length > 0);
-
   async function salvar(ativar: boolean) {
     if (!podeSalvar) return;
     setSalvando(true);
     setErro(null);
     try {
-      await sdk.dietas.criar(alunoId, {
-        nome,
-        ativar,
-        kcalAlvo: kcalAlvo ? Number(kcalAlvo) : undefined,
-        proteinaAlvoG: proteinaAlvo ? Number(proteinaAlvo) : undefined,
-        carboAlvoG: carboAlvo ? Number(carboAlvo) : undefined,
-        gorduraAlvoG: gorduraAlvo ? Number(gorduraAlvo) : undefined,
-        refeicoes: refeicoes.map((r) => ({
-          nome: r.nome,
-          horarioSugerido: r.horario || undefined,
-          itens: r.itens.map((i) => ({
-            alimentoId: i.alimento.id,
-            quantidadeG: Number(i.quantidadeG.replace(',', '.')),
-          })),
-        })),
-      });
+      await sdk.dietas.criar(alunoId, corpoDoPlano(nome, metas, refeicoes, ativar));
       router.push(`/alunos/${alunoId}`);
     } catch (e) {
       setErro(
@@ -185,6 +120,7 @@ export default function MontarDieta() {
   }
 
   const refeicao = refeicoes[ativa]!;
+  const kcalDaMeta = metaEmNumero(kcalAlvo) ?? null;
 
   return (
     <div className="flex flex-col gap-xl pb-2xl">
@@ -242,6 +178,7 @@ export default function MontarDieta() {
               <Campo
                 rotulo="Nome da refeição"
                 value={refeicao.nome}
+                erro={refeicao.nome.trim() === '' ? 'dê um nome à refeição' : undefined}
                 onChange={(e) =>
                   setRefeicoes((a) => a.map((r, i) => (i === ativa ? { ...r, nome: e.target.value } : r)))
                 }
@@ -262,8 +199,7 @@ export default function MontarDieta() {
           )}
 
           {refeicao.itens.map((item) => {
-            const gramas = Number(item.quantidadeG.replace(',', '.')) || 0;
-            const m = macrosDaPorcao(item.alimento, gramas);
+            const m = macrosDaPorcao(item.alimento, quantidadeEmGramas(item.quantidadeG) ?? 0);
             return (
               <Cartao key={item.chave}>
                 <div className="flex flex-wrap items-center justify-between gap-md">
@@ -280,6 +216,7 @@ export default function MontarDieta() {
                       rotulo="Gramas"
                       inputMode="decimal"
                       value={item.quantidadeG}
+                      erro={problemaDaQuantidade(item.quantidadeG) ?? undefined}
                       onChange={(e) => alterarQuantidade(item.chave, e.target.value)}
                     />
                   </div>
@@ -310,10 +247,10 @@ export default function MontarDieta() {
             <p className="mb-sm font-semibold">Total do plano</p>
             <dl className="flex flex-col gap-xs text-sm">
               {[
-                { rotulo: 'Calorias', atual: total.kcal, alvo: Number(kcalAlvo) || null, unidade: 'kcal' },
-                { rotulo: 'Proteína', atual: total.proteinaG, alvo: Number(proteinaAlvo) || null, unidade: 'g' },
-                { rotulo: 'Carboidrato', atual: total.carboidratoG, alvo: Number(carboAlvo) || null, unidade: 'g' },
-                { rotulo: 'Gordura', atual: total.gorduraG, alvo: Number(gorduraAlvo) || null, unidade: 'g' },
+                { rotulo: 'Calorias', atual: total.kcal, alvo: kcalDaMeta, unidade: 'kcal' },
+                { rotulo: 'Proteína', atual: total.proteinaG, alvo: metaEmNumero(proteinaAlvo) ?? null, unidade: 'g' },
+                { rotulo: 'Carboidrato', atual: total.carboidratoG, alvo: metaEmNumero(carboAlvo) ?? null, unidade: 'g' },
+                { rotulo: 'Gordura', atual: total.gorduraG, alvo: metaEmNumero(gorduraAlvo) ?? null, unidade: 'g' },
                 { rotulo: 'Fibra', atual: total.fibraG, alvo: null, unidade: 'g' },
               ].map((linha) => (
                 <div key={linha.rotulo} className="flex items-center justify-between">
@@ -332,11 +269,11 @@ export default function MontarDieta() {
               ))}
             </dl>
 
-            {Number(kcalAlvo) > 0 && Math.abs(total.kcal - Number(kcalAlvo)) / Number(kcalAlvo) > 0.05 && (
+            {kcalDaMeta !== null && kcalDaMeta > 0 && Math.abs(total.kcal - kcalDaMeta) / kcalDaMeta > 0.05 && (
               <p className="mt-md text-sm" style={{ color: 'var(--vv-alerta)' }}>
-                {total.kcal < Number(kcalAlvo)
-                  ? `Faltam ${Math.round(Number(kcalAlvo) - total.kcal)} kcal para a meta.`
-                  : `Passou ${Math.round(total.kcal - Number(kcalAlvo))} kcal da meta.`}
+                {total.kcal < kcalDaMeta
+                  ? `Faltam ${Math.round(kcalDaMeta - total.kcal)} kcal para a meta.`
+                  : `Passou ${Math.round(total.kcal - kcalDaMeta)} kcal da meta.`}
               </p>
             )}
           </Cartao>
@@ -367,20 +304,34 @@ export default function MontarDieta() {
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
       <div
-        className="sticky bottom-0 flex flex-wrap items-center justify-between gap-md border-t py-lg"
+        className="sticky bottom-0 flex flex-col gap-sm border-t py-lg"
         style={{ background: 'var(--vv-fundo)', borderColor: 'var(--vv-borda)' }}
       >
-        <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-          {refeicoes.length} {refeicoes.length === 1 ? 'refeição' : 'refeições'} ·{' '}
-          {Math.round(total.kcal)} kcal
-        </p>
-        <div className="flex gap-md">
-          <Botao variante="neutra" disabled={!podeSalvar || salvando} onClick={() => void salvar(false)}>
-            Salvar rascunho
-          </Botao>
-          <Botao disabled={!podeSalvar || salvando} onClick={() => void salvar(true)}>
-            {salvando ? 'Salvando…' : 'Salvar e ativar'}
-          </Botao>
+        {/*
+          O que falta para salvar, dito antes de tentar. Sem isto o botão fica
+          desabilitado sem explicar por quê, que é o pior dos dois mundos: nada
+          acontece e não há o que corrigir.
+        */}
+        {problemas.length > 0 && (
+          <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+            {problemas.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-md">
+          <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+            {refeicoes.length} {refeicoes.length === 1 ? 'refeição' : 'refeições'} ·{' '}
+            {Math.round(total.kcal)} kcal
+          </p>
+          <div className="flex gap-md">
+            <Botao variante="neutra" disabled={!podeSalvar || salvando} onClick={() => void salvar(false)}>
+              Salvar rascunho
+            </Botao>
+            <Botao disabled={!podeSalvar || salvando} onClick={() => void salvar(true)}>
+              {salvando ? 'Salvando…' : 'Salvar e ativar'}
+            </Botao>
+          </div>
         </div>
       </div>
     </div>

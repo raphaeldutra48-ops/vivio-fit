@@ -11,6 +11,13 @@ export default defineConfig({
     environment: 'node',
     environmentMatchGlobs: [['**/*.test.tsx', 'jsdom']],
     globals: false,
+    // Irmão do `afterEach(cleanup)` do preparo: sem isto o histórico de
+    // chamadas de um `vi.fn()` sobra para o teste seguinte, e um
+    // `mock.calls[0]` passa a ler o envio do teste anterior — que foi
+    // exatamente como o teste da vírgula decimal "provou" 120 g em vez de
+    // 152,5. As implementações não são tocadas; quem define `mockResolvedValue`
+    // num `beforeEach` continua valendo.
+    clearMocks: true,
     setupFiles: ['./teste/preparo.ts'],
   },
 });

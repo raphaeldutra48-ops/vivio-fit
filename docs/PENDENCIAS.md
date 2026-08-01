@@ -98,10 +98,14 @@ está coberto, mas as demais telas seguem verificadas só operando o navegador.
 digita antes de mandar (é onde o bug mora), não onde ela só exibe. Formulário
 que só passa `value` adiante não precisa de teste de render — o typecheck já
 cobre.
-**Já coberto desde então:** a reordenação das duas telas (`Reordenavel.test.tsx`)
-e a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`).
-**Candidata seguinte:** o editor de cardápio, que calcula macros enquanto se
-digita — mesmo perfil de risco do editor de posologia.
+**Já coberto desde então:** a reordenação das duas telas (`Reordenavel.test.tsx`),
+a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`) e o editor de
+plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`), que era a
+candidata anterior e cobrou o preço previsto — ver a resolvida de 2026-08-01.
+**Candidata seguinte:** a adipometria. É a tela com mais transformação por tecla
+do app — sete dobras cutâneas viram densidade e depois percentual de gordura por
+protocolo — e hoje nada garante que uma dobra apagada não vire zero no meio da
+fórmula, que é o mesmo defeito que o plano alimentar tinha.
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
@@ -183,6 +187,45 @@ carrega — o modelo de dados não muda.
 o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
 ## Resolvidas
+
+### O editor de plano alimentar ganhou teste — e ele achou um bug — resolvida em 2026-08-01
+**Era:** a candidata seguinte da pendência 14b. O campo de gramas é texto (tem de
+ser: fosse `type="number"` controlado, apagar para redigitar viraria zero a cada
+tecla) e virava número dentro da própria tela, com `Number(texto.replace(',','.'))`
+**sem nenhuma rede**. Campo vazio virava `0`; campo com lixo virava `NaN`, que o
+`JSON.stringify` transforma em `null`. Os dois eram enviados, e o schema
+(`quantidadeG: z.number().positive().max(5000)`) recusava com 400 — que a tela
+traduzia como "Não foi possível salvar o plano", sem dizer qual alimento estava
+errado, depois de a dieta inteira estar montada. E `podeSalvar` só olhava o nome
+do plano e se cada refeição tinha item: **nenhuma quantidade era conferida**.
+**Correção:** a conversão, a validação e a montagem do corpo saíram para
+`apps/web/lib/dieta.ts`, como já tinha sido feito com a anamnese. `quantidadeEmGramas`
+devolve `null` — e não `0` — quando não dá para ler, que é a distinção que faltava
+entre "o campo está vazio" e "prescreveram zero grama". `problemasDoPlano` espelha
+cada regra do schema e devolve texto pronto; a tela pinta o erro no campo (o
+`Campo` já tinha a prop `erro`, ninguém usava aqui) e lista o que falta acima dos
+botões, porque botão desabilitado sem explicação é o pior dos dois mundos.
+**Três defeitos que ninguém tinha registrado, achados ao escrever o teste:**
+o nome da refeição podia ser apagado (o schema exige `min(1)`); as metas aceitavam
+decimal e valor fora de faixa (o schema exige `.int()` e mínimo 500 para kcal);
+e `Number(kcalAlvo) || null` tratava a meta `0` como ausente.
+**O bug do próprio teste, que virou correção de configuração:** o teste da vírgula
+decimal afirmou 120 g em vez de 152,5. Não era a tela — era `mock.calls[0]` lendo o
+envio do **teste anterior**, porque o histórico de um `vi.fn()` sobrevive entre
+testes. Entrou `clearMocks: true` no `vitest.config.ts`, irmão do `afterEach(cleanup)`
+que já existia para o DOM: os dois resolvem a mesma classe de vazamento.
+**Verificado:** 23 testes de unidade em `lib/dieta.spec.ts` (cada montagem termina
+em `criarPlanoDietaSchema.safeParse`, a mesma validação da API) e 9 de render em
+`teste/montar-dieta.test.tsx` — inclusive que apagar as gramas trava o envio e que
+o corpo que sai do `sdk` passa no schema. Suíte da web: **87 testes**. E operado no
+navegador com a conta do seed: campo apagado mostrou "informe a quantidade em
+gramas" sob o campo e travou os dois botões, `152,5` virou 195 kcal na aba, e meta
+kcal 100 foi apontada como fora da faixa. Nada foi salvo — a ficha da Ana não foi
+tocada.
+**Nota de localização:** o teste de render mora em `teste/` e não ao lado da
+página porque o caminho dela tem `(pro)` e `[alunoId]`; parêntese e colchete são
+sintaxe de glob, e um `.test.tsx` ali dentro corre o risco de nunca ser coletado.
+**Ainda aberto:** pendência 14b — a adipometria é a próxima.
 
 ### Arrastar para reordenar — resolvida em 2026-08-01
 **Era:** pendência 6. Reordenar era só com os botões ↑ ↓.
