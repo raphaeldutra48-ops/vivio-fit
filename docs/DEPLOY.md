@@ -48,19 +48,12 @@ no painel dele e entram no mesmo lugar do passo 5.
 
 ---
 
-## 3. Subir o código para o GitHub
+## 3. Subir o código para o GitHub ✔
 
-O Railway constrói a partir de um repositório.
+Feito: `github.com/raphaeldutra48-ops/vivio-fit` (privado), branch `main`.
+Nenhum `.env` foi versionado em commit nenhum.
 
-```bash
-git init && git add -A && git commit -m "Vívio Fit"
-```
-
-Depois crie o repositório **privado** no GitHub e faça o push. Privado importa:
-o `.env` está no `.gitignore`, mas o schema do banco e as regras de negócio não
-precisam ser públicos.
-
-> Confira antes que `git status` não lista nenhum `.env`.
+Daqui em diante cada `push` no `main` dispara um deploy novo nos dois serviços.
 
 ---
 
@@ -154,6 +147,31 @@ desenvolvedor Apple US$ 99/ano, Google US$ 25 única vez).
 
 ---
 
+## 7b. Primeiro administrador e catálogo
+
+O banco de produção nasce vazio, e o `seed.ts` **não** roda lá: ele cria contas
+de demonstração com senha conhecida (`Senha@123`), impróprias num ambiente com
+gente de verdade.
+
+Duas tarefas de instalação cobrem isso, acionadas por variável no serviço `api`
+e executadas pelo `entrada.sh` no start do contêiner:
+
+| Variável | O que faz |
+|---|---|
+| `ADMIN_EMAIL` + `ADMIN_SENHA` (+ `ADMIN_NOME`) | cria a primeira conta ADMIN. Sem ela ninguém aprova profissional e o app sobe travado |
+| `SEMEAR_CATALOGO=true` | popula 23 exercícios globais e 45 alimentos. Sem isso não há o que usar para montar treino nem dieta |
+
+Existem por variável, e não por comando, porque o Railway não dá terminal: o que
+se controla ali é variável e deploy.
+
+Ambas são idempotentes. **Apague as quatro depois do primeiro deploy** — senha
+em texto claro no painel é senha exposta a quem tem acesso ao projeto.
+
+A senha do admin exige 12 caracteres (o cadastro comum pede 8): é a conta que
+libera quem acessa dado de saúde de terceiros, e não há ninguém acima dela.
+
+---
+
 ## 8. Conferir depois de subir
 
 1. `https://api.viviofit.com.br/api/v1/health` responde 200.
@@ -164,6 +182,10 @@ desenvolvedor Apple US$ 99/ano, Google US$ 25 única vez).
 4. Confirme o link, entre, recarregue a página — a sessão precisa sobreviver
    (é o cookie httpOnly funcionando através do domínio real).
 5. No console do navegador, `localStorage` e `document.cookie` vazios.
+6. Erre a senha 11 vezes: a 11ª tem de responder "Muitas tentativas. Aguarde 15
+   minutos" (limite de login, pendência 4).
+7. Entre com a conta ADMIN e abra `/admin/profissionais` — a fila de verificação
+   precisa carregar.
 
 **Não subir foto de evolução que importe** enquanto a pendência 19 estiver
 aberta: o disco do contêiner é apagado a cada deploy.
@@ -178,5 +200,15 @@ foi verificado aqui: os comandos de build que os Dockerfiles executam
 execução em `apps/web/server.js`, a recusa da API a subir sem
 `ORIGENS_PERMITIDAS` e o CORS respondendo só para origem conhecida.
 
-O primeiro `docker build` pode acusar algum caminho — é o risco conhecido deste
-passo. Se acontecer, o log do Railway aponta a linha.
+Também foi conferido, um por um, que todo caminho que os `COPY` do Dockerfile
+esperam existe depois de um build local: `apps/api/dist/main.js`,
+`apps/web/.next/standalone/apps/web/server.js`, `apps/web/.next/static`,
+`packages/*/dist` e `apps/api/entrada.sh`. E `pnpm install --frozen-lockfile`
+roda limpo, que é o passo que mais quebra primeiro deploy.
+
+O que continua sem prova: o `prisma generate` com o engine linkado contra a
+OpenSSL da imagem slim, e o comportamento do corepack dentro do contêiner. Se
+quebrar, o log do Railway aponta a linha.
+
+**Roteiro operacional, com a ordem e as telas do painel:**
+[PASSO-A-PASSO-RAILWAY.md](PASSO-A-PASSO-RAILWAY.md).

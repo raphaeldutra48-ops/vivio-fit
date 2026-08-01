@@ -1,45 +1,36 @@
-# Subir o Vívio Fit no Railway — roteiro
+# Subir o Vívio Fit — roteiro
 
 Ordem pensada para **descobrir problema cedo e barato**: primeiro sobe nas URLs
-provisórias do Railway, prova que as imagens Docker funcionam, e só depois entra
+provisórias do Railway e prova que as imagens Docker funcionam; só depois entra
 o domínio. Se algum `docker build` quebrar (pendência 18), você descobre na
-etapa 3, não com o DNS já apontado.
+etapa 2, com o DNS ainda intocado.
 
-Funciona porque `algo-api.up.railway.app` e `algo-web.up.railway.app` são
-subdomínios do mesmo domínio — *same-site* — então o cookie do login já se
-comporta como vai se comportar no domínio final.
+> **O que vai parecer quebrado na etapa 2, e não está.** Nas URLs provisórias, a
+> sessão **não sobrevive ao recarregar a página**. Isso é esperado:
+> `up.railway.app` está na Public Suffix List, então `algo-api.up.railway.app` e
+> `algo-web.up.railway.app` contam como **sites diferentes** para o navegador, e
+> o cookie `SameSite=Lax` do refresh não é enviado. Some sozinho na etapa 4,
+> quando `api.viviofit.com.br` e `app.viviofit.com.br` passam a ser o mesmo
+> site. Até lá: login funciona, navegar funciona, recarregar derruba.
 
-Tempo: ~40 min até estar no ar.
+Tempo: ~45 min de trabalho, mais a propagação do DNS.
 
 ---
 
-## Etapa 1 — Código no GitHub (~5 min)
+## Etapa 0 — Registrar o domínio (você, ~15 min)
 
-**O repositório local já está pronto.** 31 commits na branch `main`, árvore
-limpa, nenhum `.env` versionado em commit nenhum (conferido no histórico
-inteiro). Falta só o repositório remoto — que depende da sua conta.
+Em [registro.br](https://registro.br): busque `viviofit.com.br`, registre
+(~R$ 40/ano). Exige CPF e pagamento — é ação sua, com sua conta.
 
-1. Em [github.com/new](https://github.com/new), crie `vivio-fit` como
-   **Private**. Não marque nada em "Initialize this repository" — o histórico
-   já existe aqui e um README criado lá causaria conflito.
+Não precisa esperar propagar para seguir: as etapas 1 a 3 não dependem dele.
 
-2. Conecte e envie (troque `SEU-USUARIO`):
+---
 
-```bash
-git remote add origin https://github.com/SEU-USUARIO/vivio-fit.git
-```
+## Etapa 1 — Código no GitHub ✔
 
-```bash
-git push -u origin main
-```
+Feito. `github.com/raphaeldutra48-ops/vivio-fit`, branch `main` em dia.
 
-O GitHub vai pedir autenticação. Se pedir senha, use um **Personal Access
-Token** (Settings → Developer settings → Tokens), não a senha da conta — o
-GitHub não aceita senha em push desde 2021.
-
-> Privado importa: o schema do banco e as regras de negócio não precisam ser
-> públicos. O `.env` está no `.gitignore` e nunca foi commitado, mas repositório
-> público é superfície desnecessária.
+Daqui em diante, cada `git push` no `main` dispara um deploy novo no Railway.
 
 ---
 
@@ -47,7 +38,7 @@ GitHub não aceita senha em push desde 2021.
 
 No Railway: **New Project → Deploy from GitHub repo → vivio-fit**.
 
-Ele vai criar um serviço. Renomeie para **`api`** e configure em **Settings**:
+Ele cria um serviço. Renomeie para **`api`** e ajuste em **Settings**:
 
 | Campo | Valor |
 |---|---|
@@ -64,11 +55,12 @@ para **`web`**:
 
 | Campo | Valor |
 |---|---|
+| Build → Builder | `Dockerfile` |
 | Build → Dockerfile Path | `apps/web/Dockerfile` |
 | Build → Root Directory | *(vazio)* |
 
 Em cada serviço, **Settings → Networking → Generate Domain**. Anote os dois
-endereços; vamos chamá-los de `URL_API` e `URL_WEB`.
+endereços; abaixo eles são `URL_API` e `URL_WEB`.
 
 ---
 
@@ -86,8 +78,8 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 ### Serviço `api` → Variables
 
-Cole tudo de uma vez (o Railway aceita colar várias linhas em **Raw Editor**),
-trocando os valores marcados:
+Cole tudo de uma vez (**Raw Editor** aceita várias linhas), trocando o que está
+entre `<>`:
 
 ```
 NODE_ENV=production
@@ -105,10 +97,19 @@ API_PUBLIC_URL=https://<URL_API>
 EMAIL_REMETENTE=Vívio Fit <nao-responda@viviofit.com.br>
 LEMBRETES_ATIVOS=true
 MEDIA_DIR=./media
+ADMIN_EMAIL=<seu e-mail>
+ADMIN_SENHA=<uma senha sua, 12+ caracteres, com letra e número>
+ADMIN_NOME=<seu nome>
+SEMEAR_CATALOGO=true
 ```
 
-`SMTP_URL` fica de fora por enquanto — sem ela o e-mail vai para o log do
-Railway, que é onde você vai pegar o link na etapa 5.
+As quatro últimas são **de instalação**. Com elas presentes, o contêiner cria o
+administrador e popula exercícios e alimentos no start — e escreve no log o que
+fez. Sem elas o app subiria funcionando e inútil: nenhum exercício para montar
+treino, nenhum alimento para montar dieta.
+
+`SMTP_URL` fica de fora por enquanto: sem ela o link de confirmação sai no log
+do Railway, que é de onde você vai pegá-lo na etapa 5.
 
 ### Serviço `web` → Variables
 
@@ -117,7 +118,7 @@ NODE_ENV=production
 NEXT_PUBLIC_API_URL=https://<URL_API>
 ```
 
-E em **Settings → Build → Build Args** (não é variável comum):
+E em **Settings → Build → Build Args** (não é a mesma coisa que Variables):
 
 ```
 NEXT_PUBLIC_API_URL=https://<URL_API>
@@ -130,71 +131,94 @@ NEXT_PUBLIC_API_URL=https://<URL_API>
 ### Deploy
 
 Cada serviço → **Deploy**. O primeiro leva alguns minutos (instala o workspace
-inteiro). A API roda `prisma migrate deploy` sozinha no start.
+inteiro, mobile incluído — o pnpm precisa dele para o `--frozen-lockfile`).
+
+No log da `api` você deve ver, nesta ordem:
+
+```
+→ aplicando migrações
+→ ADMIN_EMAIL presente: criando o primeiro administrador
+Admin criado: seu@email
+→ SEMEAR_CATALOGO=true: populando exercícios e alimentos
+Exercícios globais: 23
+Alimentos: 45
+API na porta 3333 — origens: https://<URL_WEB>
+```
+
+**Agora apague `ADMIN_EMAIL`, `ADMIN_SENHA`, `ADMIN_NOME` e `SEMEAR_CATALOGO`**
+das variáveis. Senha em texto claro no painel é senha exposta a todo mundo que
+tem acesso ao projeto. Os dois scripts são idempotentes — se rodarem de novo por
+engano, não duplicam nada — mas não há motivo para deixá-los armados.
 
 **Se algum build falhar:** copie as últimas ~30 linhas do log e me mande. As
-imagens nunca foram construídas nesta máquina (sem Docker aqui), então é o
-ponto mais provável de tropeço.
+imagens nunca foram construídas (esta máquina não tem Docker), então é o ponto
+mais provável de tropeço.
 
 ---
 
-## Etapa 4 — Destravar a primeira conta
+## Etapa 4 — Domínio próprio (~10 min + propagação)
 
-Aqui tem uma pegadinha que trava o app se você não souber.
+1. Railway → serviço `api` → **Networking → Custom Domain** →
+   `api.viviofit.com.br`
+2. Railway → serviço `web` → **Custom Domain** → `app.viviofit.com.br`
+3. Cada um mostra um destino CNAME. No registro.br, **Editar Zona DNS**:
 
-O seed **não** roda em produção — de propósito: ele cria contas com senha
-conhecida (`Senha@123`), que não podem existir num ambiente real.
+| Nome | Tipo | Valor |
+|---|---|---|
+| `api` | CNAME | o que o Railway mostrar |
+| `app` | CNAME | o que o Railway mostrar |
 
-Então:
+4. No serviço `api`, troque os três endereços:
 
-1. Acesse `https://<URL_WEB>/cadastrar` e crie sua conta de profissional —
-   escolha a profissão, informe o registro no conselho e a UF.
-
-2. **Confirme o e-mail.** Sem `SMTP_URL`, o link sai no log: no Railway, serviço
-   `api` → **Deployments → View Logs**, procure `[Correio]`. Copie a URL e abra
-   no navegador.
-
-3. **Ative o profissional.** Um profissional recém-criado nasce aguardando
-   verificação do registro no conselho e **não consegue convidar aluno nenhum**.
-
-   Como ainda não existe nenhum admin em produção, esta primeira vez é pelo
-   terminal do Railway (**api → ⋮ → Run command**):
-
-```bash
-pnpm --filter @vivio/api exec tsx prisma/ativar-profissional.ts SEU@EMAIL
+```
+ORIGENS_PERMITIDAS=https://app.viviofit.com.br
+WEB_PUBLIC_URL=https://app.viviofit.com.br
+API_PUBLIC_URL=https://api.viviofit.com.br
 ```
 
-   Deve responder `Ativado: Raphael (PERSONAL) — CREF 000000/CE`.
+5. No serviço `web`, troque `NEXT_PUBLIC_API_URL` **e o Build Arg** para
+   `https://api.viviofit.com.br` → **redeploy** (build arg mudou, precisa
+   reconstruir a imagem).
 
-   **Só a primeira vez.** Depois, com uma conta ADMIN no banco, a verificação é
-   feita pela tela `/admin/profissionais`, que mostra a fila de quem aguarda,
-   o registro declarado e um link para a consulta pública do conselho.
+6. Me avise: eu aponto o app do aluno (`apps/mobile/app.json`,
+   `expo.extra.apiUrl`) para o endereço novo.
 
-Agora entre em `https://<URL_WEB>` e você consegue convidar alunos.
+O HTTPS é emitido sozinho depois que o DNS propaga (minutos a algumas horas).
+
+**É aqui que a sessão passa a sobreviver ao recarregar** — `api.` e `app.` são
+subdomínios de `viviofit.com.br`, mesmo site, e o cookie `Lax` volta a viajar.
 
 ---
 
 ## Etapa 5 — Conferir
 
-1. `https://<URL_API>/api/v1/health` → **200**
-2. `https://<URL_API>/docs` → **404** (a documentação não pode ficar exposta)
-3. Login → recarregue a página → **a sessão sobrevive**
-4. Console do navegador: `localStorage` e `document.cookie` **vazios**
-5. Convide um aluno e aceite pelo app
+| # | O quê | Esperado |
+|---|---|---|
+| 1 | `https://api.viviofit.com.br/api/v1/health` | 200 |
+| 2 | `https://api.viviofit.com.br/docs` | **404** — a documentação não pode ficar exposta |
+| 3 | Login em `app.viviofit.com.br` | entra |
+| 4 | Recarregar a página | **a sessão sobrevive** |
+| 5 | Console do navegador: `localStorage` e `document.cookie` | **vazios** |
+| 6 | Errar a senha 11 vezes | a 11ª responde "Muitas tentativas. Aguarde 15 minutos" |
+| 7 | `/admin/profissionais` com a conta admin | abre a fila de verificação |
+| 8 | Cadastrar-se como profissional e aprovar pelo painel | passa a convidar aluno |
+
+O passo 8 tem uma pegadinha: sem `SMTP_URL`, o link de confirmação de e-mail sai
+no log (`api → Deployments → View Logs`, procure `[Correio]`). Copie e abra no
+navegador.
 
 > **Não suba foto de evolução que importe.** O disco do contêiner é apagado a
 > cada deploy (pendência 19).
 
 ---
 
-## Etapa 6 — E-mail de verdade (Resend)
+## Etapa 6 — E-mail de verdade (Resend, ~10 min)
 
 Enquanto `SMTP_URL` não existir, todo cadastro depende de você pescar o link no
 log. Para o app funcionar sozinho:
 
 1. Conta em [resend.com](https://resend.com) — 3.000 e-mails/mês grátis.
-2. **Domains → Add Domain → `viviofit.com.br`** (precisa do domínio já
-   registrado).
+2. **Domains → Add Domain → `viviofit.com.br`**.
 3. O Resend mostra registros DNS (SPF, DKIM). Eles entram no registro.br, em
    **Editar Zona DNS**.
 4. **API Keys → Create**. A chave vira:
@@ -207,27 +231,16 @@ SMTP_URL=smtp://resend:SUA_CHAVE_AQUI@smtp.resend.com:587
 
 ---
 
-## Etapa 7 — Domínio próprio
+## O que continua pendente depois de tudo isso
 
-Depois de registrar `viviofit.com.br` no registro.br:
-
-1. Railway → serviço `api` → **Networking → Custom Domain** →
-   `api.viviofit.com.br`
-2. Railway → serviço `web` → **Custom Domain** → `app.viviofit.com.br`
-3. Cada um mostra um destino CNAME. No registro.br, **Editar Zona DNS**:
-
-| Nome | Tipo | Valor |
+| # | O quê | Consequência de deixar como está |
 |---|---|---|
-| `api` | CNAME | o que o Railway mostrar |
-| `app` | CNAME | o que o Railway mostrar |
+| 19 | Fotos gravam no disco do contêiner | somem a cada deploy — resolver antes de usuário real |
+| 16 | Falha de SMTP é engolida | cadastro responde 201 e o e-mail não chega |
+| 4b | Limite de tentativas é por processo | com mais de uma instância, o atacante ganha o dobro |
+| 20 | Sem gateway | pagamento PIX é conferido no banco e marcado à mão (a tela já diz isso) |
 
-4. Atualize no serviço `api`: `ORIGENS_PERMITIDAS`, `WEB_PUBLIC_URL` e
-   `API_PUBLIC_URL` para os endereços novos.
-5. Atualize no serviço `web`: `NEXT_PUBLIC_API_URL` **e o Build Arg** →
-   **redeploy** (build arg mudou, precisa reconstruir).
-6. Aponte o app do aluno: `apps/mobile/app.json`, em `expo.extra.apiUrl`.
-
-O HTTPS é emitido sozinho depois que o DNS propaga.
+Lista completa e atualizada em [PENDENCIAS.md](PENDENCIAS.md).
 
 ---
 
@@ -235,8 +248,7 @@ O HTTPS é emitido sozinho depois que o DNS propaga.
 
 - Build quebrado: me mande as últimas linhas do log
 - Erro em runtime: idem, com a rota que falhou
-- Depois do domínio no ar: eu ajusto o app do aluno e revisamos a lista da
-  etapa 5 juntos
+- Depois do domínio no ar: eu aponto o app do aluno e revisamos a etapa 5 juntos
 
-Segredos (senha do Neon, chave do Resend, JWT) vão **direto no painel do
-Railway** — não passe por aqui.
+Segredos (senha do Neon, chave do Resend, JWT, senha do admin) vão **direto no
+painel do Railway** — não passe por aqui.

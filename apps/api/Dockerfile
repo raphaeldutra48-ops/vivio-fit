@@ -43,15 +43,20 @@ ENV NODE_ENV=production
 USER node
 WORKDIR /app
 
+# node_modules vem inteiro, com as dependências de desenvolvimento: `tsx` é uma
+# delas e é o que executa os scripts de instalação (prisma/criar-admin.ts e
+# prisma/semear-catalogo.ts). Trocar por uma instalação `--prod` aqui quebraria
+# os dois — e o erro só apareceria no dia de subir.
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=node:node /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/
+COPY --from=build --chown=node:node /app/apps/api/entrada.sh ./apps/api/
 
 WORKDIR /app/apps/api
 EXPOSE 3333
 
-# `migrate deploy` (não `dev`): aplica as migrações existentes e nunca gera
-# nem apaga nada. Rodar no start garante que o banco acompanha a imagem.
-CMD ["sh", "-c", "node ../../node_modules/prisma/build/index.js migrate deploy && node dist/main.js"]
+# Migração, tarefas de instalação acionadas por variável, e então a API.
+# Ver apps/api/entrada.sh.
+CMD ["sh", "./entrada.sh"]

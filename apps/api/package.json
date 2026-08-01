@@ -12,7 +12,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "criar-admin": "tsx prisma/criar-admin.ts",
+    "semear-catalogo": "tsx prisma/semear-catalogo.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
