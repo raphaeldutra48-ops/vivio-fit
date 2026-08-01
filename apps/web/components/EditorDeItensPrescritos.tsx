@@ -11,6 +11,65 @@ import { useEffect, useMemo, useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { Botao, Cartao } from './ui';
 
+/** "08:00 ,, 20:00," -> ['08:00', '20:00'] */
+const analisarHorarios = (texto: string): string[] =>
+  texto
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+/**
+ * Campo de horários com o texto digitado em estado próprio.
+ *
+ * O array normalizado não pode ser o `value` do campo: "08:00," vira
+ * `['08:00']`, que ao voltar para a tela é "08:00" — a vírgula sumia no
+ * instante em que era digitada, e não havia como escrever o segundo horário.
+ * O resultado ia para o servidor como um horário só, "08:0020:00".
+ *
+ * Fora do componente de cima de propósito: declarado dentro, o React o trataria
+ * como um tipo novo a cada tecla e remontaria o campo, tirando o cursor dele.
+ */
+function CampoDeHorarios({
+  horarios,
+  aoMudar,
+}: {
+  horarios: string[];
+  aoMudar: (horarios: string[]) => void;
+}) {
+  const [texto, setTexto] = useState(() => horarios.join(', '));
+
+  useEffect(() => {
+    // Só reescreve quando o valor de fora diverge do que já está digitado —
+    // isto é, quando veio de outro lugar (carregar um modelo), não do onChange
+    // daqui. Sem a comparação, voltaríamos a apagar a vírgula.
+    const atual = analisarHorarios(texto);
+    const iguais = atual.length === horarios.length && atual.every((h, i) => h === horarios[i]);
+    if (!iguais) setTexto(horarios.join(', '));
+    // `texto` de fora das dependências é intencional: ele muda a cada tecla e
+    // reagir a isso é justamente o que se quer evitar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horarios]);
+
+  return (
+    <label className="flex flex-col gap-xs sm:col-span-2">
+      <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+        Horários
+      </span>
+      <input
+        className="min-h-toque rounded-md border px-md"
+        style={entrada}
+        value={texto}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          // O schema valida HH:MM no envio; aqui só separamos.
+          aoMudar(analisarHorarios(e.target.value));
+        }}
+        placeholder="08:00, 20:00"
+      />
+    </label>
+  );
+}
+
 /** Frequências que cobrem quase toda prescrição — o resto é texto livre. */
 const FREQUENCIAS = [
   '1x ao dia',
@@ -186,26 +245,10 @@ export function EditorDeItensPrescritos({
               </select>
             </label>
 
-            <label className="flex flex-col gap-xs sm:col-span-2">
-              <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
-                Horários
-              </span>
-              <input
-                className="min-h-toque rounded-md border px-md"
-                style={entrada}
-                value={item.horarios.join(', ')}
-                onChange={(e) =>
-                  alterar(indice, {
-                    // Aceita "08:00, 20:00"; o schema valida HH:MM no envio.
-                    horarios: e.target.value
-                      .split(',')
-                      .map((h) => h.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="08:00, 20:00"
-              />
-            </label>
+            <CampoDeHorarios
+              horarios={item.horarios}
+              aoMudar={(horarios) => alterar(indice, { horarios })}
+            />
           </div>
 
           <input

@@ -39,6 +39,12 @@ export default function Login() {
         setFaltaConfirmar(true);
         return;
       }
+      // "Tente novamente" seria mentira aqui: tentar de novo é justamente o que
+      // não vai funcionar. A API já manda o texto com o tempo de espera.
+      if (e instanceof ErroApi && e.codigo === 'LIMITE_EXCEDIDO') {
+        setErro(e.message);
+        return;
+      }
       setErro(
         e instanceof ErroApi && e.codigo === 'CREDENCIAIS_INVALIDAS'
           ? 'E-mail ou senha incorretos.'

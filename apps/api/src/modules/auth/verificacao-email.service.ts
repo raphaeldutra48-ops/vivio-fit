@@ -11,7 +11,7 @@ const VALIDADE_HORAS = 24;
 
 /**
  * Intervalo mínimo entre reenvios. Sem Redis não dá para ter rate limit de
- * verdade (pendência 4), mas o próprio token anterior serve de relógio — e
+ * verdade (pendência 4b), mas o próprio token anterior serve de relógio — e
  * impede que o endpoint vire amplificador de e-mail contra terceiros.
  */
 const INTERVALO_REENVIO_SEGUNDOS = 60;

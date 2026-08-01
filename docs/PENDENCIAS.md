@@ -9,23 +9,35 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 **Assumida em:** B2
 **Estado:** os e2e criam e apagam usuários no mesmo Neon usado para desenvolver.
 Usam sufixo único por execução, então não colidem entre si.
-**Por quê:** evitar montar um segundo banco antes de existir o que testar.
-**Pagar em:** antes do CI (fim da Fase 0). O Neon tem branches — criar um branch
-`test` e apontar `DATABASE_URL` de teste para ele.
+**O que já está feito:** `apps/api/test/banco-de-teste.ts` roda antes de tudo e
+(a) usa `DATABASE_URL_TEST` quando existe, (b) avisa em voz alta quando não
+existe, e (c) **recusa rodar** se a URL parecer de produção ou `NODE_ENV` for
+`production` — a suíte faz `deleteMany`, e apontá-la para o banco errado uma
+vez basta para o estrago.
+**O que falta (ação sua, precisa da conta Neon):** no painel do Neon, `Branches`
+→ `New branch`, nome `test`, a partir de `main`. Copiar a connection string e
+pôr em `apps/api/.env`:
 
-### 4. Rate limit ausente
-**Assumida em:** B2
-**Estado:** `/auth/login` aceita tentativas ilimitadas.
-**Por quê:** rate limit distribuído precisa de Redis, que chega no C8.
-**Pagar em:** C8. Enquanto isso, argon2id já torna força bruta cara.
+```
+DATABASE_URL_TEST=<string do branch test, com -pooler>
+DIRECT_URL_TEST=<a mesma, sem -pooler>
+```
 
-### 6. Reordenação por arrastar não implementada
-**Assumida em:** C3
-**Estado:** a montagem de treino reordena exercícios com botões ↑ ↓.
-**Por quê:** funciona com teclado e leitor de tela sem biblioteca extra; o
-arrastar é polimento, não requisito do fluxo.
-**Pagar em:** quando a tela receber acabamento visual (pós-C4).
+Depois, uma vez: `cd apps/api && npx prisma migrate deploy` e `pnpm seed` com
+`DATABASE_URL` apontando para o branch novo. A partir daí `pnpm test` usa o
+branch sozinho, e o aviso some.
+**Pagar em:** antes do CI.
 
+### 4b. O limite de tentativas é por processo, não distribuído
+**Assumida em:** dívidas técnicas (o que sobrou da pendência 4)
+**Estado:** os contadores de `@Limite()` vivem na memória do processo. Com N
+instâncias da API, o atacante ganha N vezes o orçamento de tentativas, e um
+deploy zera tudo.
+**Por que basta por ora:** a API roda em uma instância, e o caso real —
+alguém martelando uma conta de um lugar só — está coberto. O argon2id continua
+tornando cada tentativa cara.
+**Pagar em:** junto do Redis (pendência 11). Só a implementação de `Limitador`
+muda; o decorador e o interceptador ficam como estão.
 
 ### 7. nodeLinker hoisted no workspace inteiro
 **Assumida em:** C4
@@ -33,18 +45,11 @@ arrastar é polimento, não requisito do fluxo.
 **Consequência:** o monorepo perde o isolamento estrito do pnpm — um pacote passa
 a conseguir importar dependência que não declarou, e o erro só aparece no build
 de produção.
-**Mitigação atual:** `pnpm build` roda os 7 workspaces no CI e pegaria o caso.
+**Mitigação atual:** `pnpm build` roda os 7 workspaces no CI e pegaria o caso, e
+`apps/web/teste/versoes-do-react.spec.ts` cobre a consequência mais cara (duas
+cópias de React), que era a pendência 8.
 **Alternativa futura:** isolar o mobile em workspace próprio, ou reavaliar quando
 o Metro melhorar o suporte a symlinks.
-
-### 8. React precisa da mesma versão exata em web e mobile
-**Assumida em:** C4
-**Estado:** `apps/web` e `apps/mobile` fixam `react`/`react-dom` em `19.2.3`.
-**Por quê:** com nodeLinker hoisted, faixas diferentes (`^19.0.0` vs `19.2.3`)
-geram duas cópias de React e o build da web quebra com
-`Cannot read properties of null (reading 'useContext')`.
-**Como aplicar:** ao atualizar o React, atualizar os dois apps juntos, na mesma
-versão exata.
 
 ### 9. Offline: WatermelonDB trocado por cache + fila
 **Assumida em:** C6
@@ -81,32 +86,22 @@ porque o compute gratuito do Neon escala a zero e limita. O timeout do vitest
 subiu para 90s so para lentidao de infra nao ser lida como bug.
 **Sintoma ja observado:** dois testes falharam por timeout numa rodada e
 passaram na seguinte, sem mudanca de codigo.
-**Pagar em:** junto com a pendencia 2 — branch de teste no Neon, e depois
-Postgres local no CI.
+**Pagar em:** junto com a pendencia 2 — branch de teste no Neon (a ligacao ja
+esta pronta, ver la), e depois Postgres local no CI, que tira a rede do caminho
+e e o que de fato resolve a lentidao.
 
-### 13. Testes ainda apagam medidas da Ana
-**Assumida em:** Fase 2
-**Estado:** o e2e de consentimento faz deleteMany de Medida para Ana e Bruno
-no afterAll. Depois de rodar a suite, os graficos de composicao corporal ficam
-vazios ate alguem semear de novo.
-**Por que sobrou:** em C6 corrigi so o teste de execucao; o de consentimento e
-os demais continuam usando as contas do seed.
-**Pagar em:** mesma correcao da pendencia 2 — cada teste cria o proprio aluno.
-
-### 14. A web so tem teste do menu
-**Assumida em:** Prescricoes
-**Estado:** apps/web ganhou vitest, mas o unico arquivo testado e `lib/menu.ts`
-(logica pura). Nenhum componente e renderizado em teste — nao ha jsdom nem
-testing-library instalados. Toda verificacao de tela ate agora foi operando o
-navegador na mao.
-**Por que aceitei:** o que quebrou de verdade nesta fase foi regra em dado
-(`ItemDeMenu.papeis` existia no tipo e nunca era aplicado — Medicamentos
-aparecia para a nutricionista). Teste de logica pega isso; teste de render nao
-pegaria mais barato.
-**Risco:** regressao de formulario passa despercebida — por exemplo, o editor
-de posologia enviar string vazia onde o schema espera ausencia.
-**Pagar em:** quando existir o segundo formulario com a mesma complexidade do
-`EditorDeItensPrescritos`, instalar jsdom + testing-library e cobrir os dois.
+### 14b. As outras telas continuam sem teste de render
+**Assumida em:** dívidas técnicas (o que sobrou da pendência 14)
+**Estado:** jsdom e testing-library estão instalados e o `EditorDeItensPrescritos`
+está coberto, mas as demais telas seguem verificadas só operando o navegador.
+**Como escolher a próxima:** cobrir onde a tela **transforma** o que o usuário
+digita antes de mandar (é onde o bug mora), não onde ela só exibe. Formulário
+que só passa `value` adiante não precisa de teste de render — o typecheck já
+cobre.
+**Já coberto desde então:** a reordenação das duas telas (`Reordenavel.test.tsx`)
+e a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`).
+**Candidata seguinte:** o editor de cardápio, que calcula macros enquanto se
+digita — mesmo perfil de risco do editor de posologia.
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
@@ -188,6 +183,153 @@ carrega — o modelo de dados não muda.
 o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
 ## Resolvidas
+
+### Arrastar para reordenar — resolvida em 2026-08-01
+**Era:** pendência 6. Reordenar era só com os botões ↑ ↓.
+**Correção:** `useArrasteParaReordenar` + `PunhoDeArraste` (HTML5 puro, sem
+biblioteca), na montagem de treino e no editor de anamnese. **Adição, não
+troca:** os botões ↑ ↓ continuam onde estavam, porque arrastar não existe no
+teclado nem no leitor de tela e pagar polimento com acessibilidade seria um mau
+negócio. Só o punho é arrastável — o cartão inteiro impediria selecionar o texto
+dos campos de série e repetição que moram dentro dele. E o punho é
+`aria-hidden`: para quem não usa mouse ele não faz nada, e anunciá-lo daria uma
+parada de tabulação que não leva a lugar nenhum.
+**De quebra, uma dívida de acessibilidade que ninguém tinha registrado:**
+reordenar mudava a lista sem mudar o foco. Para quem enxerga, o item
+visivelmente subia; para quem ouve, nada acontecia. Agora existe uma região
+`aria-live="polite"` (`components/Anuncio.tsx`) que diz "Supino movido para a
+posição 2 de 5" — nas duas telas, tanto pelo botão quanto pelo arrasto.
+**Regra única:** `reordenar(itens, de, para)` serve às duas formas. Arrastar não
+é troca de pares — levar o 5º ao 1º tem de manter a ordem relativa dos outros —
+e os botões são só o caso `para = i ± 1`. Duas implementações divergiriam.
+**Bug que só apareceu no navegador:** a origem do arrasto vivia em `useState`.
+Nos testes, `fireEvent` reconcilia entre uma chamada e outra, então o
+`dragover` já enxergava o valor. No navegador os eventos podem cair no mesmo
+tique, o estado ainda não chegou, e o gesto virava nada. Passou para `useRef`
+(síncrono), e entrou um teste que dispara os três eventos dentro de um único
+`act` — sem ele, a suíte continuaria verde com o bug de volta.
+**Verificado:** 9 testes de `reordenar` sem DOM, 10 de render cobrindo a fiação,
+e as duas telas operadas no navegador (ordem mudando e a região viva com o texto
+certo).
+
+### A regra "mesma versão de React nos dois apps" virou teste — resolvida em 2026-08-01
+**Era:** pendência 8. A regra existia como parágrafo nesta página, que ninguém lê
+ao rodar `pnpm add react@latest` num app só. Faixas diferentes entre web e
+mobile, com `nodeLinker: hoisted`, instalam duas cópias de React e o build da
+web morre com `Cannot read properties of null (reading 'useContext')` — erro que
+não diz nada sobre a causa.
+**Correção:** `apps/web/teste/versoes-do-react.spec.ts` lê os dois
+`package.json` e falha se `react` ou `react-dom` divergirem, **ou** se a versão
+tiver `^`/`~` — a faixa é justamente o que deixa cada app resolver para um patch
+diferente sem ninguém editar nada.
+**Nota:** a pendência 7 (nodeLinker hoisted) continua aberta; este teste cobre a
+consequência mais cara dela, não a causa.
+
+### A regra de consentimento virou um lugar só — resolvida em 2026-08-01
+**Era:** dívida que não estava registrada. "Este profissional pode ver este
+escopo?" estava escrito em dois lugares — o `ConsentGuard` e o relatório de
+carteira — e **já tinha divergido uma vez**: o relatório filtrava só por
+`profissionalId` e ignorava o consentimento com `profissionalId: null`, que é o
+concedido para toda a equipe de cuidado e o caso mais comum. Efeito: aluno que
+autorizou tudo aparecia na tela como se não tivesse autorizado nada.
+**Correção:** `consentimentoVigentePara(profissionalId)` em
+`src/common/consentimento/regra.ts`, usada pelos dois. Divergir de novo passa a
+exigir reescrever de propósito.
+**Verificado:** 3 testes de unidade da regra, mais os e2e de consentimento e de
+relatórios que já cobriam o comportamento das duas pontas.
+
+### A suíte passou a escolher o banco — e a recusar o errado — resolvida em 2026-08-01
+**Era:** parte da pendência 2. Os e2e liam `DATABASE_URL` direto, sem nada entre
+eles e o banco apontado. Uma variável errada no ambiente e a suíte — que faz
+`deleteMany` — rodava onde não devia.
+**Correção:** `apps/api/test/banco-de-teste.ts` como `setupFiles`, antes de
+qualquer import (o PrismaClient lê `DATABASE_URL` ao ser construído; depois já é
+tarde). Usa `DATABASE_URL_TEST` quando existe, avisa em voz alta quando não
+existe, e **recusa rodar** se a URL parecer de produção ou `NODE_ENV` for
+`production`.
+**Verificado:** os três caminhos — aviso no banco de dev, recusa com uma URL
+contendo "prod", e uma URL de teste inválida chegando de fato ao Prisma
+(`Can't reach database server at localhost:59999`), que é a prova de que a
+troca funciona.
+**Ainda aberto:** pendência 2 — falta criar o branch no Neon, que é ação na
+conta e está com o passo a passo lá.
+
+### A web ganhou teste de render — e ele achou um bug — resolvida em 2026-07-31
+**Era:** `apps/web` tinha vitest, mas o único arquivo testado era `lib/menu.ts`.
+Nenhum componente era renderizado; toda verificação de tela vinha de operar o
+navegador na mão. O risco anotado era literalmente "o editor de posologia
+enviar string vazia onde o schema espera ausência".
+**Correção:** jsdom + testing-library + `user-event`, com
+`apps/web/vitest.config.ts` (o `jsx: preserve` que o Next exige não serve para o
+esbuild do Vitest — daí `esbuild.jsx: 'automatic'`, que vale só no teste) e um
+`cleanup` global, sem o qual o DOM de um teste vaza para o seguinte. 13 testes
+no `EditorDeItensPrescritos`, cada um terminando com `posologiaSchema.safeParse`
+— a mesma validação que a API aplica, para tela e servidor não divergirem.
+**O bug que apareceu no primeiro `vitest run`:** o campo de horários usava
+`value={item.horarios.join(', ')}` e devolvia o array já normalizado a cada
+tecla. Digitar a vírgula produzia `['08:00']`, que voltava para a tela como
+"08:00" — **a vírgula sumia no instante em que era digitada**. Era impossível
+escrever o segundo horário, e "08:00, 20:00" chegava ao servidor como um único
+horário `"08:0020:00"`, recusado pelo schema. Corrigido com um
+`CampoDeHorarios` que guarda o texto digitado em estado próprio e só reescreve
+o campo quando o valor vem de fora (carregar um modelo). Declarado **fora** do
+componente de cima: dentro, o React o trataria como um tipo novo a cada tecla e
+tiraria o cursor do campo.
+**Verificado também o que não estava quebrado:** dose decimal digitada dígito a
+dígito ("2.5") chega como `2.5`; e a única outra tela com o mesmo padrão
+(`opcoes.join('
+')` na anamnese) já filtrava as vazias antes de enviar.
+**De quebra:** a validação e a montagem do corpo do modelo de anamnese saíram do
+componente para `lib/anamnese.ts`, com 13 testes que confrontam "o que a tela
+deixa salvar" com "o que o schema do servidor aceita" — divergir aí é erro que
+só aparece no envio.
+**Total na web:** 33 testes.
+**Ainda aberto:** pendência 14b — as outras telas.
+
+### Login ganhou limite de tentativas — resolvida em 2026-07-31
+**Era:** `/auth/login` aceitava tentativas ilimitadas. A defesa era só o custo
+do argon2id — que encarece cada tentativa, mas não impede um script de ficar
+tentando a noite inteira.
+**Correção:** `@Limite()` na rota + `LimiteInterceptor` global (inerte onde não
+há o decorador, para nenhuma rota passar a ser limitada sem alguém ter dito que
+sim). No login: 10 senhas erradas na mesma conta ou 60 no mesmo IP em 15 minutos
+respondem **429 LIMITE_EXCEDIDO** com `Retry-After`. Só **falha** conta — quem
+acerta a senha nunca é penalizado, e acertar zera o histórico da conta (o balde
+do IP não, senão bastaria um login válido próprio para limpar a contagem entre
+as tentativas). O reenvio de verificação conta **toda** requisição, porque
+responde 204 mesmo quando não faz nada e por isso nunca produz "falha" — sem
+isso seria um jeito grátis de encher a caixa de entrada de alguém.
+**Detalhes que decidiram o desenho:** a janela é fixa e não é renovada a cada
+falha, senão quem erra sem parar ficaria preso para sempre — e quem faz isso
+costuma ser a pessoa dona da conta. Corpo inválido (400) e erro nosso (5xx) não
+contam: um bug de front trancaria o usuário. E o `Map` tem teto, senão IP
+rotativo viraria vazamento de memória.
+**Pegadinha do deploy:** atrás do proxy do Railway `req.ip` é o IP do proxy — o
+mesmo para todo mundo — e o limite por IP trancaria o login **geral**. Daí
+`PROXY_HOPS` (=1 no Railway), com aviso no boot se faltar em produção.
+**Verificado:** 8 testes de unidade do `Limitador` (relógio injetado, sem subir
+a aplicação) e 3 e2e — a 11ª senha errada devolvendo 429, outra conta entrando
+normalmente enquanto a primeira está bloqueada, e o acerto zerando a contagem.
+**Ainda aberto:** pendência 4b — falta ser distribuído.
+
+### Testes pararam de apagar as medidas da Ana — resolvida em 2026-07-31
+**Era:** o `afterAll` do e2e de consentimento fazia `deleteMany` de **todas** as
+medidas da Ana e do Bruno. Rodar a suíte esvaziava o histórico de composição
+corporal, e os gráficos do app ficavam em branco até alguém digitar tudo de
+novo à mão.
+**Correção:** o teste passou a usar uma data reservada (`DATA_DO_TESTE`,
+propositalmente distante de qualquer dado real) e a apagar **só** a medida que
+ele mesmo cria, naquela data.
+**O que a conferência revelou:** as medidas da Ana já estavam em zero — o seed
+nunca criou nenhuma, então o histórico só existia enquanto alguém não rodasse a
+suíte. Por isso o seed passou a semear cinco medições da Ana, com datas
+relativas a hoje (data fixa envelhece e vira "última medição há 8 meses" na
+tela). Agora `pnpm seed` recompõe o histórico, e nenhum teste o apaga.
+**Auditoria dos outros 21 arquivos de teste:** todos os `deleteMany` restantes
+miram usuários que o próprio teste criou (sufixo único) ou registros que ele
+inseriu. Nenhum outro encosta em conta do seed.
+**Verificado:** suíte inteira (313 testes) e, logo depois, consulta ao banco
+mostrando as 5 medidas da Ana intactas.
 
 ### Verificação de profissional ganhou painel — resolvida em 2026-07-30
 **Era:** `verificadoEm` era **lido** (`vinculos.service.ts` barra quem não foi

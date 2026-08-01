@@ -35,6 +35,13 @@ export default function Login() {
         setFaltaConfirmar(true);
         return;
       }
+      // Falar em conexão aqui mandaria a pessoa mexer no wi-fi por nada: o
+      // servidor respondeu, e o que ele disse foi "espere". A API já manda o
+      // texto com o tempo.
+      if (e instanceof ErroApi && e.codigo === 'LIMITE_EXCEDIDO') {
+        setErro(e.message);
+        return;
+      }
       setErro(
         e instanceof ErroApi && e.codigo === 'CREDENCIAIS_INVALIDAS'
           ? 'E-mail ou senha incorretos.'

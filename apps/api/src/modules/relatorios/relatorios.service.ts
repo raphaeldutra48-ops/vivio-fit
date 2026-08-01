@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EscopoDado, StatusRefeicao, StatusVinculo } from '@prisma/client';
 import type { LinhaDoRelatorio, RelatorioDaCarteira } from '@vivio/contracts';
+import { consentimentoVigentePara } from '../../common/consentimento/regra';
 import { PrismaService } from '../../infra/prisma.service';
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;
@@ -53,14 +54,10 @@ export class RelatoriosService {
     // laço viraria 800 consultas.
     const [consentimentos, execucoes, medidas, registros] = await Promise.all([
       this.prisma.consentimento.findMany({
-        where: {
-          alunoId: { in: alunoIds },
-          revogadoEm: null,
-          // Mesma regra do ConsentGuard: null vale para toda a equipe de
-          // cuidado. Filtrar só pelo id do profissional ignoraria o
-          // consentimento geral, que é o caso mais comum.
-          OR: [{ profissionalId: null }, { profissionalId }],
-        },
+        // A mesma regra que o ConsentGuard aplica, vinda do mesmo lugar: já
+        // divergiu uma vez, e o relatório mostrava como "não autorizado" quem
+        // tinha autorizado a equipe inteira.
+        where: { alunoId: { in: alunoIds }, ...consentimentoVigentePara(profissionalId) },
         select: { alunoId: true, escopo: true },
       }),
       this.prisma.execucaoTreino.findMany({

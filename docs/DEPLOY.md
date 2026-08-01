@@ -122,6 +122,7 @@ algumas horas).
 | `WEB_PUBLIC_URL` | `https://app.viviofit.com.br` | monta o link de confirmação |
 | `API_PUBLIC_URL` | `https://api.viviofit.com.br` | monta as URLs de mídia |
 | `COOKIE_SAMESITE` | `lax` | |
+| `PROXY_HOPS` | `1` | sem ela o limite de login por IP vê um IP só (o do proxy) |
 | `SMTP_URL` | do Resend | sem ela o e-mail só vai para o log |
 | `EMAIL_REMETENTE` | `Vívio Fit <nao-responda@viviofit.com.br>` | |
 | `LEMBRETES_ATIVOS` | `true` | |

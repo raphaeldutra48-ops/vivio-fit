@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { AcaoAuditoria, EscopoDado, Papel } from '@prisma/client';
 import type { UsuarioAutenticado } from '@vivio/contracts';
 import type { Request } from 'express';
+import { consentimentoVigentePara } from '../consentimento/regra';
 import { CHAVE_AUDITORIA } from '../decorators/auditar.decorator';
 import { CHAVE_ESCOPO } from '../decorators/exige-consentimento.decorator';
 import { ErroDominio } from '../erros/erro-dominio';
@@ -46,13 +47,7 @@ export class ConsentGuard implements CanActivate {
     if (usuario.papel === Papel.ALUNO && usuario.id === alunoId) return true;
 
     const consentimento = await this.prisma.consentimento.findFirst({
-      where: {
-        alunoId,
-        escopo,
-        revogadoEm: null,
-        // null = concedido para toda a equipe de cuidado
-        OR: [{ profissionalId: null }, { profissionalId: usuario.id }],
-      },
+      where: { alunoId, escopo, ...consentimentoVigentePara(usuario.id) },
       select: { id: true },
     });
 

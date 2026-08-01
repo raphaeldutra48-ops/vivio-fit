@@ -9,6 +9,9 @@ export default defineConfig({
     root: './',
     include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
     environment: 'node',
+    // Decide o banco antes de qualquer import — o PrismaClient lê DATABASE_URL
+    // ao ser construído, então depois já é tarde.
+    setupFiles: ['./test/banco-de-teste.ts'],
     // O Neon do plano gratuito escala a zero e fica lento sob carga; com a
     // suíte inteira, uma requisição chega a levar 10s. Margem generosa evita
     // falha por lentidão de infraestrutura sendo lida como bug.

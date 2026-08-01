@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { criarContaVerificada } from './apoio';
 
 describe('Auth (e2e)', () => {
   let app: INestApplication;
@@ -424,6 +425,54 @@ describe('Auth (e2e)', () => {
         .post(url('/auth/refresh'))
         .send({ refreshToken: login.body.refreshToken })
         .expect(401);
+    });
+  });
+
+  /**
+   * Pendência 4. Fica por último de propósito: o limite por IP é do processo
+   * inteiro, e gastar o orçamento de falhas no meio do arquivo faria os testes
+   * anteriores começarem a receber 429 em vez do erro que estão verificando.
+   */
+  describe('limite de tentativas', () => {
+    const alvo = `bruteforce.${sufixo}@exemplo.com`;
+    const errar = (quem: string) =>
+      request(app.getHttpServer()).post(url('/auth/login')).send({ email: quem, senha: 'Errada@1' });
+
+    it('a décima primeira senha errada na mesma conta responde 429', async () => {
+      for (let i = 0; i < 10; i++) await errar(alvo).expect(401);
+
+      const bloqueado = await errar(alvo).expect(429);
+      expect(bloqueado.body.erro.codigo).toBe('LIMITE_EXCEDIDO');
+      expect(Number(bloqueado.headers['retry-after'])).toBeGreaterThan(0);
+    });
+
+    /** Trancar a conta atacada não pode trancar as outras. */
+    it('outra conta continua entrando normalmente', async () => {
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email, senha })
+        .expect(200);
+    });
+
+    it('acertar a senha zera a contagem da conta', async () => {
+      const emailLimpo = `recupera.${sufixo}@exemplo.com`;
+      await criarContaVerificada(app.getHttpServer(), '/auth/registrar/aluno', {
+        nome: 'Recupera Conta',
+        email: emailLimpo,
+        senha,
+        dataNascimento: '1993-03-03',
+      });
+
+      // Nove erros: um a menos que o limite.
+      for (let i = 0; i < 9; i++) await errar(emailLimpo).expect(401);
+
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: emailLimpo, senha })
+        .expect(200);
+
+      // Se a contagem não tivesse zerado, o décimo erro já bloquearia.
+      await errar(emailLimpo).expect(401);
     });
   });
 });

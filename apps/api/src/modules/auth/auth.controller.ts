@@ -20,6 +20,7 @@ import {
 } from '@vivio/contracts';
 import type { Request, Response } from 'express';
 import { Publico } from '../../common/decorators/publico.decorator';
+import { Limite } from '../../common/limite/limite.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { AuthService } from './auth.service';
@@ -81,9 +82,11 @@ export class AuthController {
     return this.auth.registrarProfissional(dados);
   }
 
+  /** O token tem entropia de sobra, mas adivinhação em massa não precisa ser de graça. */
   @Publico()
   @Post('verificar-email')
   @HttpCode(200)
+  @Limite({ conta: 'falhas', porIp: 30, janelaSegundos: 900 })
   @ApiOperation({ summary: 'Confirma o e-mail pelo token do link e já devolve os tokens' })
   async verificarEmail(
     @Body(new ZodValidationPipe(verificarEmailSchema)) dados: VerificarEmailInput,
@@ -93,9 +96,16 @@ export class AuthController {
     return this.entregarSessao(req, res, await this.auth.confirmarEmail(dados.token, contextoDe(req)));
   }
 
+  /**
+   * `todas` e não `falhas`: esta rota responde 204 mesmo quando não faz nada,
+   * de propósito, para não revelar quais e-mails existem. Sem "falha" para
+   * contar, o limite tem de ser por requisição — senão vira um jeito gratuito
+   * de encher a caixa de entrada de alguém.
+   */
   @Publico()
   @Post('reenviar-verificacao')
   @HttpCode(204)
+  @Limite({ conta: 'todas', campo: 'email', porIdentificador: 5, porIp: 20, janelaSegundos: 900 })
   @ApiOperation({ summary: 'Reenvia o link. Responde 204 sempre, exista o e-mail ou não' })
   async reenviarVerificacao(
     @Body(new ZodValidationPipe(reenviarVerificacaoSchema)) dados: ReenviarVerificacaoInput,
@@ -103,9 +113,16 @@ export class AuthController {
     await this.verificacao.reenviar(dados.email);
   }
 
+  /**
+   * 10 senhas erradas na mesma conta em 15 minutos param a conta; 60 no mesmo
+   * IP param o IP. Quem acerta a senha nunca é contado, então o usuário comum
+   * não encosta nisso. O argon2id já tornava a força bruta cara — isto tira o
+   * "ilimitado" da conta, que era o que faltava.
+   */
   @Publico()
   @Post('login')
   @HttpCode(200)
+  @Limite({ conta: 'falhas', campo: 'email', porIdentificador: 10, porIp: 60, janelaSegundos: 900 })
   async login(
     @Body(new ZodValidationPipe(loginSchema)) dados: LoginInput,
     @Req() req: Request,

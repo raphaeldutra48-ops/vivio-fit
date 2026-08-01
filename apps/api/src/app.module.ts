@@ -1,10 +1,11 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import cookieParser from 'cookie-parser';
 import { ErroFilter } from './common/filters/erro.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { LimiteInterceptor } from './common/limite/limite.interceptor';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './infra/prisma.module';
 import { AgendaModule } from './modules/agenda/agenda.module';
@@ -63,6 +64,8 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     // Autenticação é o padrão. Rota aberta exige @Publico() explícito.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_FILTER, useClass: ErroFilter },
+    // Inerte onde não há @Limite(): limitar uma rota é decisão explícita.
+    { provide: APP_INTERCEPTOR, useClass: LimiteInterceptor },
     PerfilService,
   ],
 })

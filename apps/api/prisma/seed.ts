@@ -181,6 +181,50 @@ async function main(): Promise<void> {
     }
   }
 
+  // --- Histórico de medidas da Ana ----------------------------------------
+  // Os gráficos de composição corporal só mostram alguma coisa com série
+  // temporal, e antes disto a única forma de ter uma era digitar no navegador —
+  // que sumia quando alguém rodava a suíte. Agora o histórico vem do seed:
+  // `pnpm seed` recompõe, e nenhum teste mais o apaga.
+  //
+  // Datas relativas a hoje, não fixas: um seed com data absoluta envelhece e
+  // vira "última medição há 8 meses" na tela.
+  const hoje = new Date();
+  const diaDeTras = (dias: number) => {
+    const d = new Date(hoje);
+    d.setUTCDate(d.getUTCDate() - dias);
+    // Coluna é @db.Date; zerar a hora evita depender do fuso da máquina.
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  };
+
+  // Perda gradual de peso e de cintura com massa magra estável: é assim que se
+  // parece um acompanhamento que está dando certo, e é o que a tela precisa
+  // conseguir desenhar.
+  const historicoDaAna = [
+    [112, 68.4, 28.5, 48.9, 76.0],
+    [84, 67.2, 27.8, 48.5, 74.8],
+    [56, 66.1, 26.9, 48.3, 73.5],
+    [28, 65.3, 26.2, 48.2, 72.4],
+    [7, 64.6, 25.6, 48.1, 71.6],
+  ] as const;
+
+  for (const [dias, pesoKg, percentualGordura, massaMagraKg, cinturaCm] of historicoDaAna) {
+    const data = diaDeTras(dias);
+    await prisma.medida.upsert({
+      where: { alunoId_data: { alunoId: ana.id, data } },
+      update: {},
+      create: {
+        alunoId: ana.id,
+        data,
+        pesoKg,
+        percentualGordura,
+        massaMagraKg,
+        cinturaCm,
+        registradoPorId: personal.id,
+      },
+    });
+  }
+
   // --- Biblioteca global de exercícios ------------------------------------
   const exerciciosGlobais = [
     ['Supino reto com barra', 'PEITO', 'Barra', 'Escápulas retraídas, barra na linha do mamilo.'],

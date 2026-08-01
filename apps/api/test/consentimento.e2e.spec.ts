@@ -31,6 +31,14 @@ describe('Consentimento e auditoria (e2e)', () => {
 
   const url = (caminho: string) => `/api/v1${caminho}`;
 
+  /**
+   * Data reservada para este teste.
+   *
+   * Distante do seed de propósito: a medida criada aqui é apagada no fim, e
+   * uma data compartilhada faria a limpeza levar dado que não é dela.
+   */
+  const DATA_DO_TESTE = '2029-01-15';
+
   async function logar(email: string): Promise<string> {
     const r = await request(app.getHttpServer()).post(url('/auth/login')).send({ email, senha });
     if (!r.body.accessToken) throw new Error(`Login falhou: ${email}`);
@@ -71,7 +79,14 @@ describe('Consentimento e auditoria (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.medida.deleteMany({ where: { alunoId: { in: [idAna, idBruno] } } });
+    // Só a medida que este teste cria, na data que ele usa. Antes daqui saía um
+    // deleteMany de tudo da Ana e do Bruno: rodar a suíte esvaziava o histórico
+    // de composição corporal, e os gráficos do app ficavam em branco até
+    // alguém digitar tudo de novo. O histórico agora vem do seed — motivo a
+    // mais para este afterAll não encostar nele.
+    await prisma.medida.deleteMany({
+      where: { alunoId: idAna, data: new Date(DATA_DO_TESTE) },
+    });
     await app.close();
   });
 
@@ -122,7 +137,7 @@ describe('Consentimento e auditoria (e2e)', () => {
       const r = await request(app.getHttpServer())
         .post(url(`/alunos/${idAna}/medidas`))
         .set('Authorization', `Bearer ${tokenPersonal}`)
-        .send({ data: '2026-07-28', pesoKg: 64.5, cinturaCm: 72 })
+        .send({ data: DATA_DO_TESTE, pesoKg: 64.5, cinturaCm: 72 })
         .expect(201);
 
       expect(r.body.pesoKg).toBe(64.5);
@@ -132,11 +147,11 @@ describe('Consentimento e auditoria (e2e)', () => {
       await request(app.getHttpServer())
         .post(url(`/alunos/${idAna}/medidas`))
         .set('Authorization', `Bearer ${tokenPersonal}`)
-        .send({ data: '2026-07-28', pesoKg: 64.9 })
+        .send({ data: DATA_DO_TESTE, pesoKg: 64.9 })
         .expect(201);
 
       const medidas = await prisma.medida.findMany({
-        where: { alunoId: idAna, data: new Date('2026-07-28') },
+        where: { alunoId: idAna, data: new Date(DATA_DO_TESTE) },
       });
       expect(medidas).toHaveLength(1);
       expect(Number(medidas[0]!.pesoKg)).toBe(64.9);

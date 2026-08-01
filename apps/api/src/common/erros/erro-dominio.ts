@@ -81,4 +81,18 @@ export class ErroDominio extends HttpException {
   static conflito(mensagem: string, detalhes?: Record<string, unknown>): ErroDominio {
     return new ErroDominio(CodigoErro.CONFLITO, mensagem, 409, detalhes);
   }
+
+  /**
+   * A mensagem diz o tempo porque a alternativa é a pessoa tentar de novo na
+   * hora, falhar igual e achar que a conta foi bloqueada de vez.
+   */
+  static limiteExcedido(segundos: number): ErroDominio {
+    const minutos = Math.ceil(segundos / 60);
+    return new ErroDominio(
+      CodigoErro.LIMITE_EXCEDIDO,
+      `Muitas tentativas. Aguarde ${minutos === 1 ? 'um minuto' : `${minutos} minutos`} e tente de novo.`,
+      429,
+      { segundos },
+    );
+  }
 }

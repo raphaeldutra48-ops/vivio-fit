@@ -6,7 +6,14 @@ import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { Anuncio } from '../../../../../../components/Anuncio';
+import {
+  PunhoDeArraste,
+  estiloDeArraste,
+  useArrasteParaReordenar,
+} from '../../../../../../components/Reordenavel';
 import { Aviso, Botao, Campo, Cartao } from '../../../../../../components/ui';
+import { anuncioDeMovimento, reordenar } from '../../../../../../lib/reordenar';
 import { sdk } from '../../../../../../lib/sdk';
 
 interface ItemNaTela extends ItemTreinoInput {
@@ -35,6 +42,9 @@ export default function MontarTreino() {
   const [grupo, setGrupo] = useState<GrupoMuscular | ''>('');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  /** Só para leitor de tela: reordenar muda a lista sem mudar o foco. */
+  const [anuncio, setAnuncio] = useState('');
+  const arraste = useArrasteParaReordenar(moverItem);
 
   useEffect(() => {
     sdk.exercicios
@@ -60,7 +70,13 @@ export default function MontarTreino() {
               ...s,
               itens: [
                 ...s.itens,
-                { exercicioId: exercicio.id, series: 3, repsAlvo: '10-12', descansoSeg: 60, exercicio },
+                {
+                  exercicioId: exercicio.id,
+                  series: 3,
+                  repsAlvo: '10-12',
+                  descansoSeg: 60,
+                  exercicio,
+                },
               ],
             }
           : s,
@@ -72,23 +88,29 @@ export default function MontarTreino() {
     setSessoes((atual) =>
       atual.map((s, i) =>
         i === sessaoAtiva
-          ? { ...s, itens: s.itens.map((it, j) => (j === indiceItem ? { ...it, ...mudanca } : it)) }
+          ? {
+              ...s,
+              itens: s.itens.map((it, j) => (j === indiceItem ? { ...it, ...mudanca } : it)),
+            }
           : s,
       ),
     );
   }
 
-  function moverItem(indiceItem: number, direcao: -1 | 1) {
-    setSessoes((atual) =>
-      atual.map((s, i) => {
-        if (i !== sessaoAtiva) return s;
-        const destino = indiceItem + direcao;
-        if (destino < 0 || destino >= s.itens.length) return s;
-        const itens = [...s.itens];
-        [itens[indiceItem], itens[destino]] = [itens[destino]!, itens[indiceItem]!];
-        return { ...s, itens };
-      }),
-    );
+  /**
+   * Mesma função para o botão ↑ ↓ (`para = i ± 1`) e para o arrasto (`para` é
+   * onde soltou). Duas implementações de "mudar de lugar" divergiriam.
+   */
+  function moverItem(de: number, para: number) {
+    const sessao = sessoes[sessaoAtiva];
+    if (!sessao) return;
+
+    const itens = reordenar(sessao.itens, de, para);
+    if (itens === sessao.itens) return; // gesto que não mudou nada
+
+    const destino = Math.max(0, Math.min(itens.length - 1, para));
+    setAnuncio(anuncioDeMovimento(sessao.itens[de]!.exercicio.nome, destino + 1, itens.length));
+    setSessoes((atual) => atual.map((s, i) => (i === sessaoAtiva ? { ...s, itens } : s)));
   }
 
   function removerItem(indiceItem: number) {
@@ -132,7 +154,11 @@ export default function MontarTreino() {
 
   return (
     <div className="flex flex-col gap-xl">
-      <Link href={`/alunos/${alunoId}`} className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+      <Link
+        href={`/alunos/${alunoId}`}
+        className="text-sm"
+        style={{ color: 'var(--vv-texto-secundario)' }}
+      >
         ← Voltar para a ficha
       </Link>
 
@@ -229,90 +255,106 @@ export default function MontarTreino() {
           </div>
 
           {sessao.itens.length === 0 && (
-            <Aviso tipo="info">
-              Nenhum exercício nesta sessão. Escolha na biblioteca ao lado.
-            </Aviso>
+            <Aviso tipo="info">Nenhum exercício nesta sessão. Escolha na biblioteca ao lado.</Aviso>
           )}
 
           {sessao.itens.map((item, i) => (
-            <Cartao key={`${item.exercicioId}-${i}`}>
-              <div className="mb-md flex items-start justify-between gap-md">
-                <div>
-                  <p className="font-semibold">{item.exercicio.nome}</p>
-                  <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
-                    {item.exercicio.grupoMuscular}
-                    {item.exercicio.equipamento && ` · ${item.exercicio.equipamento}`}
-                  </p>
+            <div
+              key={`${item.exercicioId}-${i}`}
+              data-testid={`item-${i}`}
+              {...arraste.propsDoItem(i)}
+              style={estiloDeArraste(i, arraste.arrastando, arraste.alvo)}
+            >
+              <Cartao>
+                <div className="mb-md flex items-start justify-between gap-md">
+                  <div className="flex items-start gap-sm">
+                    <PunhoDeArraste
+                      titulo={`Arraste para reordenar ${item.exercicio.nome}`}
+                      {...arraste.propsDoPunho(i)}
+                    />
+                    <div>
+                      <p className="font-semibold">{item.exercicio.nome}</p>
+                      <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                        {item.exercicio.grupoMuscular}
+                        {item.exercicio.equipamento && ` · ${item.exercicio.equipamento}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-xs">
+                    <button
+                      onClick={() => moverItem(i, i - 1)}
+                      disabled={i === 0}
+                      aria-label={`Mover ${item.exercicio.nome} para cima`}
+                      className="min-h-toque min-w-toque rounded-md border disabled:opacity-30"
+                      style={{ borderColor: 'var(--vv-borda)' }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => moverItem(i, i + 1)}
+                      disabled={i === sessao.itens.length - 1}
+                      aria-label={`Mover ${item.exercicio.nome} para baixo`}
+                      className="min-h-toque min-w-toque rounded-md border disabled:opacity-30"
+                      style={{ borderColor: 'var(--vv-borda)' }}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={() => removerItem(i)}
+                      aria-label={`Remover ${item.exercicio.nome}`}
+                      className="min-h-toque min-w-toque rounded-md border"
+                      style={{
+                        borderColor: 'var(--vv-erro)',
+                        color: 'var(--vv-erro)',
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-xs">
-                  <button
-                    onClick={() => moverItem(i, -1)}
-                    disabled={i === 0}
-                    aria-label="Mover para cima"
-                    className="min-h-toque min-w-toque rounded-md border disabled:opacity-30"
-                    style={{ borderColor: 'var(--vv-borda)' }}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => moverItem(i, 1)}
-                    disabled={i === sessao.itens.length - 1}
-                    aria-label="Mover para baixo"
-                    className="min-h-toque min-w-toque rounded-md border disabled:opacity-30"
-                    style={{ borderColor: 'var(--vv-borda)' }}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    onClick={() => removerItem(i)}
-                    aria-label="Remover exercício"
-                    className="min-h-toque min-w-toque rounded-md border"
-                    style={{ borderColor: 'var(--vv-erro)', color: 'var(--vv-erro)' }}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-md sm:grid-cols-4">
-                <Campo
-                  rotulo="Séries"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={item.series}
-                  onChange={(e) => alterarItem(i, { series: Number(e.target.value) })}
-                />
-                <Campo
-                  rotulo="Repetições"
-                  value={item.repsAlvo}
-                  onChange={(e) => alterarItem(i, { repsAlvo: e.target.value })}
-                />
-                <Campo
-                  rotulo="Carga (kg)"
-                  type="number"
-                  step="0.5"
-                  value={item.cargaSugeridaKg ?? ''}
-                  onChange={(e) =>
-                    alterarItem(i, {
-                      cargaSugeridaKg: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-                <Campo
-                  rotulo="Descanso (s)"
-                  type="number"
-                  step="15"
-                  value={item.descansoSeg ?? ''}
-                  onChange={(e) =>
-                    alterarItem(i, {
-                      descansoSeg: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-              </div>
-            </Cartao>
+                <div className="grid grid-cols-2 gap-md sm:grid-cols-4">
+                  <Campo
+                    rotulo="Séries"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={item.series}
+                    onChange={(e) => alterarItem(i, { series: Number(e.target.value) })}
+                  />
+                  <Campo
+                    rotulo="Repetições"
+                    value={item.repsAlvo}
+                    onChange={(e) => alterarItem(i, { repsAlvo: e.target.value })}
+                  />
+                  <Campo
+                    rotulo="Carga (kg)"
+                    type="number"
+                    step="0.5"
+                    value={item.cargaSugeridaKg ?? ''}
+                    onChange={(e) =>
+                      alterarItem(i, {
+                        cargaSugeridaKg: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                  />
+                  <Campo
+                    rotulo="Descanso (s)"
+                    type="number"
+                    step="15"
+                    value={item.descansoSeg ?? ''}
+                    onChange={(e) =>
+                      alterarItem(i, {
+                        descansoSeg: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                  />
+                </div>
+              </Cartao>
+            </div>
           ))}
+
+          <Anuncio texto={anuncio} />
         </section>
 
         {/* Biblioteca */}
@@ -356,7 +398,10 @@ export default function MontarTreino() {
                 // o texto interno está em spans de bloco e não compõe o nome acessível.
                 aria-label={`Adicionar ${e.nome} à sessão`}
                 className="min-h-toque rounded-md border p-md text-left"
-                style={{ borderColor: 'var(--vv-borda)', background: 'var(--vv-superficie)' }}
+                style={{
+                  borderColor: 'var(--vv-borda)',
+                  background: 'var(--vv-superficie)',
+                }}
               >
                 <span className="block font-semibold">{e.nome}</span>
                 <span className="block text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
@@ -374,14 +419,21 @@ export default function MontarTreino() {
 
       <div
         className="sticky bottom-0 flex flex-wrap items-center justify-between gap-md border-t py-lg"
-        style={{ background: 'var(--vv-fundo)', borderColor: 'var(--vv-borda)' }}
+        style={{
+          background: 'var(--vv-fundo)',
+          borderColor: 'var(--vv-borda)',
+        }}
       >
         <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
           {sessoes.length} {sessoes.length === 1 ? 'sessão' : 'sessões'} · {totalItens}{' '}
           {totalItens === 1 ? 'exercício' : 'exercícios'}
         </p>
         <div className="flex gap-md">
-          <Botao variante="neutra" disabled={!podeSalvar || salvando} onClick={() => void salvar(false)}>
+          <Botao
+            variante="neutra"
+            disabled={!podeSalvar || salvando}
+            onClick={() => void salvar(false)}
+          >
             Salvar rascunho
           </Botao>
           <Botao disabled={!podeSalvar || salvando} onClick={() => void salvar(true)}>

@@ -27,7 +27,12 @@ dist
 docs
 **/*.md
 **/test
+**/teste
 **/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+**/vitest.config.ts
 **/*.spec.tsx
 
 # Mídia enviada em desenvolvimento (driver de armazenamento local)
