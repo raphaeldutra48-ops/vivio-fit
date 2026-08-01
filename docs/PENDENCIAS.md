@@ -104,16 +104,22 @@ plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`) e a
 adipometria (`lib/adipometria.spec.ts` + `teste/adipometria.test.tsx`) — as duas
 últimas eram as candidatas anteriores e as duas cobraram o preço previsto. Ver as
 resolvidas de 2026-08-01.
-**Candidata seguinte: a bioimpedância**, e desta vez não é palpite — o defeito já
-foi lido no código. `apps/web/app/(pro)/avaliacao/bioimpedancia/page.tsx` tem
-`const numero = (chave) => Number(valores[chave]?.replace(',','.')) || 0`, o mesmo
-`|| 0` que acabou de ser tirado das outras duas, e um `completo` que só confere
-`peso > 0 && gordura > 0`. As oito faixas do `avaliacaoBioimpedanciaSchema`
-(percentual 1–70, massa óssea 0,5–10, TMB inteira 500–5000…) não são conferidas em
-lugar nenhum, e o `opcional()` devolve `numero()` — então um campo opcional com
-lixo digitado vira `0` e é recusado pelo `.min()` como se alguém tivesse errado de
-propósito. É a mesma família das outras duas, então `lib/adipometria.ts` já é o
-molde.
+**Candidatas seguintes:** o `|| 0` acabou — não há mais nenhum em `apps/web/app`.
+O que sobrou é a **mesma falha em outra forma**: telas que guardam
+`Number(e.target.value)` **direto no estado**, em vez de guardar o texto. Limpar o
+campo estaciona `0` no estado (o campo passa a exibir "0", que ninguém digitou), e
+o `positive()`/`min()` do schema recusa no envio. Localizadas:
+
+| Arquivo | Linha | Campo |
+|---|---|---|
+| `plano-alimentar/refeicoes/page.tsx` | 220–221 | `porcoes`, `quantidadeG` |
+| `plano-alimentar/receitas/page.tsx` | 161, 196 | `rende`, `quantidadeG` |
+| `alunos/[alunoId]/treino/novo/page.tsx` | 323, 337, 348 | `series`, `cargaSugeridaKg`, `descansoSeg` |
+
+As duas de `plano-alimentar` primeiro: mesmo domínio e mesmo schema
+(`itemRefeicaoSchema`) do editor de plano alimentar, então `lib/dieta.ts` e
+`lib/campos.ts` já são o molde. O padrão inteiro está em
+[ADAPTACOES.md](ADAPTACOES.md).
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
@@ -195,6 +201,45 @@ carrega — o modelo de dados não muda.
 o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
 ## Resolvidas
+
+### A bioimpedância parou de contrariar a própria legenda — resolvida em 2026-08-01
+**Era:** a terceira e última tela da leva da pendência 14b, e a mais fácil de
+errar por digitação: é uma transcrição: oito números copiados do visor da
+balança, nenhum conferível contra outra fonte, e faixa no schema para todos.
+Tinha o mesmo `Number(...) || 0` das outras duas e um `completo` que só olhava
+`peso > 0 && gordura > 0` — as outras seis faixas não eram conferidas em lugar
+nenhum. Pior, o `opcional()` devolvia esse mesmo `|| 0`: campo opcional com texto
+ilegível virava `0` e era recusado pelo `.min()` do schema como se alguém tivesse
+errado de propósito.
+**O defeito que só apareceu lendo a tela inteira:** a legenda embaixo do painel
+dizia "se a balança informar a massa magra, ela prevalece sobre a derivada". O
+servidor cumpre isso (`calcularPorBioimpedancia` usa `massaMagraKg ?? peso -
+massaGorda`). **A prévia mostrava sempre a derivada** — com 70 kg, 25% e massa
+magra informada de 51,2 kg, a tela dizia 52,5 kg e o número mudava depois de
+salvar. Agora a prévia usa a informada e a legenda muda de texto para dizer que
+foi ela que valeu.
+**Correção:** `apps/web/lib/bioimpedancia.ts`, no mesmo formato das outras duas.
+A tabela `CAMPOS` que desenha o formulário passou a carregar a faixa de cada
+campo, espelhando `avaliacaoBioimpedanciaSchema` — assim campo novo sem faixa não
+passa despercebido, porque é a mesma lista.
+**De quebra, a terceira repetição virou extração:** `numeroDoCampo`,
+`problemaDeFaixa`, `erroVisivel` e `arredondar` foram para `apps/web/lib/campos.ts`.
+Os módulos de tela reexportam o que já expunham, e **os testes de `dieta` e
+`adipometria` não mudaram uma linha** — continuarem verdes é a prova de que a
+extração não alterou comportamento. Junto veio uma mensagem melhor: campo vazio
+diz "preencha este campo", campo ilegível diz "use só números"; antes os dois
+diziam "preencha", o que é confuso para quem acabou de digitar ali.
+**Um caso em que a tela é mais rígida que o schema, de propósito:** texto
+ilegível num campo opcional vira ausência no corpo, e o schema aceita — o campo
+simplesmente não vai. Mas alguém digitou ali, e enviar sem ele seria descartar em
+silêncio o que a pessoa escreveu. A tela para e pede correção. Há teste nomeando
+esse caso, para ninguém "consertar" a divergência depois achando que é bug.
+**Verificado:** 20 testes de unidade e 6 de render. Suíte da web: **146 testes**.
+No navegador: 70 kg + 25% deram 17,5 e 52,5 kg; informar 51,2 trocou a massa magra
+e o texto da legenda; massa óssea 50 kg pintou "entre 0.5 e 10 kg" no campo e
+travou o botão. Nada foi salvo.
+**Ainda aberto:** pendência 14b — sobraram as telas que guardam `Number()` direto
+no estado, listadas lá em cima.
 
 ### A equação de composição corporal virou um lugar só — resolvida em 2026-08-01
 **Era:** a adipometria, candidata seguinte da pendência 14b. E o que o teste

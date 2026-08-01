@@ -1,38 +1,25 @@
 'use client';
 
-import { faixaDeGordura, type AvaliacaoResumo, type SexoBiologico, type VinculoResumo } from '@vivio/contracts';
+import type { AvaliacaoResumo, SexoBiologico, VinculoResumo } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
+import {
+  CAMPOS,
+  corpoDaBioimpedancia,
+  previaDaBioimpedancia,
+  problemaDoCampo,
+  problemasDaBioimpedancia,
+  type ValoresDaBalanca,
+} from '../../../../lib/bioimpedancia';
+import { erroVisivel } from '../../../../lib/campos';
 import { sdk } from '../../../../lib/sdk';
-
-/**
- * Campos que as balanças de bioimpedância costumam reportar. Só peso e
- * percentual são obrigatórios — o resto varia bastante de aparelho para aparelho.
- */
-interface CampoDaBalanca {
-  chave: string;
-  rotulo: string;
-  unidade: string;
-  obrigatorio?: boolean;
-}
-
-const CAMPOS: CampoDaBalanca[] = [
-  { chave: 'pesoKg', rotulo: 'Peso', unidade: 'kg', obrigatorio: true },
-  { chave: 'percentualGordura', rotulo: 'Gordura', unidade: '%', obrigatorio: true },
-  { chave: 'massaMagraKg', rotulo: 'Massa magra', unidade: 'kg' },
-  { chave: 'alturaCm', rotulo: 'Altura', unidade: 'cm' },
-  { chave: 'aguaCorporalPercentual', rotulo: 'Água corporal', unidade: '%' },
-  { chave: 'massaOsseaKg', rotulo: 'Massa óssea', unidade: 'kg' },
-  { chave: 'taxaMetabolicaBasal', rotulo: 'Taxa metabólica basal', unidade: 'kcal' },
-  { chave: 'gorduraVisceral', rotulo: 'Gordura visceral', unidade: 'nível' },
-];
 
 export default function Bioimpedancia() {
   const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [alunoId, setAlunoId] = useState('');
   const [sexo, setSexo] = useState<SexoBiologico>('F');
-  const [valores, setValores] = useState<Record<string, string>>({});
+  const [valores, setValores] = useState<ValoresDaBalanca>({});
   const [historico, setHistorico] = useState<AvaliacaoResumo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
@@ -53,12 +40,12 @@ export default function Bioimpedancia() {
     sdk.avaliacoes.listar(alunoId).then(setHistorico).catch(() => setHistorico([]));
   }, [alunoId, mensagem]);
 
-  const numero = (chave: string) => Number(valores[chave]?.replace(',', '.')) || 0;
-  const peso = numero('pesoKg');
-  const gordura = numero('percentualGordura');
-  const completo = alunoId !== '' && peso > 0 && gordura > 0;
-
-  const massaGorda = completo ? (peso * gordura) / 100 : null;
+  const previa = useMemo(() => previaDaBioimpedancia(valores, sexo), [valores, sexo]);
+  const problemas = useMemo(
+    () => problemasDaBioimpedancia(alunoId, valores),
+    [alunoId, valores],
+  );
+  const completo = problemas.length === 0;
 
   async function salvar() {
     if (!completo) return;
@@ -66,19 +53,7 @@ export default function Bioimpedancia() {
     setErro(null);
     setMensagem(null);
     try {
-      const opcional = (chave: string) => (valores[chave] ? numero(chave) : undefined);
-      const r = await sdk.avaliacoes.registrar(alunoId, {
-        metodo: 'BIOIMPEDANCIA',
-        data: new Date(),
-        pesoKg: peso,
-        percentualGordura: gordura,
-        alturaCm: opcional('alturaCm'),
-        massaMagraKg: opcional('massaMagraKg'),
-        aguaCorporalPercentual: opcional('aguaCorporalPercentual'),
-        massaOsseaKg: opcional('massaOsseaKg'),
-        taxaMetabolicaBasal: opcional('taxaMetabolicaBasal'),
-        gorduraVisceral: opcional('gorduraVisceral'),
-      });
+      const r = await sdk.avaliacoes.registrar(alunoId, corpoDaBioimpedancia(valores, new Date()));
       setMensagem(
         `Salvo: ${r.resultado.percentualGordura}% de gordura, ${r.resultado.massaMagraKg} kg de massa magra.`,
       );
@@ -152,6 +127,7 @@ export default function Bioimpedancia() {
                 rotulo={`${campo.rotulo} (${campo.unidade})${campo.obrigatorio ? '' : ' — opcional'}`}
                 inputMode="decimal"
                 value={valores[campo.chave] ?? ''}
+                erro={erroVisivel(valores[campo.chave], problemaDoCampo(campo, valores))}
                 onChange={(e) =>
                   setValores((atual) => ({ ...atual, [campo.chave]: e.target.value }))
                 }
@@ -159,10 +135,19 @@ export default function Bioimpedancia() {
             ))}
           </div>
 
-          <div className="mt-lg">
-            <Botao disabled={!completo || salvando} onClick={() => void salvar()}>
-              {salvando ? 'Salvando…' : 'Salvar avaliação'}
-            </Botao>
+          <div className="mt-lg flex flex-col gap-sm">
+            {problemas.length > 0 && (
+              <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+                {problemas.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+            <div>
+              <Botao disabled={!completo || salvando} onClick={() => void salvar()}>
+                {salvando ? 'Salvando…' : 'Salvar avaliação'}
+              </Botao>
+            </div>
           </div>
         </Cartao>
 
@@ -172,15 +157,15 @@ export default function Bioimpedancia() {
               Composição
             </p>
             <p className="text-2xl font-bold tabular-nums">
-              {gordura > 0 ? `${gordura}%` : '—'}
+              {previa ? `${previa.percentualGordura}%` : '—'}
               <span className="text-sm font-normal" style={{ color: 'var(--vv-texto-secundario)' }}>
                 {' '}
                 de gordura
               </span>
             </p>
-            {gordura > 0 && (
+            {previa && (
               <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                Faixa: {faixaDeGordura(gordura, sexo)}
+                Faixa: {previa.faixa}
               </p>
             )}
 
@@ -188,19 +173,26 @@ export default function Bioimpedancia() {
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa gorda</dt>
                 <dd className="tabular-nums">
-                  {massaGorda !== null ? `${massaGorda.toFixed(1)} kg` : '—'}
+                  {previa ? `${previa.massaGordaKg.toFixed(1)} kg` : '—'}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa magra</dt>
                 <dd className="tabular-nums">
-                  {massaGorda !== null ? `${(peso - massaGorda).toFixed(1)} kg` : '—'}
+                  {previa ? `${previa.massaMagraKg.toFixed(1)} kg` : '—'}
                 </dd>
               </div>
             </dl>
 
+            {/*
+              A prévia usa a massa magra informada quando ela existe, como o
+              servidor faz. Antes a legenda prometia isso e a prévia mostrava a
+              derivada — o número mudava depois de salvar.
+            */}
             <p className="mt-md text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
-              Se a balança informar a massa magra, ela prevalece sobre a derivada.
+              {previa?.massaMagraInformada
+                ? 'Massa magra informada pela balança — é ela que prevalece sobre a derivada.'
+                : 'Se a balança informar a massa magra, ela prevalece sobre a derivada.'}
             </p>
           </Cartao>
 

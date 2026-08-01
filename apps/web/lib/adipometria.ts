@@ -11,6 +11,15 @@ import {
   type ProtocoloDobras,
   type SexoBiologico,
 } from '@vivio/contracts';
+import {
+  arredondar,
+  erroVisivel,
+  numeroDoCampo,
+  problemaDeFaixa,
+  problemaDeFaixaOpcional,
+} from './campos';
+
+export { erroVisivel, numeroDoCampo };
 
 /**
  * Leitura dos campos, validação e prévia da adipometria.
@@ -59,42 +68,13 @@ const LIMITE = {
   altura: { min: 80, max: 260 },
 } as const;
 
-const arredondar = (v: number, casas = 2): number => {
-  const fator = 10 ** casas;
-  return Math.round(v * fator) / fator;
-};
-
-/**
- * Texto → número, ou `null` quando não dá para ler.
- *
- * Aceita vírgula: "12,5 mm" é como se anota uma dobra em português. Devolver
- * `null` em vez de `0` é o ponto — zero milímetros não existe, e tratar campo
- * vazio como zero é justamente o que produzia o percentual errado.
- */
-export function numeroDoCampo(texto: string | undefined): number | null {
-  const limpo = (texto ?? '').trim().replace(/,/g, '.');
-  if (limpo === '') return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
-}
-
-function problemaDeFaixa(
-  texto: string | undefined,
-  faixa: { min: number; max: number },
-  unidade: string,
-): string | null {
-  const n = numeroDoCampo(texto);
-  if (n === null) return 'preencha este campo';
-  if (n < faixa.min || n > faixa.max) return `entre ${faixa.min} e ${faixa.max} ${unidade}`;
-  return null;
-}
-
 /** Mensagem para o campo da dobra, ou `null` se está boa. */
 export function problemaDaDobra(texto: string | undefined): string | null {
   return problemaDeFaixa(texto, LIMITE.dobra, 'mm');
 }
 
 export function problemaDaIdade(texto: string): string | null {
+  // Mensagens próprias: "preencha a idade" e "anos" dizem mais que o genérico.
   const n = numeroDoCampo(texto);
   if (n === null) return 'preencha a idade';
   if (!Number.isInteger(n)) return 'use anos inteiros';
@@ -110,24 +90,7 @@ export function problemaDoPeso(texto: string): string | null {
 
 /** A altura é opcional: em branco não é problema. */
 export function problemaDaAltura(texto: string): string | null {
-  if (texto.trim() === '') return null;
-  return problemaDeFaixa(texto, LIMITE.altura, 'cm');
-}
-
-/**
- * O que pintar de vermelho no campo.
- *
- * Campo em branco ainda não é erro de ninguém — a tela abre com peso e dobras
- * vazios, e recebê-la já toda vermelha é ranzinza sem informar nada. Quem
- * cobra o que falta é a lista acima do botão; o campo só reclama depois que
- * alguém digitou algo que não serve.
- */
-export function erroVisivel(
-  texto: string | undefined,
-  problema: string | null,
-): string | undefined {
-  if ((texto ?? '').trim() === '') return undefined;
-  return problema ?? undefined;
+  return problemaDeFaixaOpcional(texto, LIMITE.altura, 'cm');
 }
 
 /** Tudo que impede salvar, em texto para a tela. Vazio significa que dá. */

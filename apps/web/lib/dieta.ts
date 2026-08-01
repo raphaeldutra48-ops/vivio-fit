@@ -1,4 +1,5 @@
 import type { AlimentoResumo, CriarPlanoDietaInput, Macros } from '@vivio/contracts';
+import { numeroDoCampo } from './campos';
 
 /**
  * Cálculo, validação e montagem do corpo do plano alimentar.
@@ -46,18 +47,12 @@ const FAIXA_DA_META = {
 } as const;
 
 /**
- * Texto do campo → número, ou `null` quando não dá para ler.
+ * Texto do campo → gramas, ou `null` quando não dá para ler.
  *
- * Aceita vírgula porque é assim que se escreve decimal em português. Devolver
- * `null` em vez de `0` é o ponto: quem chama precisa distinguir "o campo está
- * vazio" de "o nutricionista prescreveu zero grama".
+ * É o `numeroDoCampo` de `campos.ts` com o nome do domínio. A distinção que
+ * importa aqui: `null` é "o campo está vazio", `0` é "prescreveram zero grama".
  */
-export function quantidadeEmGramas(texto: string): number | null {
-  const limpo = texto.trim().replace(/,/g, '.');
-  if (limpo === '') return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
-}
+export const quantidadeEmGramas = numeroDoCampo;
 
 /** Mensagem para o campo, ou `null` se está bom. */
 export function problemaDaQuantidade(texto: string): string | null {
@@ -70,10 +65,7 @@ export function problemaDaQuantidade(texto: string): string | null {
 
 /** Meta em branco é ausência, não erro — as quatro são opcionais. */
 export function metaEmNumero(texto: string): number | undefined {
-  const limpo = texto.trim().replace(/,/g, '.');
-  if (limpo === '') return undefined;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : undefined;
+  return numeroDoCampo(texto) ?? undefined;
 }
 
 function problemaDaMeta(texto: string, faixa: { rotulo: string; min: number; max: number }) {
