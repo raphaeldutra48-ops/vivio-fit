@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -15,11 +16,15 @@ import {
   consultaFinanceiroSchema,
   criarCobrancaSchema,
   registrarPagamentoSchema,
+  salvarPagamentoSchema,
+  type CobrancaComPix,
   type CobrancaResumo,
   type ConsultaFinanceiro,
   type CriarCobrancaInput,
+  type DadosDePagamento,
   type RegistrarPagamentoInput,
   type ResumoFinanceiro,
+  type SalvarPagamentoInput,
   type UsuarioAutenticado,
 } from '@vivio/contracts';
 import { Papeis } from '../../common/decorators/papeis.decorator';
@@ -49,6 +54,31 @@ export class FinanceiroController {
     @Query(new ZodValidationPipe(consultaFinanceiroSchema)) consulta: ConsultaFinanceiro,
   ): Promise<ResumoFinanceiro> {
     return this.financeiro.resumo(usuario.id, consulta);
+  }
+
+  @Get('pagamento')
+  @ApiOperation({ summary: 'Chave PIX cadastrada para gerar cobranças' })
+  obterPagamento(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+  ): Promise<DadosDePagamento | null> {
+    return this.financeiro.obterDadosDePagamento(usuario.id);
+  }
+
+  @Put('pagamento')
+  salvarPagamento(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(salvarPagamentoSchema)) dados: SalvarPagamentoInput,
+  ): Promise<DadosDePagamento> {
+    return this.financeiro.salvarDadosDePagamento(usuario.id, dados);
+  }
+
+  @Get('cobrancas/:id/pix')
+  @ApiOperation({ summary: 'BR Code (copia e cola) da cobrança' })
+  gerarPix(
+    @Param('id') id: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+  ): Promise<CobrancaComPix> {
+    return this.financeiro.gerarPix(usuario.id, id);
   }
 
   @Post('cobrancas')

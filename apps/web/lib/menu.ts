@@ -77,7 +77,7 @@ export const MENU: BlocoDeMenu[] = [
         rotulo: 'Receba Fácil',
         icone: '💳',
         href: '/receba-facil',
-        estado: 'em-construcao',
+        estado: 'pronto',
         itens: [],
       },
       { rotulo: 'Relatórios', icone: '📊', href: '/relatorios', estado: 'pronto', itens: [] },

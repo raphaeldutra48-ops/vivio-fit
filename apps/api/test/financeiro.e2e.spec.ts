@@ -192,6 +192,94 @@ describe('Financeiro (e2e)', () => {
     });
   });
 
+  describe('PIX', () => {
+    let idParaPix: string;
+    /** Mês próprio: pagar aqui não pode mexer nos totais que o resumo afere. */
+    const MES_DO_PIX = '2027-09';
+
+    it('sem chave cadastrada, avisa antes de gerar', async () => {
+      const criada = await request(servidor)
+        .post(url('/financeiro/cobrancas'))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({
+          alunoId: idAluno,
+          descricao: `Para PIX ${sufixo}`,
+          valorCentavos: 9990,
+          vencimento: `${MES_DO_PIX}-20`,
+        })
+        .expect(201);
+      idParaPix = criada.body[0].id;
+
+      await prisma.dadosDePagamento.deleteMany({
+        where: { profissional: { email: 'personal@viviofit.com.br' } },
+      });
+
+      const r = await request(servidor)
+        .get(url(`/financeiro/cobrancas/${idParaPix}/pix`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(409);
+      expect(r.body.erro.mensagem).toContain('chave PIX');
+    });
+
+    it('chave malformada é recusada', async () => {
+      const r = await request(servidor)
+        .put(url('/financeiro/pagamento'))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ tipoChave: 'CPF', chave: '123', recebedor: 'Diego', cidade: 'Fortaleza' })
+        .expect(409);
+      expect(r.body.erro.mensagem).toContain('11 dígitos');
+    });
+
+    it('salva a chave já normalizada', async () => {
+      const r = await request(servidor)
+        .put(url('/financeiro/pagamento'))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({
+          tipoChave: 'TELEFONE',
+          chave: '(85) 99999-8888',
+          recebedor: 'Diego Personal',
+          cidade: 'Fortaleza',
+        })
+        .expect(200);
+
+      expect(r.body.chave).toBe('+5585999998888');
+    });
+
+    it('gera o código com o valor da cobrança', async () => {
+      const r = await request(servidor)
+        .get(url(`/financeiro/cobrancas/${idParaPix}/pix`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      expect(r.body.brCode.startsWith('000201')).toBe(true);
+      expect(r.body.brCode).toContain('br.gov.bcb.pix');
+      expect(r.body.brCode).toContain('+5585999998888');
+      // Campo 54 com tamanho 05: "99.90" tem 5 caracteres.
+      expect(r.body.brCode).toContain('540599.90');
+      expect(r.body.valorCentavos).toBe(9990);
+    });
+
+    it('cobrança paga não gera código', async () => {
+      await request(servidor)
+        .patch(url(`/financeiro/cobrancas/${idParaPix}/pagar`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ formaPagamento: 'PIX' })
+        .expect(200);
+
+      await request(servidor)
+        .get(url(`/financeiro/cobrancas/${idParaPix}/pix`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(409);
+    });
+
+    it('não gera código de cobrança de outro profissional', async () => {
+      await request(servidor)
+        .get(url(`/financeiro/cobrancas/${idParaPix}/pix`))
+        .set('Authorization', `Bearer ${tokenNutri}`)
+        .expect(404);
+    });
+  });
+
   describe('resumo do mês', () => {
     it('separa recebido, a receber e atrasado', async () => {
       const r = await request(servidor)

@@ -31,3 +31,4 @@ export * from './materiais';
 export * from './financeiro';
 export * from './site';
 export * from './perfil';
+export * from './pix';

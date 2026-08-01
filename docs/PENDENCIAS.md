@@ -173,17 +173,19 @@ R2 tem 10 GB grátis e não cobra egresso), implementar o driver S3 na interface
 que já existe e apontar por variável — nenhum serviço muda.
 **Enquanto isso:** avisar quem testar que as fotos são descartáveis.
 
-### 20. "Receba Fácil" depende de conta em gateway de pagamento
-**Assumida em:** telas restantes
-**Estado:** o item continua `em-construcao` no menu. É a cobrança automática —
-gerar PIX/boleto, receber confirmação, repassar. Não dá para construir de
-verdade sem conta em gateway (Pagar.me, Asaas, Stripe), que exige CNPJ,
-contrato e taxas negociadas.
-**O que já funciona sem ele:** o Controle financeiro registra o combinado e o
-recebido — quem pagou, quem deve, quanto entrou. É controle manual, e resolve
-para quem cobra por PIX direto.
-**Pagar em:** quando existir a conta. O trabalho é webhook de confirmação +
-conciliação com a `Cobranca` que já existe — o modelo de dados não muda.
+### 20. Confirmação automática de pagamento exige gateway
+**Assumida em:** Receba Fácil
+**Estado:** o app **gera** o PIX copia e cola (BR Code do BACEN, padrão aberto),
+mas **não sabe quando o pagamento cai**. Sem gateway não existe webhook, então o
+profissional confere no banco e marca como recebido no Controle financeiro.
+**Por que resolve mesmo assim:** o público-alvo cobra por PIX direto. O dinheiro
+vai do aluno para a conta dele, sem a plataforma intermediar, sem taxa e sem
+CNPJ — o que também evita a plataforma virar instituição de pagamento.
+**Se um dia precisar de confirmação automática:** conta em gateway (Pagar.me,
+Asaas), webhook de confirmação e conciliação pelo identificador que o BR Code já
+carrega — o modelo de dados não muda.
+**O que a tela promete:** exatamente isso, e nada além. O aviso na tela diz que
+o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
 ## Resolvidas
 

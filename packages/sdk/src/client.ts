@@ -86,6 +86,9 @@ import type {
   SalvarPerfilPublicoInput,
   AtualizarPerfilInput,
   MeuPerfil,
+  CobrancaComPix,
+  DadosDePagamento,
+  SalvarPagamentoInput,
   CriarModeloPrescricaoInput,
   CriarPrescritivelInput,
   EmitirPrescricaoInput,
@@ -930,6 +933,16 @@ export class VivioClient {
 
     remover: (id: string): Promise<{ removidas: number }> =>
       this.requisicao<{ removidas: number }>(`/financeiro/cobrancas/${id}`, { metodo: 'DELETE' }),
+
+    /** Chave PIX usada para montar o código das cobranças. */
+    obterPagamento: (): Promise<DadosDePagamento | null> =>
+      this.requisicao<DadosDePagamento | null>('/financeiro/pagamento'),
+
+    salvarPagamento: (dados: SalvarPagamentoInput): Promise<DadosDePagamento> =>
+      this.requisicao<DadosDePagamento>('/financeiro/pagamento', { metodo: 'PUT', corpo: dados }),
+
+    gerarPix: (id: string): Promise<CobrancaComPix> =>
+      this.requisicao<CobrancaComPix>(`/financeiro/cobrancas/${id}/pix`),
   };
 
   // --- materiais ------------------------------------------------------------

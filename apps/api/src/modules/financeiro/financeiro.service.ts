@@ -1,12 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, StatusCobranca, StatusVinculo } from '@prisma/client';
-import type {
-  CobrancaResumo,
-  ConsultaFinanceiro,
-  CriarCobrancaInput,
-  RegistrarPagamentoInput,
-  ResumoFinanceiro,
-  SituacaoCobranca,
+import {
+  gerarBrCode,
+  normalizarChavePix,
+  validarChavePix,
+  type CobrancaComPix,
+  type CobrancaResumo,
+  type ConsultaFinanceiro,
+  type CriarCobrancaInput,
+  type DadosDePagamento,
+  type RegistrarPagamentoInput,
+  type ResumoFinanceiro,
+  type SalvarPagamentoInput,
+  type SituacaoCobranca,
+  type TipoChavePix,
 } from '@vivio/contracts';
 import { randomUUID } from 'node:crypto';
 import { ErroDominio } from '../../common/erros/erro-dominio';
@@ -206,6 +213,96 @@ export class FinanceiroService {
       where: { loteId: cobranca.loteId, profissionalId, status: { not: StatusCobranca.PAGA } },
     });
     return { removidas: r.count };
+  }
+
+  // --- PIX ------------------------------------------------------------------
+
+  async obterDadosDePagamento(profissionalId: string): Promise<DadosDePagamento | null> {
+    const dados = await this.prisma.dadosDePagamento.findUnique({ where: { profissionalId } });
+    if (!dados) return null;
+    return {
+      tipoChave: dados.tipoChave as TipoChavePix,
+      chave: dados.chave,
+      recebedor: dados.recebedor,
+      cidade: dados.cidade,
+    };
+  }
+
+  async salvarDadosDePagamento(
+    profissionalId: string,
+    dados: SalvarPagamentoInput,
+  ): Promise<DadosDePagamento> {
+    const problema = validarChavePix(dados.tipoChave, dados.chave);
+    if (problema) throw ErroDominio.conflito(problema);
+
+    // Guarda já normalizada: o código é montado a partir daqui, e formatar na
+    // hora de gerar espalharia a regra por dois lugares.
+    const chave = normalizarChavePix(dados.tipoChave, dados.chave);
+
+    const salvo = await this.prisma.dadosDePagamento.upsert({
+      where: { profissionalId },
+      create: {
+        profissionalId,
+        tipoChave: dados.tipoChave,
+        chave,
+        recebedor: dados.recebedor.trim(),
+        cidade: dados.cidade.trim(),
+      },
+      update: {
+        tipoChave: dados.tipoChave,
+        chave,
+        recebedor: dados.recebedor.trim(),
+        cidade: dados.cidade.trim(),
+      },
+    });
+
+    return {
+      tipoChave: salvo.tipoChave as TipoChavePix,
+      chave: salvo.chave,
+      recebedor: salvo.recebedor,
+      cidade: salvo.cidade,
+    };
+  }
+
+  /**
+   * Gera o "copia e cola" de uma cobrança.
+   *
+   * O identificador leva o id curto da cobrança, então o profissional
+   * reconhece o depósito no extrato — é a única conciliação possível sem
+   * gateway.
+   */
+  async gerarPix(profissionalId: string, cobrancaId: string): Promise<CobrancaComPix> {
+    const cobranca = await this.prisma.cobranca.findUnique({
+      where: { id: cobrancaId },
+      include: { aluno: { select: { nome: true } } },
+    });
+    if (!cobranca || cobranca.profissionalId !== profissionalId) {
+      throw ErroDominio.naoEncontrado('Cobrança');
+    }
+    if (cobranca.status === StatusCobranca.PAGA) {
+      throw ErroDominio.conflito('Esta cobrança já está paga.');
+    }
+
+    const dados = await this.prisma.dadosDePagamento.findUnique({ where: { profissionalId } });
+    if (!dados) {
+      throw ErroDominio.conflito(
+        'Cadastre sua chave PIX em Receba Fácil antes de gerar o código.',
+      );
+    }
+
+    return {
+      cobrancaId: cobranca.id,
+      valorCentavos: cobranca.valorCentavos,
+      descricao: cobranca.descricao,
+      aluno: cobranca.aluno.nome,
+      brCode: gerarBrCode({
+        chave: dados.chave,
+        recebedor: dados.recebedor,
+        cidade: dados.cidade,
+        valorCentavos: cobranca.valorCentavos,
+        identificador: cobranca.id.slice(-10),
+      }),
+    };
   }
 
   private async exigirPropria(profissionalId: string, id: string) {

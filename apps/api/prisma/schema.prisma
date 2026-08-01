@@ -60,6 +60,7 @@ model User {
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
   perfilPublico      PerfilPublico?          @relation("PerfilPublicoDoProfissional")
+  dadosDePagamento   DadosDePagamento?       @relation("PagamentoDoProfissional")
   cobrancasEmitidas  Cobranca[]              @relation("CobrancasEmitidas")
   cobrancasComoAluno Cobranca[]              @relation("CobrancasDoAluno")
   materiais          Material[]              @relation("MateriaisDoAutor")
@@ -1122,6 +1123,22 @@ model PedidoDeContato {
   criadoEm   DateTime @default(now())
 
   @@index([perfilId, criadoEm(sort: Desc)])
+}
+
+/// Chave PIX do profissional, para gerar o "copia e cola" das cobranças.
+///
+/// O dinheiro vai direto do aluno para ele — a plataforma não intermedia, não
+/// guarda saldo e não tem acesso à conta. Só monta o código.
+model DadosDePagamento {
+  profissionalId String @id
+  profissional   User   @relation("PagamentoDoProfissional", fields: [profissionalId], references: [id], onDelete: Cascade)
+  tipoChave      String
+  /// Já normalizada no formato que os bancos esperam.
+  chave          String
+  recebedor      String
+  cidade         String
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
 }
 
 enum StatusCobranca {
