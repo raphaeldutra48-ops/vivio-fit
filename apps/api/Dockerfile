@@ -29,8 +29,19 @@ COPY packages/config/package.json packages/config/
 RUN pnpm install --frozen-lockfile
 
 # --- build ------------------------------------------------------------------
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
+# `FROM deps` e NÃO `FROM base` + copiar o node_modules da raiz.
+#
+# O pnpm põe os links entre workspaces no `node_modules` de CADA pacote, não no
+# da raiz: `apps/api/node_modules/@vivio/{config,contracts}`,
+# `packages/contracts/node_modules/@vivio/config`, e assim por diante. A raiz
+# nem tem uma pasta `@vivio`. Copiar só ela deixava o contêiner sem nenhum link
+# de workspace, e o build morria em `File '@vivio/config/tsconfig.base.json'
+# not found` — com um erro de tipo em seguida, que era só consequência de o
+# tsconfig base ter sumido.
+#
+# Herdar o estágio inteiro traz todos eles. O `COPY . .` abaixo não atropela
+# nada: `node_modules` está no .dockerignore, então não vem do contexto.
+FROM deps AS build
 COPY . .
 # O client do Prisma é gerado a partir do schema — precisa vir antes do compile.
 RUN pnpm --filter @vivio/api exec prisma generate
@@ -48,7 +59,10 @@ WORKDIR /app
 # prisma/semear-catalogo.ts). Trocar por uma instalação `--prod` aqui quebraria
 # os dois — e o erro só apareceria no dia de subir.
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
+# `packages` vem do estágio de build, então traz junto o node_modules de cada
+# pacote — é lá que moram os links de workspace que o require() vai seguir.
 COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=node:node /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/

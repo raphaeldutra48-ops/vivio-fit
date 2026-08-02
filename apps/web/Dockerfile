@@ -23,8 +23,11 @@ COPY packages/config/package.json packages/config/
 RUN pnpm install --frozen-lockfile
 
 # --- build ------------------------------------------------------------------
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
+# `FROM deps` pela mesma razão do Dockerfile da API: o pnpm põe os links entre
+# workspaces no `node_modules` de cada pacote, não no da raiz. Copiar só a raiz
+# deixa o build sem `@vivio/config`, `@vivio/contracts`, `@vivio/sdk` e
+# `@vivio/ui` — e a web depende dos quatro.
+FROM deps AS build
 COPY . .
 
 # NEXT_PUBLIC_* é embutido no JavaScript durante o build, não lido em runtime.
