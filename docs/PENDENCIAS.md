@@ -181,10 +181,34 @@ banco fica com registros apontando para arquivos que não existem mais.
 **Por que só apareceu agora:** o driver foi feito com a abstração pronta para
 S3 desde o começo, e em desenvolvimento nada some — o problema só existe onde o
 contêiner é recriado.
-**Pagar em:** antes de qualquer usuário real subir foto. Criar bucket (Cloudflare
-R2 tem 10 GB grátis e não cobra egresso), implementar o driver S3 na interface
-que já existe e apontar por variável — nenhum serviço muda.
-**Enquanto isso:** avisar quem testar que as fotos são descartáveis.
+**O que já está feito (2026-08-02):** `ArmazenamentoR2` implementa a interface
+`Armazenamento` com URL assinada de curta duração para leitura e escrita, e
+`escolherDriverDeMidia` decide o driver **por presença de configuração**, não
+por `NODE_ENV` — quem aponta um bucket quer usá-lo, inclusive localmente para
+conferir a credencial antes do deploy. Nenhum serviço mudou: era para isso que
+a interface existia. Em produção sem R2 o app sobe (derrubá-lo por causa de
+mídia seria pior) e registra no boot, em nível de erro, que **as fotos serão
+apagadas no próximo deploy** — mesmo tratamento que o `PROXY_HOPS` recebeu.
+**O que falta (ação sua, precisa da conta Cloudflare):** em
+[dash.cloudflare.com](https://dash.cloudflare.com) → **R2** → *Create bucket*
+(10 GB grátis, sem cobrança de egresso, que é o que pesa quando o app serve
+imagem toda vez que alguém abre a evolução). Depois **Manage R2 API Tokens** →
+criar token com leitura e escrita nesse bucket. As quatro variáveis vão direto
+nas Variables do Railway:
+
+```
+R2_BUCKET=<nome do bucket>
+R2_ACCOUNT_ID=<o hex que aparece no painel do R2>
+R2_ACCESS_KEY_ID=<do token>
+R2_SECRET_ACCESS_KEY=<do token>
+```
+
+O bucket fica **privado** — a entrega é sempre por link assinado. Não marque
+acesso público.
+**Como verificar:** subir uma foto de evolução, fazer um deploy novo e abrir a
+foto de novo. Antes disso o log do boot já diz qual driver está em uso.
+**Ainda aberto até o bucket existir.** A pendência 22 (arquivo do exame) se paga
+junto: o upload do laudo usa o mesmo armazenamento.
 
 ### 20. Confirmação automática de pagamento exige gateway
 **Assumida em:** Receba Fácil
