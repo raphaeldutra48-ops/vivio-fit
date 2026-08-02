@@ -13,6 +13,7 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AvaliacaoModule } from './modules/avaliacao/avaliacao.module';
 import { ExamesModule } from './modules/exames/exames.module';
+import { AlertasModule } from './modules/alertas/alertas.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
@@ -53,6 +54,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     AgendaModule,
     AvaliacaoModule,
     ExamesModule,
+    AlertasModule,
     PrescricoesModule,
     AdminModule,
     AnamneseModule,

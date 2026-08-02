@@ -22,6 +22,8 @@ import type {
   AvaliacaoResumo,
   ExameResumo,
   RegistrarExameInput,
+  AlertaResumo,
+  ReconhecerAlertaInput,
   CriarModeloCardapioInput,
   ListaDeCompras,
   ModeloCardapioCompleto,
@@ -651,6 +653,27 @@ export class VivioClient {
     registrar: (alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> =>
       this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames`, {
         metodo: 'POST',
+        corpo: dados,
+      }),
+  };
+
+  // --- alertas clínicos cruzados ----------------------------------------------
+
+  /**
+   * O personal entra aqui — e só aqui. Ele não lê exame, mas recebe a
+   * orientação derivada dele, sem marcador e sem valor.
+   */
+  readonly alertas = {
+    listar: (alunoId: string): Promise<AlertaResumo[]> =>
+      this.requisicao<AlertaResumo[]>(`/alunos/${alunoId}/alertas`),
+
+    reconhecer: (
+      alunoId: string,
+      alertaId: string,
+      dados: ReconhecerAlertaInput = {},
+    ): Promise<AlertaResumo> =>
+      this.requisicao<AlertaResumo>(`/alunos/${alunoId}/alertas/${alertaId}/reconhecer`, {
+        metodo: 'PATCH',
         corpo: dados,
       }),
   };

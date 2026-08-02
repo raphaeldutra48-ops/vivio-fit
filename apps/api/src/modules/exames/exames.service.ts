@@ -13,6 +13,7 @@ import {
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
+import { AlertasService } from '../alertas/alertas.service';
 import { podeVerArquivo, podeVerMarcador } from './escopo';
 
 type LinhaExame = Prisma.ExameGetPayload<{
@@ -24,7 +25,10 @@ type LinhaExame = Prisma.ExameGetPayload<{
 
 @Injectable()
 export class ExamesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly alertas: AlertasService,
+  ) {}
 
   async listar(alunoId: string, papel: Papel): Promise<ExameResumo[]> {
     const exames = await this.prisma.exame.findMany({
@@ -103,6 +107,24 @@ export class ExamesService {
         resultados: true,
       },
     });
+
+    /*
+      Os alertas cruzados nascem aqui — é o registro do exame que avisa o resto
+      da equipe de cuidado. Fica FORA da transação de propósito: se a geração
+      falhar, o exame continua gravado e correto. Perder um aviso é ruim;
+      perder o exame que o profissional acabou de digitar é pior, e a geração é
+      idempotente (a unique por regra + exame deixa reprocessar).
+    */
+    await this.alertas.gerarParaExame(
+      alunoId,
+      exame.id,
+      exame.resultados.map((r) => ({
+        marcador: r.marcador as Marcador,
+        valor: Number(r.valor),
+        classificacao: r.classificacao as Classificacao,
+      })),
+      dados.sexo,
+    );
 
     return this.paraResumo(exame, papel);
   }

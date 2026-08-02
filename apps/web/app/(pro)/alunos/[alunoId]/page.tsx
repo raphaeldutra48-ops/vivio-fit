@@ -6,6 +6,7 @@ import { areaTemaClaro } from '@vivio/ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
 import { useSessao } from '../../../../lib/sessao';
@@ -92,6 +93,12 @@ export default function FichaDoAluno() {
           </Link>
         </div>
       </header>
+
+      {/*
+        Antes da equipe e do treino de propósito: se há alerta pendente, ele
+        muda a conduta do que vem abaixo.
+      */}
+      <AlertasClinicos alunoId={alunoId} />
 
       <section>
         <h2 className="mb-md text-lg font-semibold">Equipe de cuidado</h2>

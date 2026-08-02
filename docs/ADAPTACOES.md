@@ -136,6 +136,33 @@ e não dá para ler.
 A regra geral que sobrou das duas: **em branco é ausência**; o que muda entre
 telas é se a ausência importa. Decidir isso é por tela, não por biblioteca.
 
+## 6d. Texto derivado não pode reconstruir o dado de origem
+
+*(2026-08-02, alertas cruzados)*
+
+O alerta cruzado é o mecanismo que leva um achado do exame a quem não pode ler
+o exame. Isso cria um risco que não existia em nenhuma outra parte do app:
+**o texto do alerta pode virar um caminho indireto para o dado protegido.**
+
+Duas travas, as duas testadas:
+
+1. **O texto** destinado a quem não pode ver o marcador não cita o marcador nem
+   o valor. `regras.spec.ts` percorre todas as regras e falha se o rótulo do
+   marcador aparecer no título ou na orientação de um papel sem escopo — vale
+   para as regras de hoje e para as que alguém escrever amanhã.
+2. **A serialização** devolve `marcadorOrigem` e `exameId` apenas para quem
+   pode ver aquele marcador. Para o personal saem sempre nulos; para o
+   nutricionista, nulos quando o alerta nasceu de marcador médico. Sem isso, o
+   link "ver o exame de origem" entregaria o que o texto escondeu.
+
+Domínio clínico pode aparecer ("cuidado renal"); marcador e valor, não. É a
+linha que a especificação desenha ao dizer que personal e nutricionista recebem
+o alerta derivado, e não o arquivo.
+
+**Consequência de projeto:** a mesma regra gera textos diferentes por papel, e
+não um texto só com campos ocultos. Esconder pedaço de frase é frágil; escrever
+a frase certa para cada destinatário, não.
+
 ## 7. Adaptações de teste
 
 - **`clearMocks: true` no `vitest.config.ts`.** Sem ele o histórico de chamadas

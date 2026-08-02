@@ -109,6 +109,9 @@ model User {
   examesComoAluno         Exame[]               @relation("ExamesDoAluno")
   examesRegistrados       Exame[]               @relation("ExamesRegistrados")
 
+  alertasComoAluno        AlertaClinico[]       @relation("AlertasDoAluno")
+  alertasReconhecidos     AlertaClinico[]       @relation("AlertasReconhecidos")
+
   agendaComoProfissional  Compromisso[]         @relation("AgendaDoProfissional")
   compromissosComoAluno   Compromisso[]         @relation("CompromissosDoAluno")
   disponibilidade         DisponibilidadeSlot[] @relation("DisponibilidadeDoProfissional")
@@ -860,8 +863,41 @@ model Exame {
   deletadoEm      DateTime?
 
   resultados ResultadoMarcador[]
+  alertas    AlertaClinico[]
 
   @@index([alunoId, dataColeta(sort: Desc)])
+}
+
+/// Alerta cruzado: achado no exame vira orientação para OUTRO membro da equipe.
+///
+/// O `marcadorOrigem` existe para auditoria e para o profissional que PODE ver
+/// o marcador rastrear a origem. Ele **nunca** é serializado para quem não pode
+/// vê-lo — para o personal sai sempre nulo, junto com o `exameId`. Sem isso, o
+/// alerta viraria um caminho indireto para mostrar o exame a quem não pode
+/// abri-lo.
+model AlertaClinico {
+  id               String    @id @default(cuid())
+  alunoId          String
+  aluno            User      @relation("AlertasDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  /// PERSONAL | NUTRICIONISTA | MEDICO. Nunca ALUNO.
+  papelDestino     String
+  severidade       String
+  /// Identificador da regra que o gerou. Junto com o exame, evita duplicata.
+  regra            String
+  titulo           String
+  orientacao       String
+  marcadorOrigem   String?
+  exameId          String?
+  exame            Exame?    @relation(fields: [exameId], references: [id], onDelete: Cascade)
+  criadoEm         DateTime  @default(now())
+  reconhecidoEm    DateTime?
+  reconhecidoPorId String?
+  reconhecidoPor   User?     @relation("AlertasReconhecidos", fields: [reconhecidoPorId], references: [id])
+  anotacao         String?
+
+  /// Reprocessar o mesmo exame não duplica o aviso.
+  @@unique([alunoId, papelDestino, regra, exameId])
+  @@index([alunoId, papelDestino, reconhecidoEm])
 }
 
 /// Um marcador de um exame, com a classificação congelada no registro.

@@ -218,6 +218,10 @@ que são referências de otimização, e não critério de diagnóstico, já est
 tela de resultado e na Metodologia — mas aviso não substitui revisão.
 **O que ajuda na revisão:** a página `/metodologia` lista as 20 faixas com as
 fontes, geradas da própria tabela. Dá para imprimir e revisar sem ler código.
+**Vale também para as 8 regras de alerta** (`apps/api/src/modules/alertas/regras.ts`):
+elas decidem quando um achado vira orientação para outro profissional, e o
+texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
+é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
 
 ### 22. O exame ainda não aceita o arquivo do laudo
 **Assumida em:** leitor de exames (2026-08-02)
