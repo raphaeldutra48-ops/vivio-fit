@@ -480,6 +480,44 @@ export const resultadoMarcadorSchema = z.object({
 });
 export type ResultadoMarcadorInput = z.infer<typeof resultadoMarcadorSchema>;
 
+// --- Saída ------------------------------------------------------------------
+
+export interface MarcadorNoExame {
+  marcador: Marcador;
+  rotulo: string;
+  unidade: string;
+  sistema: SistemaCorporal;
+  valor: number;
+  classificacao: Classificacao;
+  laboratorial: Faixa;
+  funcional: Faixa;
+  fonteLaboratorial: Fonte;
+  fonteFuncional: Fonte;
+  nota?: string;
+}
+
+export interface ExameResumo {
+  id: string;
+  laboratorio: string;
+  dataColeta: string;
+  sexo: SexoBiologico;
+  observacao: string | null;
+  registradoPor: { id: string; nome: string };
+  /**
+   * Já filtrados pelo escopo de quem pediu. O nutricionista recebe menos
+   * marcadores que o médico, e `total` conta só o que ele pode ver — dizer
+   * "45 marcadores" e listar 16 seria pior que não dizer nada.
+   */
+  resultados: MarcadorNoExame[];
+  contagem: Record<Classificacao, number>;
+  /**
+   * Link assinado do arquivo. **null para o nutricionista, sempre** — só
+   * médico e o próprio aluno recebem.
+   */
+  arquivoUrl: string | null;
+  temArquivo: boolean;
+}
+
 export const registrarExameSchema = z.object({
   laboratorio: z.string().min(2).max(120),
   dataColeta: z.coerce.date(),
