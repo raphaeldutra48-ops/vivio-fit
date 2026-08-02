@@ -20,6 +20,7 @@ export * from './evolucao';
 export * from './chat';
 export * from './agenda';
 export * from './avaliacao';
+export * from './exames';
 export * from './cardapios';
 export * from './compras';
 export * from './prescricoes';
