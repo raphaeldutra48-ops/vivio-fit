@@ -200,6 +200,36 @@ carrega — o modelo de dados não muda.
 **O que a tela promete:** exatamente isso, e nada além. O aviso na tela diz que
 o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
 
+### 21. A tabela de faixas funcionais não passou por revisão profissional
+**Assumida em:** leitor de exames (2026-08-02)
+**Estado:** `packages/contracts/src/exames.ts` traz 20 marcadores, cada um com
+faixa laboratorial, faixa funcional e as duas fontes. As faixas laboratoriais
+saem de diretriz de sociedade médica onde existe diretriz; as funcionais, de
+diretriz quando a própria diretriz define alvo (vitamina D, LDL, TFG) e de
+consenso de prática funcional no resto.
+**O risco:** é a melhor leitura das fontes citadas, **não um parecer**. Cinco
+marcadores têm até a faixa LABORATORIAL vindo de fonte que não é diretriz —
+`INSULINA_JEJUM`, `HOMA_IR`, `FERRITINA`, `VITAMINA_B12` e `PCR_US` — e é a
+faixa laboratorial que carimba "Crítico". Há teste congelando essa lista de
+cinco, para crescê-la ser decisão consciente e não descuido.
+**Pagar em:** antes de o primeiro paciente real ver a tela. Um médico e um
+nutricionista precisam percorrer a tabela marcador por marcador. O aviso de
+que são referências de otimização, e não critério de diagnóstico, já está na
+tela de resultado e na Metodologia — mas aviso não substitui revisão.
+**O que ajuda na revisão:** a página `/metodologia` lista as 20 faixas com as
+fontes, geradas da própria tabela. Dá para imprimir e revisar sem ler código.
+
+### 22. O exame ainda não aceita o arquivo do laudo
+**Assumida em:** leitor de exames (2026-08-02)
+**Estado:** o modelo `Exame` tem `chaveArquivo` e `mimeType`, e
+`podeVerArquivo()` já decide quem recebe link assinado (só médico e aluno).
+Falta a ponta do upload, que depende de storage que sobreviva a deploy.
+**Por que ficou para depois:** subir o PDF para o disco do contêiner seria
+gravar um arquivo que o próximo deploy apaga — e é justamente o problema da
+pendência 19. As duas se pagam juntas.
+**Enquanto isso:** a tela de resultado avisa quando existe arquivo e diz que
+ele é acessível só ao médico e ao aluno.
+
 ## Resolvidas
 
 ### A bioimpedância parou de contrariar a própria legenda — resolvida em 2026-08-01

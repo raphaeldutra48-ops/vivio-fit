@@ -222,6 +222,16 @@ export const MENU: BlocoDeMenu[] = [
           },
         ],
       },
+      {
+        // Quem não lança exame não precisa da página que explica as faixas —
+        // e o personal não lança nem lê.
+        rotulo: 'Metodologia',
+        icone: '🧪',
+        href: '/metodologia',
+        estado: 'pronto',
+        papeis: [Papel.NUTRICIONISTA, Papel.MEDICO, Papel.ADMIN],
+        itens: [],
+      },
       { rotulo: 'Ajuda', icone: '❓', href: '/ajuda', estado: 'pronto', itens: [] },
     ],
   },

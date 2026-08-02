@@ -77,9 +77,15 @@ export default function FichaDoAluno() {
             <Botao variante="neutra">Anamnese</Botao>
           </Link>
           {usuario && PRESCRITORES.includes(usuario.papel) && (
-            <Link href={`/alunos/${alunoId}/prescricoes`}>
-              <Botao variante="neutra">Prescrever</Botao>
-            </Link>
+            <>
+              <Link href={`/alunos/${alunoId}/prescricoes`}>
+                <Botao variante="neutra">Prescrever</Botao>
+              </Link>
+              {/* Exame é do nutricionista e do médico. O personal não abre. */}
+              <Link href={`/alunos/${alunoId}/exames/novo`}>
+                <Botao variante="neutra">Novo exame</Botao>
+              </Link>
+            </>
           )}
           <Link href={`/alunos/${alunoId}/dieta`}>
             <Botao>Montar dieta</Botao>

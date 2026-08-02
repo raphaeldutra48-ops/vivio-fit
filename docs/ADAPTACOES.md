@@ -110,6 +110,32 @@ ele seria descartar em silêncio o que a pessoa escreveu. A tela para e pede a
 correção. Há teste nomeando esse caso, para ninguém "consertar" a divergência
 depois achando que é bug.
 
+## 6b. Página que explica a regra é gerada da regra
+
+*(2026-08-02, leitor de exames)*
+
+A `/metodologia` lista as 20 faixas, as fontes e a força de cada fonte — e é
+**construída de `REFERENCIAS`**, a mesma tabela que classifica os exames.
+Escrita à mão, ela divergiria, e uma página de metodologia que mente é pior que
+nenhuma. Há teste montando o agrupamento de fontes a partir da tabela, para a
+geração não quebrar em silêncio.
+
+Mesmo princípio da equação de composição corporal e da regra de consentimento:
+a explicação e a execução saem da mesma fonte.
+
+## 6c. Campo em branco nem sempre é campo faltando
+
+*(2026-08-02, leitor de exames)*
+
+Nas telas de avaliação, campo vazio é dado que falta e a lista acima do botão
+cobra. **No exame é o contrário**: um laudo quase nunca traz os 20 marcadores,
+e cobrar os ausentes transformaria a tela numa lista de reclamações. Lá,
+`problemaDoMarcador` devolve `null` para vazio e só reclama do que foi digitado
+e não dá para ler.
+
+A regra geral que sobrou das duas: **em branco é ausência**; o que muda entre
+telas é se a ausência importa. Decidir isso é por tela, não por biblioteca.
+
 ## 7. Adaptações de teste
 
 - **`clearMocks: true` no `vitest.config.ts`.** Sem ele o histórico de chamadas

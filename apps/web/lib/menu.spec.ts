@@ -32,6 +32,14 @@ describe('menuPara', () => {
     expect(hrefsDe(Papel.PERSONAL)).not.toContain('/prescricoes/suplementos');
   });
 
+  /** O personal não lê exame, então a página que explica as faixas não é dele. */
+  it('só quem lança exame vê a Metodologia', () => {
+    for (const papel of [Papel.NUTRICIONISTA, Papel.MEDICO]) {
+      expect(hrefsDe(papel)).toContain('/metodologia');
+    }
+    expect(hrefsDe(Papel.PERSONAL)).not.toContain('/metodologia');
+  });
+
   it('o aluno não vê nada do painel profissional', () => {
     expect(hrefsDe(Papel.ALUNO)).toHaveLength(0);
   });

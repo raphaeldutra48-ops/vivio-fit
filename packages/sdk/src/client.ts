@@ -20,6 +20,8 @@ import type {
   AlimentoResumo,
   AplicarModeloInput,
   AvaliacaoResumo,
+  ExameResumo,
+  RegistrarExameInput,
   CriarModeloCardapioInput,
   ListaDeCompras,
   ModeloCardapioCompleto,
@@ -627,6 +629,27 @@ export class VivioClient {
     /** Salva e já atualiza a medida do dia — os gráficos refletem na hora. */
     registrar: (alunoId: string, dados: RegistrarAvaliacaoInput): Promise<AvaliacaoResumo> =>
       this.requisicao<AvaliacaoResumo>(`/alunos/${alunoId}/avaliacoes`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+  };
+
+  // --- exames laboratoriais ---------------------------------------------------
+
+  /**
+   * O que volta daqui já vem filtrado pelo papel de quem pediu: o
+   * nutricionista recebe menos marcadores que o médico, e nenhum dos dois
+   * decide isso na tela.
+   */
+  readonly exames = {
+    listar: (alunoId: string): Promise<ExameResumo[]> =>
+      this.requisicao<ExameResumo[]>(`/alunos/${alunoId}/exames`),
+
+    obter: (alunoId: string, exameId: string): Promise<ExameResumo> =>
+      this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames/${exameId}`),
+
+    registrar: (alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> =>
+      this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames`, {
         metodo: 'POST',
         corpo: dados,
       }),
