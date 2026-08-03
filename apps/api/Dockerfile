@@ -9,7 +9,10 @@ ENV PATH=$PNPM_HOME:$PATH
 # corepack usa a versão fixada em "packageManager" do package.json da raiz.
 RUN corepack enable
 # O engine do Prisma é linkado contra OpenSSL; a imagem slim não traz.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+# gosu: o contêiner precisa começar como root para ajustar o dono do volume
+# montado, e só então descer para o usuário sem privilégio. `su` não repassa
+# sinal direito num PID 1; gosu existe exatamente para isso.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates gosu \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
@@ -50,8 +53,12 @@ RUN pnpm exec turbo run build --filter=@vivio/api
 # --- produção ---------------------------------------------------------------
 FROM base AS runner
 ENV NODE_ENV=production
-# Usuário sem privilégios: a imagem node já traz "node" (uid 1000).
-USER node
+# HOME do usuário sem privilégio, e não /root: o `npm run` das tarefas de
+# instalação precisa de um diretório onde o `node` consiga escrever cache.
+ENV HOME=/home/node
+# Começa como ROOT de propósito — não para rodar a aplicação, mas para ajustar
+# o dono do volume montado, que o Railway entrega como root. O `entrada.sh`
+# desce para o usuário `node` (uid 1000) antes de executar qualquer coisa.
 WORKDIR /app
 
 # node_modules vem inteiro, com as dependências de desenvolvimento: `tsx` é uma
