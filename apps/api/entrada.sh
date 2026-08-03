@@ -26,6 +26,14 @@ if [ -n "$ADMIN_EMAIL" ]; then
   echo "→ pronto. Apague ADMIN_EMAIL e ADMIN_SENHA das variáveis do serviço."
 fi
 
+# Saída de emergência: admin trancado fora da própria conta. Vem antes do
+# catálogo porque, se a conta está inacessível, é o que a pessoa precisa agora.
+if [ -n "$REDEFINIR_SENHA_EMAIL" ]; then
+  echo "→ REDEFINIR_SENHA_EMAIL presente: redefinindo a senha do admin"
+  npm run --silent redefinir-senha
+  echo "→ pronto. Apague REDEFINIR_SENHA_EMAIL e REDEFINIR_SENHA_NOVA."
+fi
+
 if [ "$SEMEAR_CATALOGO" = "true" ]; then
   echo "→ SEMEAR_CATALOGO=true: populando exercícios e alimentos"
   npm run --silent semear-catalogo
