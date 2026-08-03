@@ -20,6 +20,18 @@ node ../../node_modules/prisma/build/index.js migrate deploy
 # subir e mostrar o erro no log.
 set +e
 
+# O contêiner roda como `node`, sem privilégio. Volume montado com dono errado
+# é o tipo de falha que só apareceria quando alguém subisse a primeira foto — e
+# aí o upload quebra na cara do usuário. Melhor descobrir no boot.
+if [ -n "$MEDIA_DIR" ]; then
+  if mkdir -p "$MEDIA_DIR" 2>/dev/null && touch "$MEDIA_DIR/.escrita-ok" 2>/dev/null; then
+    rm -f "$MEDIA_DIR/.escrita-ok"
+    echo "→ mídia gravável em $MEDIA_DIR"
+  else
+    echo "!! SEM PERMISSÃO DE ESCRITA em $MEDIA_DIR — o envio de foto vai falhar."
+  fi
+fi
+
 if [ -n "$ADMIN_EMAIL" ]; then
   echo "→ ADMIN_EMAIL presente: criando o primeiro administrador"
   npm run --silent criar-admin

@@ -21,6 +21,29 @@ export const VARIAVEIS_R2 = [
 
 export type DriverDeMidia = 'R2' | 'LOCAL';
 
+/**
+ * O disco local é efêmero ou sobrevive ao deploy?
+ *
+ * Disco de contêiner some a cada deploy; disco montado a partir de um volume
+ * persistente, não. O Railway expõe `RAILWAY_VOLUME_MOUNT_PATH` quando há um
+ * volume montado — se o `MEDIA_DIR` aponta para dentro dele, a mídia dura.
+ *
+ * A distinção existe para o aviso não mentir. Um log que grita "as fotos serão
+ * apagadas" quando elas não serão ensina todo mundo a ignorar os avisos, e aí
+ * o dia em que ele estiver certo ninguém lê.
+ */
+export function midiaEmDiscoPersistente(config: ConfigService): boolean {
+  const montagem = config.get<string>('RAILWAY_VOLUME_MOUNT_PATH');
+  const destino = config.get<string>('MEDIA_DIR');
+  if (!montagem || !destino) return false;
+
+  const normalizar = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+  const raiz = normalizar(montagem);
+  const alvo = normalizar(destino);
+
+  return alvo === raiz || alvo.startsWith(`${raiz}/`);
+}
+
 export function faltandoParaR2(config: ConfigService): string[] {
   // `string[]` e não a união estreita: a entrada de conta/endpoint abaixo não é
   // o nome de uma variável só, e o filtro sozinho devolveria o tipo apertado.
@@ -56,10 +79,20 @@ export function escolherDriverDeMidia(config: ConfigService, logger: Logger): Dr
     );
   }
 
+  if (midiaEmDiscoPersistente(config)) {
+    // Volume montado: o disco local dura. Não é object storage — uma réplica
+    // só, sem CDN e com backup por conta da casa — mas a foto sobrevive, que
+    // era o problema irreversível.
+    logger.log(
+      `mídia em volume persistente (${config.get<string>('MEDIA_DIR')}) — sobrevive ao deploy`,
+    );
+    return 'LOCAL';
+  }
+
   if (producao) {
     logger.error(
       'MÍDIA EM DISCO DE CONTÊINER: as fotos de evolução serão APAGADAS no próximo deploy. ' +
-        `Configure ${VARIAVEIS_R2.join(', ')} e R2_ACCOUNT_ID (pendência 19).`,
+        `Configure ${VARIAVEIS_R2.join(', ')} e R2_ACCOUNT_ID, ou monte um volume (pendência 19).`,
     );
   }
 
