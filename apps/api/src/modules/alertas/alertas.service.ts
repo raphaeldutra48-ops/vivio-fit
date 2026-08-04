@@ -11,6 +11,7 @@ import {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { podeVerMarcador } from '../exames/escopo';
+import { alertasDaCondicao, type CondicaoParaRegra } from './regras-condicao';
 import { alertasDoExame, type ResultadoParaRegra } from './regras';
 
 type LinhaAlerta = Prisma.AlertaClinicoGetPayload<{
@@ -51,6 +52,48 @@ export class AlertasService {
       skipDuplicates: true,
     });
 
+    return count;
+  }
+
+  /**
+   * Gera e grava os alertas de uma condição de saúde.
+   *
+   * Mesma mecânica do exame, outra origem. A unique por (aluno, papel, regra,
+   * condição) faz registrar a mesma condição de novo não encher a tela.
+   */
+  async gerarParaCondicao(
+    alunoId: string,
+    condicaoId: string,
+    condicao: CondicaoParaRegra,
+  ): Promise<number> {
+    const gerados = alertasDaCondicao(condicao);
+    if (gerados.length === 0) return 0;
+
+    const { count } = await this.prisma.alertaClinico.createMany({
+      data: gerados.map((a) => ({
+        alunoId,
+        condicaoId,
+        papelDestino: a.papelDestino,
+        severidade: a.severidade,
+        regra: a.regra,
+        titulo: a.titulo,
+        orientacao: a.orientacao,
+      })),
+      skipDuplicates: true,
+    });
+
+    return count;
+  }
+
+  /**
+   * Resolvida a condição, o aviso dela sai da frente.
+   *
+   * Apagar e não apenas marcar como reconhecido: o alerta existia porque a
+   * condição valia. Deixá-lo pendente faria o personal continuar evitando
+   * agachamento por uma lesão que já teve alta.
+   */
+  async removerDaCondicao(condicaoId: string): Promise<number> {
+    const { count } = await this.prisma.alertaClinico.deleteMany({ where: { condicaoId } });
     return count;
   }
 
@@ -109,6 +152,8 @@ export class AlertasService {
       orientacao: a.orientacao,
       marcadorOrigem: podeRastrear ? marcador : null,
       exameId: podeRastrear ? a.exameId : null,
+      // Sem filtro: condição é legível pelos três profissionais.
+      condicaoId: a.condicaoId,
       criadoEm: a.criadoEm.toISOString(),
       reconhecidoEm: a.reconhecidoEm?.toISOString() ?? null,
       reconhecidoPor: a.reconhecidoPor,

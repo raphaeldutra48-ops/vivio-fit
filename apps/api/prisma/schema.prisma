@@ -112,6 +112,10 @@ model User {
   alertasComoAluno        AlertaClinico[]       @relation("AlertasDoAluno")
   alertasReconhecidos     AlertaClinico[]       @relation("AlertasReconhecidos")
 
+  condicoesComoAluno      CondicaoSaude[]       @relation("CondicoesDoAluno")
+  condicoesRegistradas    CondicaoSaude[]       @relation("CondicoesRegistradas")
+  condicoesResolvidas     CondicaoSaude[]       @relation("CondicoesResolvidas")
+
   agendaComoProfissional  Compromisso[]         @relation("AgendaDoProfissional")
   compromissosComoAluno   Compromisso[]         @relation("CompromissosDoAluno")
   disponibilidade         DisponibilidadeSlot[] @relation("DisponibilidadeDoProfissional")
@@ -868,6 +872,38 @@ model Exame {
   @@index([alunoId, dataColeta(sort: Desc)])
 }
 
+/// Condição de saúde do aluno — a outra fonte de alerta cruzado.
+///
+/// Diferente do exame, a condição é LEGÍVEL pelos três profissionais: um
+/// personal que não sabe da lesão no ombro vai prescrever desenvolvimento
+/// militar. O que continua privativo do médico é escrever — diagnosticar não é
+/// papel de quem prescreve treino ou dieta.
+///
+/// Nunca é apagada, só resolvida: histórico de lesão muda a conduta mesmo
+/// depois de curada, e apagar destruiria essa informação.
+model CondicaoSaude {
+  id              String    @id @default(cuid())
+  alunoId         String
+  aluno           User      @relation("CondicoesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  registradoPorId String
+  registradoPor   User      @relation("CondicoesRegistradas", fields: [registradoPorId], references: [id])
+  tipo            String
+  descricao       String
+  /// Obrigatória em lesão e cirurgia — é ela que diz ao personal o que evitar.
+  regiao          String?
+  gravidade       String
+  inicioEm        DateTime? @db.Date
+  observacao      String?
+  criadoEm        DateTime  @default(now())
+  resolvidaEm     DateTime?
+  resolvidaPorId  String?
+  resolvidaPor    User?     @relation("CondicoesResolvidas", fields: [resolvidaPorId], references: [id])
+
+  alertas AlertaClinico[]
+
+  @@index([alunoId, resolvidaEm])
+}
+
 /// Alerta cruzado: achado no exame vira orientação para OUTRO membro da equipe.
 ///
 /// O `marcadorOrigem` existe para auditoria e para o profissional que PODE ver
@@ -889,6 +925,9 @@ model AlertaClinico {
   marcadorOrigem   String?
   exameId          String?
   exame            Exame?    @relation(fields: [exameId], references: [id], onDelete: Cascade)
+  /// A outra origem possível. Um alerta nasce de exame OU de condição.
+  condicaoId       String?
+  condicao         CondicaoSaude? @relation(fields: [condicaoId], references: [id], onDelete: Cascade)
   criadoEm         DateTime  @default(now())
   reconhecidoEm    DateTime?
   reconhecidoPorId String?
@@ -897,6 +936,8 @@ model AlertaClinico {
 
   /// Reprocessar o mesmo exame não duplica o aviso.
   @@unique([alunoId, papelDestino, regra, exameId])
+  /// Idem para condição: registrar de novo a mesma não enche a tela.
+  @@unique([alunoId, papelDestino, regra, condicaoId])
   @@index([alunoId, papelDestino, reconhecidoEm])
 }
 

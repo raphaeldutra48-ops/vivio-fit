@@ -163,6 +163,23 @@ o alerta derivado, e não o arquivo.
 não um texto só com campos ocultos. Esconder pedaço de frase é frágil; escrever
 a frase certa para cada destinatário, não.
 
+## 6e. Duas seções irmãs onde uma cria os dados da outra
+
+*(2026-08-04, condições de saúde)*
+
+Registrar uma condição cria alertas; dar alta apaga os alertas dela. As duas
+seções vivem lado a lado na ficha do aluno, e cada uma busca os próprios dados
+ao montar — então dar alta deixava o alerta da lesão resolvida **na tela até
+alguém recarregar**, e clicar em "marcar como visto" nele respondia 404.
+
+A ficha passou a guardar um contador que sobe a cada mudança em condição; a
+lista de alertas o recebe como dependência do efeito. É a solução mais simples
+que não inventa estado global nem faz os dois componentes se conhecerem.
+
+**Como isso apareceu:** operando no navegador. Nenhum teste pegaria — os dois
+componentes estavam corretos isoladamente, e o e2e confirma que o servidor
+apaga o alerta. O defeito só existe na composição.
+
 ## 7. Adaptações de teste
 
 - **`clearMocks: true` no `vitest.config.ts`.** Sem ele o histórico de chamadas

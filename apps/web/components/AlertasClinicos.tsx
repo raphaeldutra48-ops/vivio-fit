@@ -18,7 +18,20 @@ const COR_DA_SEVERIDADE: Record<SeveridadeAlerta, string> = {
  * chega aqui já vem sem marcador e sem valor para quem não pode vê-los; a tela
  * não decide nada disso, só exibe o que o servidor mandou.
  */
-export function AlertasClinicos({ alunoId }: { alunoId: string }) {
+export function AlertasClinicos({
+  alunoId,
+  atualizarEm = 0,
+}: {
+  alunoId: string;
+  /**
+   * Muda quando as condições do aluno mudam, para esta lista buscar de novo.
+   *
+   * Sem isso, dar alta numa condição deixava o alerta dela na tela até alguém
+   * recarregar a página — e clicar em "marcar como visto" num alerta que o
+   * servidor já apagou responde 404.
+   */
+  atualizarEm?: number;
+}) {
   const [alertas, setAlertas] = useState<AlertaResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
   const [ocultarResolvidos, setOcultarResolvidos] = useState(true);
@@ -30,7 +43,7 @@ export function AlertasClinicos({ alunoId }: { alunoId: string }) {
       // 403 aqui é informação, não falha: pode ser papel sem alerta ou falta de
       // consentimento clínico. Nos dois casos a seção simplesmente não aparece.
       .catch(() => setSemConsentimento(true));
-  }, [alunoId]);
+  }, [alunoId, atualizarEm]);
 
   async function reconhecer(id: string) {
     const atualizado = await sdk.alertas.reconhecer(alunoId, id).catch(() => null);

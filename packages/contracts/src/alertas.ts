@@ -45,6 +45,12 @@ export interface AlertaResumo {
   marcadorOrigem: string | null;
   /** Idem: rastrear até o exame é privilégio de quem pode abrir o exame. */
   exameId: string | null;
+  /**
+   * Origem quando o alerta nasceu de uma condição de saúde. Este vem sempre
+   * preenchido: condição é legível pelos três profissionais, ao contrário do
+   * exame — um personal que não sabe da lesão prescreve o exercício errado.
+   */
+  condicaoId: string | null;
   criadoEm: string;
   reconhecidoEm: string | null;
   reconhecidoPor: { id: string; nome: string } | null;

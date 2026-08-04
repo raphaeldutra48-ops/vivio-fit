@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AvaliacaoModule } from './modules/avaliacao/avaliacao.module';
 import { ExamesModule } from './modules/exames/exames.module';
 import { AlertasModule } from './modules/alertas/alertas.module';
+import { CondicoesModule } from './modules/condicoes/condicoes.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
@@ -55,6 +56,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     AvaliacaoModule,
     ExamesModule,
     AlertasModule,
+    CondicoesModule,
     PrescricoesModule,
     AdminModule,
     AnamneseModule,

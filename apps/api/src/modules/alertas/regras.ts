@@ -234,7 +234,8 @@ export function ladoDoValor(
 
 export interface AlertaGerado {
   regra: string;
-  marcador: Marcador;
+  /** `null` quando a origem é uma condição de saúde, não um exame. */
+  marcador: Marcador | null;
   papelDestino: PapelDestino;
   severidade: SeveridadeAlerta;
   titulo: string;

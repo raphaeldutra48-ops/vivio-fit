@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
+import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
 import { useSessao } from '../../../../lib/sessao';
@@ -19,6 +20,8 @@ export default function FichaDoAluno() {
   const [aluno, setAluno] = useState<ResumoAluno | null>(null);
   const [planos, setPlanos] = useState<PlanoTreinoResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
+  /** Sobe a cada mudança em condição, para os alertas serem buscados de novo. */
+  const [versaoClinica, setVersaoClinica] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,7 +101,16 @@ export default function FichaDoAluno() {
         Antes da equipe e do treino de propósito: se há alerta pendente, ele
         muda a conduta do que vem abaixo.
       */}
-      <AlertasClinicos alunoId={alunoId} />
+      {/*
+        As duas seções são irmãs e uma nasce da outra: registrar ou dar alta
+        numa condição cria ou apaga alertas. O contador liga as duas — sem ele,
+        o alerta de uma lesão já resolvida ficaria na tela até recarregar.
+      */}
+      <AlertasClinicos alunoId={alunoId} atualizarEm={versaoClinica} />
+
+      {/* Logo abaixo dos alertas: é a causa deles, e quem lê o alerta costuma
+          querer ver o fato que o originou. */}
+      <CondicoesDeSaude alunoId={alunoId} aoMudar={() => setVersaoClinica((v) => v + 1)} />
 
       <section>
         <h2 className="mb-md text-lg font-semibold">Equipe de cuidado</h2>

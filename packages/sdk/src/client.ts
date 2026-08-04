@@ -24,6 +24,9 @@ import type {
   RegistrarExameInput,
   AlertaResumo,
   ReconhecerAlertaInput,
+  CondicaoResumo,
+  RegistrarCondicaoInput,
+  ResolverCondicaoInput,
   CriarModeloCardapioInput,
   ListaDeCompras,
   ModeloCardapioCompleto,
@@ -653,6 +656,33 @@ export class VivioClient {
     registrar: (alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> =>
       this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames`, {
         metodo: 'POST',
+        corpo: dados,
+      }),
+  };
+
+  // --- condições de saúde ------------------------------------------------------
+
+  /**
+   * Ler é dos três profissionais e do aluno; escrever é só do médico. Um
+   * personal que não sabe da lesão no ombro prescreve o exercício errado.
+   */
+  readonly condicoes = {
+    listar: (alunoId: string): Promise<CondicaoResumo[]> =>
+      this.requisicao<CondicaoResumo[]>(`/alunos/${alunoId}/condicoes`),
+
+    registrar: (alunoId: string, dados: RegistrarCondicaoInput): Promise<CondicaoResumo> =>
+      this.requisicao<CondicaoResumo>(`/alunos/${alunoId}/condicoes`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+
+    resolver: (
+      alunoId: string,
+      condicaoId: string,
+      dados: ResolverCondicaoInput = {},
+    ): Promise<CondicaoResumo> =>
+      this.requisicao<CondicaoResumo>(`/alunos/${alunoId}/condicoes/${condicaoId}/resolver`, {
+        metodo: 'PATCH',
         corpo: dados,
       }),
   };
