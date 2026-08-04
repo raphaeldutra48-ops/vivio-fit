@@ -84,6 +84,7 @@ export class ExamesService {
   async anexarLaudo(
     alunoId: string,
     exameId: string,
+    autorId: string,
     chave: string,
     mimeType: string,
   ): Promise<{ temArquivo: true }> {
@@ -91,6 +92,17 @@ export class ExamesService {
       where: { id: exameId, alunoId, deletadoEm: null },
     });
     if (!exame) throw ErroDominio.naoEncontrado('Exame');
+
+    /*
+      A chave tem de ser de um arquivo que ESTE usuário acabou de enviar.
+      Sem esta conferência, quem pode anexar poderia apontar o exame para o
+      laudo de outra pessoa e ler pelo link assinado — o `podeVerArquivo`
+      autorizaria, porque ele só olha o papel, não a origem do arquivo.
+      O módulo de exercícios já fazia isso com o vídeo.
+    */
+    if (!chave.startsWith(`exames/${autorId}/`)) {
+      throw ErroDominio.conflito('Chave de arquivo não pertence a você.');
+    }
 
     await this.prisma.exame.update({
       where: { id: exameId },

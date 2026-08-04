@@ -306,6 +306,60 @@ describe('Mídia, vídeo de exercício e fotos de evolução (e2e)', () => {
       expect((arquivo.body as Buffer).byteLength).toBe(1024);
     });
 
+    it('trocar o vídeo apaga o arquivo anterior', async () => {
+      const enviar = async (recheio: number): Promise<string> => {
+        const autorizacao = await request(servidor)
+          .post(url('/midia/upload-url'))
+          .set('Authorization', `Bearer ${tokenPersonal}`)
+          .send({ tipo: 'VIDEO_EXERCICIO', mimeType: 'video/mp4', tamanhoBytes: 1024 })
+          .expect(201);
+
+        await request(servidor)
+          .put(semHost(autorizacao.body.urlUpload))
+          .set('Content-Type', 'video/mp4')
+          .send(Buffer.alloc(1024, recheio))
+          .expect(200);
+
+        return autorizacao.body.chave as string;
+      };
+
+      const primeira = await enviar(1);
+      await request(servidor)
+        .patch(url(`/exercicios/${idExercicio}/video`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ chave: primeira })
+        .expect(200);
+
+      // O link do primeiro vídeo, capturado enquanto o arquivo ainda existe.
+      const linkAntigo = await request(servidor)
+        .get(url(`/exercicios/${idExercicio}/video`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+      await request(servidor).get(semHost(linkAntigo.body.url)).expect(200);
+
+      const segunda = await enviar(2);
+      await request(servidor)
+        .patch(url(`/exercicios/${idExercicio}/video`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ chave: segunda })
+        .expect(200);
+
+      /*
+        A assinatura do link antigo continua válida por minutos — o que sumiu é
+        o arquivo. O 404 aqui é a prova de que a troca não deixou o vídeo velho
+        ocupando disco: são até 100 MB por regravação, e regravar a
+        demonstração de um exercício algumas vezes enchia o volume com arquivos
+        que ninguém mais alcança.
+      */
+      await request(servidor).get(semHost(linkAntigo.body.url)).expect(404);
+
+      const linkNovo = await request(servidor)
+        .get(url(`/exercicios/${idExercicio}/video`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+      await request(servidor).get(semHost(linkNovo.body.url)).expect(200);
+    });
+
     it('não deixa vincular vídeo enviado por outra pessoa', async () => {
       await request(servidor)
         .patch(url(`/exercicios/${idExercicio}/video`))

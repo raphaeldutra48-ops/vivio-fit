@@ -250,18 +250,28 @@ elas decidem quando um achado vira orientação para outro profissional, e o
 texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
 é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
 
-### 23. Não há faxina de mídia órfã
+### 23. Sobra um filete de mídia órfã, e não vale um deletador automático
 **Assumida em:** upload do laudo (2026-08-04)
-**Estado:** trocar o laudo de um exame apaga o arquivo anterior — isso está
-coberto. O que não existe é varredura para arquivo que ficou sem dono por
-outro caminho: registro apagado direto no banco, upload autorizado que o
-cliente nunca concluiu, exame removido no futuro por uma rota de exclusão que
-ainda não existe.
-**Tamanho do problema hoje:** pequeno. Nenhuma rota do app apaga exame, e o
-volume tem 5 GB. Mas cresce sozinho e em silêncio.
-**Pagar em:** quando houver rota de exclusão de exame ou de foto, que é
-quando o órfão passa a ser produzido de verdade. Uma tarefa periódica
-comparando as chaves do storage com as do banco resolve.
+**O que era o problema de verdade, e foi corrigido:** a auditoria das rotas
+que mexem em arquivo achou **dois vazamentos reais**, os dois já pagos —
+`exercicios.vincularVideo` trocava o vídeo sem apagar o anterior (até 100 MB
+cada, e regravar a demonstração algumas vezes enchia o disco), e o
+`anexarLaudo` não conferia se a chave era de quem estava anexando, o que
+além de vazar arquivo deixava apontar o exame para o laudo de outra pessoa.
+Fotos, materiais e a troca de laudo já limpavam corretamente.
+**O que sobra:** o arquivo que subiu para o storage e cujo vínculo com o banco
+falhou logo depois — rede caindo entre o upload e a chamada que grava a chave.
+É a única fonte que resta, e ela é estreita.
+**Por que NÃO existe uma varredura que apaga:** um processo que apaga arquivo
+"sem dono no banco" é perigoso na proporção inversa do problema que resolve.
+Um bug nele apaga foto de evolução de paciente, que é irreversível, para
+recuperar alguns megabytes. O risco não paga.
+**Se um dia valer a pena**, o desenho seguro é: `listar(prefixo)` na interface
+`Armazenamento`, um comando que só **relata** os órfãos, e só depois — com o
+relatório limpo por algumas semanas — um modo que apaga, restrito a arquivos
+com mais de N dias. Nunca começar pelo que apaga.
+**Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
+uns 60% sem explicação.
 
 ## Resolvidas
 

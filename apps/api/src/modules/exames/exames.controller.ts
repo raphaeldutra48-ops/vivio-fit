@@ -85,8 +85,9 @@ export class ExamesController {
   anexarLaudo(
     @Param('alunoId') alunoId: string,
     @Param('exameId') exameId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
     @Body(new ZodValidationPipe(anexarLaudoSchema)) dados: AnexarLaudoInput,
   ): Promise<{ temArquivo: true }> {
-    return this.exames.anexarLaudo(alunoId, exameId, dados.chave, dados.mimeType);
+    return this.exames.anexarLaudo(alunoId, exameId, usuario.id, dados.chave, dados.mimeType);
   }
 }

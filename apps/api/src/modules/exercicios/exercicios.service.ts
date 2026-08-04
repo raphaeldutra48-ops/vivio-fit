@@ -57,6 +57,16 @@ export class ExerciciosService {
       where: { id: exercicio.id },
       data: { videoChave: chave },
     });
+
+    // Trocar o vídeo tem de apagar o anterior: são até 100 MB cada, e sem isso
+    // regravar a demonstração de um exercício algumas vezes enche o disco com
+    // arquivos que ninguém alcança mais.
+    // Depois do update, para uma falha aqui não deixar o exercício apontando
+    // para um arquivo que já não existe.
+    if (exercicio.videoChave && exercicio.videoChave !== chave) {
+      await this.midia.remover(exercicio.videoChave).catch(() => undefined);
+    }
+
     return paraResumo(atualizado);
   }
 

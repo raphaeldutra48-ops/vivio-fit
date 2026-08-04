@@ -301,11 +301,26 @@ describe('Exames — faixa funcional e escopo por papel (e2e)', () => {
         .expect(403);
     });
 
+    /**
+     * A chave tem de ser de um arquivo que quem anexa acabou de enviar. Sem
+     * isso, dava para apontar o exame para o laudo de outra pessoa e ler pelo
+     * link assinado — `podeVerArquivo` autorizaria, porque só olha o papel.
+     */
+    it('recusa chave que não pertence a quem está anexando', async () => {
+      const r = await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
+        .set(comToken(tokenMedico))
+        .send({ chave: `exames/${alunoId}/laudo-de-outro.pdf`, mimeType: 'application/pdf' })
+        .expect(409);
+
+      expect(r.body.erro.mensagem).toMatch(/não pertence a você/);
+    });
+
     it('o médico anexa e passa a receber o link assinado', async () => {
       await request(servidor)
         .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
         .set(comToken(tokenMedico))
-        .send({ chave: `exames/${alunoId}/laudo-${sufixo}.pdf`, mimeType: 'application/pdf' })
+        .send({ chave: `exames/${idMedico}/laudo-${sufixo}.pdf`, mimeType: 'application/pdf' })
         .expect(200);
 
       const r = await request(servidor)
@@ -353,8 +368,22 @@ describe('Exames — faixa funcional e escopo por papel (e2e)', () => {
       await request(servidor)
         .patch(url(`/alunos/${alunoId}/exames/cln00000000000000000000/laudo`))
         .set(comToken(tokenMedico))
-        .send({ chave: 'exames/x/teste.pdf', mimeType: 'application/pdf' })
+        .send({ chave: `exames/${idMedico}/teste.pdf`, mimeType: 'application/pdf' })
         .expect(404);
+    });
+
+    /** Trocar o laudo não pode deixar o anterior ocupando disco para sempre. */
+    it('substituir o laudo troca a chave gravada', async () => {
+      const nova = `exames/${idMedico}/laudo-novo-${sufixo}.pdf`;
+
+      await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
+        .set(comToken(tokenMedico))
+        .send({ chave: nova, mimeType: 'application/pdf' })
+        .expect(200);
+
+      const exame = await prisma.exame.findUniqueOrThrow({ where: { id: exameId } });
+      expect(exame.chaveArquivo).toBe(nova);
     });
   });
 
