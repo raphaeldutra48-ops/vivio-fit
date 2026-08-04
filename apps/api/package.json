@@ -15,6 +15,7 @@
     "seed": "tsx prisma/seed.ts",
     "criar-admin": "tsx prisma/criar-admin.ts",
     "redefinir-senha": "tsx prisma/redefinir-senha.ts",
+    "revisao-clinica": "tsx scripts/gerar-revisao-clinica.ts",
     "semear-catalogo": "tsx prisma/semear-catalogo.ts"
   },
   "dependencies": {

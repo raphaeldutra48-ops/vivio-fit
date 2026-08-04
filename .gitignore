@@ -35,3 +35,7 @@ Thumbs.db
 
 # arquivos de midia do driver local
 media/
+
+# Dossie de revisao clinica: gerado sob demanda a partir das tabelas do codigo.
+# Versionar o HTML abriria espaco para ele divergir do que o app executa.
+revisao-clinica.html
