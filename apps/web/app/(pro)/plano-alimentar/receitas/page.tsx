@@ -1,9 +1,18 @@
 'use client';
 
 import type { AlimentoResumo, ReceitaResumo } from '@vivio/contracts';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BuscaDeAlimento } from '../../../../components/BuscaDeAlimento';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
+import { erroVisivel } from '../../../../lib/campos';
+import {
+  corpoDaReceita,
+  problemaDasGramas,
+  problemaDoRendimento,
+  problemaDoTempo,
+  problemasDaReceita,
+  type IngredienteDigitado,
+} from '../../../../lib/plano-alimentar';
 import { sdk } from '../../../../lib/sdk';
 
 const entrada = {
@@ -11,12 +20,6 @@ const entrada = {
   borderColor: 'var(--vv-borda)',
   color: 'var(--vv-texto-primario)',
 };
-
-interface IngredienteEmEdicao {
-  alimentoId: string;
-  nome: string;
-  quantidadeG: number;
-}
 
 export default function Receitas() {
   const [receitas, setReceitas] = useState<ReceitaResumo[]>([]);
@@ -28,10 +31,12 @@ export default function Receitas() {
   const [editando, setEditando] = useState<string | null>(null);
   const [nome, setNome] = useState('');
   const [modoPreparo, setModoPreparo] = useState('');
-  const [rendePorcoes, setRende] = useState(1);
+  // Texto, não número: guardar `Number(e.target.value)` no estado faz apagar o
+  // campo para redigitar estacionar um `0` que ninguém digitou.
+  const [rendePorcoes, setRende] = useState('1');
   const [nomeDaPorcao, setNomeDaPorcao] = useState('');
   const [tempoMinutos, setTempo] = useState('');
-  const [ingredientes, setIngredientes] = useState<IngredienteEmEdicao[]>([]);
+  const [ingredientes, setIngredientes] = useState<IngredienteDigitado[]>([]);
 
   const carregar = () =>
     sdk.receitas
@@ -49,7 +54,7 @@ export default function Receitas() {
     setErro(null);
     setNome('');
     setModoPreparo('');
-    setRende(1);
+    setRende('1');
     setNomeDaPorcao('');
     setTempo('');
     setIngredientes([]);
@@ -60,14 +65,14 @@ export default function Receitas() {
     setErro(null);
     setNome(r.nome);
     setModoPreparo(r.modoPreparo ?? '');
-    setRende(r.rendePorcoes);
+    setRende(String(r.rendePorcoes));
     setNomeDaPorcao(r.nomeDaPorcao ?? '');
     setTempo(r.tempoMinutos?.toString() ?? '');
     setIngredientes(
       r.ingredientes.map((i) => ({
         alimentoId: i.alimentoId,
         nome: i.nome,
-        quantidadeG: i.quantidadeG,
+        quantidadeG: String(i.quantidadeG),
       })),
     );
   }
@@ -75,30 +80,28 @@ export default function Receitas() {
   function adicionar(a: AlimentoResumo) {
     setIngredientes((atual) => [
       ...atual,
-      { alimentoId: a.id, nome: a.nome, quantidadeG: a.medidaGramas ?? 100 },
+      { alimentoId: a.id, nome: a.nome, quantidadeG: String(a.medidaGramas ?? 100) },
     ]);
   }
 
-  const podeSalvar =
-    nome.trim().length >= 2 &&
-    ingredientes.length > 0 &&
-    ingredientes.every((i) => i.quantidadeG > 0) &&
-    rendePorcoes > 0;
+  const problemas = useMemo(
+    () => problemasDaReceita(nome, rendePorcoes, tempoMinutos, ingredientes),
+    [nome, rendePorcoes, tempoMinutos, ingredientes],
+  );
+  const podeSalvar = problemas.length === 0;
 
   async function salvar() {
+    if (!podeSalvar) return;
     setErro(null);
     setSalvando(true);
-    const corpo = {
-      nome: nome.trim(),
-      modoPreparo: modoPreparo.trim() || undefined,
+    const corpo = corpoDaReceita(
+      nome,
+      modoPreparo,
       rendePorcoes,
-      nomeDaPorcao: nomeDaPorcao.trim() || undefined,
-      tempoMinutos: tempoMinutos ? Number(tempoMinutos) : undefined,
-      ingredientes: ingredientes.map((i) => ({
-        alimentoId: i.alimentoId,
-        quantidadeG: i.quantidadeG,
-      })),
-    };
+      nomeDaPorcao,
+      tempoMinutos,
+      ingredientes,
+    );
     try {
       if (editando) await sdk.receitas.atualizar(editando, corpo);
       else await sdk.receitas.criar(corpo);
@@ -148,17 +151,17 @@ export default function Receitas() {
               />
               <Campo
                 rotulo="Tempo de preparo em minutos (opcional)"
-                type="number"
                 inputMode="numeric"
                 value={tempoMinutos}
+                erro={erroVisivel(tempoMinutos, problemaDoTempo(tempoMinutos))}
                 onChange={(e) => setTempo(e.target.value)}
               />
               <Campo
                 rotulo="Rende quantas porções"
-                type="number"
                 inputMode="decimal"
                 value={rendePorcoes}
-                onChange={(e) => setRende(Number(e.target.value))}
+                erro={erroVisivel(rendePorcoes, problemaDoRendimento(rendePorcoes))}
+                onChange={(e) => setRende(e.target.value)}
               />
               <Campo
                 rotulo="Nome da porção (opcional)"
@@ -184,20 +187,28 @@ export default function Receitas() {
                     Gramas
                   </span>
                   <input
-                    type="number"
                     inputMode="decimal"
-                    min={1}
                     className="min-h-toque w-[110px] rounded-md border px-md"
-                    style={entrada}
+                    style={{
+                      ...entrada,
+                      borderColor: problemaDasGramas(i.quantidadeG)
+                        ? 'var(--vv-erro)'
+                        : 'var(--vv-borda)',
+                    }}
                     value={i.quantidadeG}
                     onChange={(e) =>
                       setIngredientes((atual) =>
                         atual.map((x, n) =>
-                          n === indice ? { ...x, quantidadeG: Number(e.target.value) } : x,
+                          n === indice ? { ...x, quantidadeG: e.target.value } : x,
                         ),
                       )
                     }
                   />
+                  {problemaDasGramas(i.quantidadeG) && (
+                    <span className="text-xs" style={{ color: 'var(--vv-erro)' }} role="alert">
+                      {problemaDasGramas(i.quantidadeG)}
+                    </span>
+                  )}
                 </label>
                 <button
                   onClick={() => setIngredientes((a) => a.filter((_, n) => n !== indice))}
@@ -233,6 +244,16 @@ export default function Receitas() {
           </Cartao>
 
           {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
+          {/* O que falta, dito antes de tentar — botão travado sem explicação
+              é o pior dos dois mundos. */}
+          {problemas.length > 0 && (
+            <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+              {problemas.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex justify-end">
             <Botao onClick={salvar} disabled={!podeSalvar || salvando}>

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ExercicioResumo, GrupoMuscular, ItemTreinoInput } from '@vivio/contracts';
+import type { ExercicioResumo, GrupoMuscular } from '@vivio/contracts';
 import { GRUPOS_MUSCULARES } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
@@ -13,16 +13,30 @@ import {
   useArrasteParaReordenar,
 } from '../../../../../../components/Reordenavel';
 import { Aviso, Botao, Campo, Cartao } from '../../../../../../components/ui';
+import { erroVisivel } from '../../../../../../lib/campos';
 import { anuncioDeMovimento, reordenar } from '../../../../../../lib/reordenar';
 import { sdk } from '../../../../../../lib/sdk';
+import {
+  corpoDoTreino,
+  problemaDaCarga,
+  problemaDasReps,
+  problemaDasSeries,
+  problemaDoDescanso,
+  problemasDoTreino,
+  type ItemDeTreinoDigitado,
+  type SessaoDigitada,
+} from '../../../../../../lib/treino';
 
-interface ItemNaTela extends ItemTreinoInput {
+/**
+ * Os campos numéricos vivem como TEXTO no estado. Guardar `Number()` direto
+ * fazia apagar o campo de séries para redigitar estacionar um `0`, que o
+ * `min(1)` do schema recusa.
+ */
+interface ItemNaTela extends ItemDeTreinoDigitado {
   exercicio: ExercicioResumo;
 }
 
-interface SessaoNaTela {
-  nome: string;
-  diaSugerido?: number;
+interface SessaoNaTela extends SessaoDigitada {
   itens: ItemNaTela[];
 }
 
@@ -34,7 +48,9 @@ export default function MontarTreino() {
 
   const [nome, setNome] = useState('');
   const [objetivo, setObjetivo] = useState('');
-  const [sessoes, setSessoes] = useState<SessaoNaTela[]>([{ nome: 'Treino A', itens: [] }]);
+  const [sessoes, setSessoes] = useState<SessaoNaTela[]>([
+    { nome: 'Treino A', diaSugerido: '', itens: [] },
+  ]);
   const [sessaoAtiva, setSessaoAtiva] = useState(0);
 
   const [exercicios, setExercicios] = useState<ExercicioResumo[]>([]);
@@ -72,9 +88,11 @@ export default function MontarTreino() {
                 ...s.itens,
                 {
                   exercicioId: exercicio.id,
-                  series: 3,
+                  nome: exercicio.nome,
+                  series: '3',
                   repsAlvo: '10-12',
-                  descansoSeg: 60,
+                  cargaSugeridaKg: '',
+                  descansoSeg: '60',
                   exercicio,
                 },
               ],
@@ -84,7 +102,7 @@ export default function MontarTreino() {
     );
   }
 
-  function alterarItem(indiceItem: number, mudanca: Partial<ItemTreinoInput>) {
+  function alterarItem(indiceItem: number, mudanca: Partial<ItemDeTreinoDigitado>) {
     setSessoes((atual) =>
       atual.map((s, i) =>
         i === sessaoAtiva
@@ -122,19 +140,11 @@ export default function MontarTreino() {
   }
 
   async function salvar(ativar: boolean) {
+    if (!podeSalvar) return;
     setErro(null);
     setSalvando(true);
     try {
-      await sdk.treinos.criar(alunoId, {
-        nome,
-        objetivo: objetivo || undefined,
-        ativar,
-        sessoes: sessoes.map((s) => ({
-          nome: s.nome,
-          diaSugerido: s.diaSugerido,
-          itens: s.itens.map(({ exercicio: _ignorado, ...item }) => item),
-        })),
-      });
+      await sdk.treinos.criar(alunoId, corpoDoTreino(nome, objetivo, ativar, sessoes));
       router.push(`/alunos/${alunoId}`);
     } catch (e) {
       setErro(
@@ -150,7 +160,8 @@ export default function MontarTreino() {
   }
 
   const sessao = sessoes[sessaoAtiva]!;
-  const podeSalvar = nome.trim().length >= 2 && sessoes.every((s) => s.itens.length > 0);
+  const problemas = useMemo(() => problemasDoTreino(nome, sessoes), [nome, sessoes]);
+  const podeSalvar = problemas.length === 0;
 
   return (
     <div className="flex flex-col gap-xl">
@@ -207,7 +218,7 @@ export default function MontarTreino() {
             setSessoes((atual) => {
               const proxima = String.fromCharCode(65 + atual.length);
               setSessaoAtiva(atual.length);
-              return [...atual, { nome: `Treino ${proxima}`, itens: [] }];
+              return [...atual, { nome: `Treino ${proxima}`, diaSugerido: '', itens: [] }];
             })
           }
         >
@@ -237,12 +248,8 @@ export default function MontarTreino() {
                   borderColor: 'var(--vv-borda)',
                   color: 'var(--vv-texto-primario)',
                 }}
-                value={sessao.diaSugerido ?? ''}
-                onChange={(e) =>
-                  alterarSessao(sessaoAtiva, {
-                    diaSugerido: e.target.value ? Number(e.target.value) : undefined,
-                  })
-                }
+                value={sessao.diaSugerido}
+                onChange={(e) => alterarSessao(sessaoAtiva, { diaSugerido: e.target.value })}
               >
                 <option value="">—</option>
                 {DIAS.slice(1).map((dia, i) => (
@@ -316,38 +323,30 @@ export default function MontarTreino() {
                 <div className="grid grid-cols-2 gap-md sm:grid-cols-4">
                   <Campo
                     rotulo="Séries"
-                    type="number"
-                    min={1}
-                    max={20}
+                    inputMode="numeric"
                     value={item.series}
-                    onChange={(e) => alterarItem(i, { series: Number(e.target.value) })}
+                    erro={erroVisivel(item.series, problemaDasSeries(item.series))}
+                    onChange={(e) => alterarItem(i, { series: e.target.value })}
                   />
                   <Campo
                     rotulo="Repetições"
                     value={item.repsAlvo}
+                    erro={erroVisivel(item.repsAlvo, problemaDasReps(item.repsAlvo))}
                     onChange={(e) => alterarItem(i, { repsAlvo: e.target.value })}
                   />
                   <Campo
                     rotulo="Carga (kg)"
-                    type="number"
-                    step="0.5"
-                    value={item.cargaSugeridaKg ?? ''}
-                    onChange={(e) =>
-                      alterarItem(i, {
-                        cargaSugeridaKg: e.target.value ? Number(e.target.value) : undefined,
-                      })
-                    }
+                    inputMode="decimal"
+                    value={item.cargaSugeridaKg}
+                    erro={erroVisivel(item.cargaSugeridaKg, problemaDaCarga(item.cargaSugeridaKg))}
+                    onChange={(e) => alterarItem(i, { cargaSugeridaKg: e.target.value })}
                   />
                   <Campo
                     rotulo="Descanso (s)"
-                    type="number"
-                    step="15"
-                    value={item.descansoSeg ?? ''}
-                    onChange={(e) =>
-                      alterarItem(i, {
-                        descansoSeg: e.target.value ? Number(e.target.value) : undefined,
-                      })
-                    }
+                    inputMode="numeric"
+                    value={item.descansoSeg}
+                    erro={erroVisivel(item.descansoSeg, problemaDoDescanso(item.descansoSeg))}
+                    onChange={(e) => alterarItem(i, { descansoSeg: e.target.value })}
                   />
                 </div>
               </Cartao>
@@ -418,12 +417,21 @@ export default function MontarTreino() {
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
       <div
-        className="sticky bottom-0 flex flex-wrap items-center justify-between gap-md border-t py-lg"
+        className="sticky bottom-0 flex flex-col gap-sm border-t py-lg"
         style={{
           background: 'var(--vv-fundo)',
           borderColor: 'var(--vv-borda)',
         }}
       >
+        {/* O que falta, dito antes de tentar. */}
+        {problemas.length > 0 && (
+          <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+            {problemas.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-md">
         <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
           {sessoes.length} {sessoes.length === 1 ? 'sessão' : 'sessões'} · {totalItens}{' '}
           {totalItens === 1 ? 'exercício' : 'exercícios'}
@@ -439,6 +447,7 @@ export default function MontarTreino() {
           <Botao disabled={!podeSalvar || salvando} onClick={() => void salvar(true)}>
             {salvando ? 'Salvando…' : 'Salvar e ativar'}
           </Botao>
+        </div>
         </div>
       </div>
     </div>

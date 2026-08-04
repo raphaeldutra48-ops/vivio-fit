@@ -7,9 +7,17 @@ import {
   type RefeicaoSalvaResumo,
 } from '@vivio/contracts';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BuscaDeAlimento } from '../../../../components/BuscaDeAlimento';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
+import { erroVisivel } from '../../../../lib/campos';
+import {
+  corpoDaRefeicao,
+  problemaDoHorario,
+  problemaDoItem,
+  problemasDaRefeicao,
+  type ItemDigitado,
+} from '../../../../lib/plano-alimentar';
 import { sdk } from '../../../../lib/sdk';
 
 const entrada = {
@@ -17,16 +25,6 @@ const entrada = {
   borderColor: 'var(--vv-borda)',
   color: 'var(--vv-texto-primario)',
 };
-
-interface ItemEmEdicao {
-  chave: string;
-  nome: string;
-  ehReceita: boolean;
-  alimentoId?: string;
-  receitaId?: string;
-  quantidadeG?: number;
-  porcoes?: number;
-}
 
 export default function RefeicoesSalvas() {
   const [refeicoes, setRefeicoes] = useState<RefeicaoSalvaResumo[]>([]);
@@ -38,7 +36,9 @@ export default function RefeicoesSalvas() {
   const [nome, setNome] = useState('');
   const [horario, setHorario] = useState('');
   const [observacao, setObservacao] = useState('');
-  const [itens, setItens] = useState<ItemEmEdicao[]>([]);
+  // Texto, e não número, no estado: guardar `Number(e.target.value)` faz apagar
+  // o campo para redigitar estacionar um `0` que ninguém digitou.
+  const [itens, setItens] = useState<ItemDigitado[]>([]);
 
   const carregar = () =>
     sdk.refeicoesSalvas
@@ -76,8 +76,7 @@ export default function RefeicoesSalvas() {
         ehReceita: i.ehReceita,
         alimentoId: i.alimentoId ?? undefined,
         receitaId: i.receitaId ?? undefined,
-        quantidadeG: i.quantidadeG ?? undefined,
-        porcoes: i.porcoes ?? undefined,
+        quantidade: String(i.ehReceita ? (i.porcoes ?? '') : (i.quantidadeG ?? '')),
       })),
     );
   }
@@ -90,7 +89,7 @@ export default function RefeicoesSalvas() {
         nome: a.nome,
         ehReceita: false,
         alimentoId: a.id,
-        quantidadeG: a.medidaGramas ?? 100,
+        quantidade: String(a.medidaGramas ?? 100),
       },
     ]);
 
@@ -102,29 +101,21 @@ export default function RefeicoesSalvas() {
         nome: r.nome,
         ehReceita: true,
         receitaId: r.id,
-        porcoes: 1,
+        quantidade: '1',
       },
     ]);
 
-  const podeSalvar =
-    nome.trim().length >= 2 &&
-    itens.length > 0 &&
-    itens.every((i) => (i.ehReceita ? (i.porcoes ?? 0) > 0 : (i.quantidadeG ?? 0) > 0)) &&
-    (horario === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(horario));
+  const problemas = useMemo(
+    () => problemasDaRefeicao(nome, horario, itens),
+    [nome, horario, itens],
+  );
+  const podeSalvar = problemas.length === 0;
 
   async function salvar() {
+    if (!podeSalvar) return;
     setErro(null);
     setSalvando(true);
-    const corpo = {
-      nome: nome.trim(),
-      horarioSugerido: horario || undefined,
-      observacao: observacao.trim() || undefined,
-      itens: itens.map((i) =>
-        i.ehReceita
-          ? { receitaId: i.receitaId!, porcoes: i.porcoes! }
-          : { alimentoId: i.alimentoId!, quantidadeG: i.quantidadeG! },
-      ),
-    };
+    const corpo = corpoDaRefeicao(nome, horario, observacao, itens);
     try {
       if (editando) await sdk.refeicoesSalvas.atualizar(editando, corpo);
       else await sdk.refeicoesSalvas.criar(corpo);
@@ -175,6 +166,7 @@ export default function RefeicoesSalvas() {
                 rotulo="Horário sugerido"
                 type="time"
                 value={horario}
+                erro={erroVisivel(horario, problemaDoHorario(horario))}
                 onChange={(e) => setHorario(e.target.value)}
               />
             </div>
@@ -205,25 +197,26 @@ export default function RefeicoesSalvas() {
                     {i.ehReceita ? 'Porções' : 'Gramas'}
                   </span>
                   <input
-                    type="number"
                     inputMode="decimal"
-                    min={i.ehReceita ? 0.5 : 1}
-                    step={i.ehReceita ? 0.5 : 1}
                     className="min-h-toque w-[110px] rounded-md border px-md"
-                    style={entrada}
-                    value={i.ehReceita ? (i.porcoes ?? '') : (i.quantidadeG ?? '')}
+                    style={{
+                      ...entrada,
+                      borderColor: problemaDoItem(i) ? 'var(--vv-erro)' : 'var(--vv-borda)',
+                    }}
+                    value={i.quantidade}
                     onChange={(e) =>
                       setItens((atual) =>
                         atual.map((x, n) =>
-                          n === indice
-                            ? i.ehReceita
-                              ? { ...x, porcoes: Number(e.target.value) }
-                              : { ...x, quantidadeG: Number(e.target.value) }
-                            : x,
+                          n === indice ? { ...x, quantidade: e.target.value } : x,
                         ),
                       )
                     }
                   />
+                  {problemaDoItem(i) && (
+                    <span className="text-xs" style={{ color: 'var(--vv-erro)' }} role="alert">
+                      {problemaDoItem(i)}
+                    </span>
+                  )}
                 </label>
                 <button
                   onClick={() => setItens((a) => a.filter((_, n) => n !== indice))}
@@ -277,6 +270,14 @@ export default function RefeicoesSalvas() {
           </Cartao>
 
           {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
+          {problemas.length > 0 && (
+            <ul className="flex flex-col gap-xs text-sm" style={{ color: 'var(--vv-alerta)' }}>
+              {problemas.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex justify-end">
             <Botao onClick={salvar} disabled={!podeSalvar || salvando}>

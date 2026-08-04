@@ -104,22 +104,25 @@ plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`) e a
 adipometria (`lib/adipometria.spec.ts` + `teste/adipometria.test.tsx`) — as duas
 últimas eram as candidatas anteriores e as duas cobraram o preço previsto. Ver as
 resolvidas de 2026-08-01.
-**Candidatas seguintes:** o `|| 0` acabou — não há mais nenhum em `apps/web/app`.
-O que sobrou é a **mesma falha em outra forma**: telas que guardam
-`Number(e.target.value)` **direto no estado**, em vez de guardar o texto. Limpar o
-campo estaciona `0` no estado (o campo passa a exibir "0", que ninguém digitou), e
-o `positive()`/`min()` do schema recusa no envio. Localizadas:
+**A classe de defeito acabou em 2026-08-04.** Não existe mais `|| 0` nem
+`Number(e.target.value)` gravado no estado em nenhuma tela de formulário. As
+seis que transformam entrada antes de enviar — plano alimentar, adipometria,
+bioimpedância, receitas, refeições e montagem de treino — passaram todas para o
+formato `lib/<tela>.ts`, com o estado guardando **texto**.
 
-| Arquivo | Linha | Campo |
-|---|---|---|
-| `plano-alimentar/refeicoes/page.tsx` | 220–221 | `porcoes`, `quantidadeG` |
-| `plano-alimentar/receitas/page.tsx` | 161, 196 | `rende`, `quantidadeG` |
-| `alunos/[alunoId]/treino/novo/page.tsx` | 323, 337, 348 | `series`, `cargaSugeridaKg`, `descansoSeg` |
+**O que sobra desta pendência é cobertura, não defeito.** Três telas têm só
+teste de unidade da regra, sem teste de render da fiação:
+`plano-alimentar/receitas`, `plano-alimentar/refeicoes` e `treino/novo`. Foram
+operadas no navegador, mas nada impede alguém de desligar a fiação sem quebrar
+teste. As outras três têm os dois.
 
-As duas de `plano-alimentar` primeiro: mesmo domínio e mesmo schema
-(`itemRefeicaoSchema`) do editor de plano alimentar, então `lib/dieta.ts` e
-`lib/campos.ts` já são o molde. O padrão inteiro está em
-[ADAPTACOES.md](ADAPTACOES.md).
+**Uma instância remanescente, benigna:** `financeiro/page.tsx:226` faz
+`setRepetir(Math.max(1, Number(e.target.value)))`. O `Math.max` impede zero e
+`NaN` de chegarem ao servidor, então não há bug de dado — o custo é de uso:
+apagar o campo faz ele saltar para `1` sozinho. Vale arrumar junto da próxima
+mexida no financeiro, não isolado.
+
+O padrão inteiro está em [ADAPTACOES.md](ADAPTACOES.md).
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
