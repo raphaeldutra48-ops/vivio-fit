@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   EscopoDado,
   Papel,
+  anexarLaudoSchema,
   registrarExameSchema,
+  type AnexarLaudoInput,
   type ExameResumo,
   type RegistrarExameInput,
   type UsuarioAutenticado,
@@ -68,5 +70,23 @@ export class ExamesController {
     @Body(new ZodValidationPipe(registrarExameSchema)) dados: RegistrarExameInput,
   ): Promise<ExameResumo> {
     return this.exames.registrar(alunoId, usuario.id, usuario.papel, dados);
+  }
+
+  /**
+   * Anexa o laudo. Só médico e aluno — as mesmas duas pessoas que podem lê-lo.
+   *
+   * O `@Papeis` daqui é mais estreito que o da classe de propósito: deixar o
+   * nutricionista anexar seria pedir que ele suba um arquivo que não consegue
+   * reabrir depois.
+   */
+  @Patch(':exameId/laudo')
+  @Papeis(Papel.ALUNO, Papel.MEDICO)
+  @ApiOperation({ summary: 'Vincula o arquivo do laudo, já enviado ao storage' })
+  anexarLaudo(
+    @Param('alunoId') alunoId: string,
+    @Param('exameId') exameId: string,
+    @Body(new ZodValidationPipe(anexarLaudoSchema)) dados: AnexarLaudoInput,
+  ): Promise<{ temArquivo: true }> {
+    return this.exames.anexarLaudo(alunoId, exameId, dados.chave, dados.mimeType);
   }
 }

@@ -281,6 +281,83 @@ describe('Exames — faixa funcional e escopo por papel (e2e)', () => {
     });
   });
 
+  describe('laudo do laboratório', () => {
+    /** A permissão mais estreita do app: nem quem lê os marcadores abre o arquivo. */
+    it('o nutricionista não anexa laudo, mesmo lendo os marcadores', async () => {
+      const r = await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
+        .set(comToken(tokenNutri))
+        .send({ chave: 'exames/x/teste.pdf', mimeType: 'application/pdf' })
+        .expect(403);
+
+      expect(r.body.erro.codigo).toBe('PAPEL_NAO_AUTORIZADO');
+    });
+
+    it('o personal também não', async () => {
+      await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
+        .set(comToken(tokenPersonal))
+        .send({ chave: 'exames/x/teste.pdf', mimeType: 'application/pdf' })
+        .expect(403);
+    });
+
+    it('o médico anexa e passa a receber o link assinado', async () => {
+      await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/${exameId}/laudo`))
+        .set(comToken(tokenMedico))
+        .send({ chave: `exames/${alunoId}/laudo-${sufixo}.pdf`, mimeType: 'application/pdf' })
+        .expect(200);
+
+      const r = await request(servidor)
+        .get(url(`/alunos/${alunoId}/exames/${exameId}`))
+        .set(comToken(tokenMedico))
+        .expect(200);
+
+      expect(r.body.temArquivo).toBe(true);
+      expect(r.body.arquivoUrl).toContain('http');
+    });
+
+    it('o aluno recebe o link do próprio laudo', async () => {
+      const r = await request(servidor)
+        .get(url(`/alunos/${alunoId}/exames/${exameId}`))
+        .set(comToken(tokenAluno))
+        .expect(200);
+
+      expect(r.body.arquivoUrl).toContain('http');
+    });
+
+    /** O ponto do desenho inteiro. */
+    it('o nutricionista sabe que existe laudo, mas não recebe link', async () => {
+      const r = await request(servidor)
+        .get(url(`/alunos/${alunoId}/exames/${exameId}`))
+        .set(comToken(tokenNutri))
+        .expect(200);
+
+      expect(r.body.temArquivo).toBe(true);
+      expect(r.body.arquivoUrl).toBeNull();
+    });
+
+    /** Link assinado tem vida curta; sessenta deles numa lista é desperdício. */
+    it('a listagem não emite link assinado, nem para o médico', async () => {
+      const r = await request(servidor)
+        .get(url(`/alunos/${alunoId}/exames`))
+        .set(comToken(tokenMedico))
+        .expect(200);
+
+      const comLaudo = r.body.find((e: { id: string }) => e.id === exameId);
+      expect(comLaudo.temArquivo).toBe(true);
+      expect(comLaudo.arquivoUrl).toBeNull();
+    });
+
+    it('anexar em exame de id inventado é 404', async () => {
+      await request(servidor)
+        .patch(url(`/alunos/${alunoId}/exames/cln00000000000000000000/laudo`))
+        .set(comToken(tokenMedico))
+        .send({ chave: 'exames/x/teste.pdf', mimeType: 'application/pdf' })
+        .expect(404);
+    });
+  });
+
   describe('validação e isolamento', () => {
     // 422 e não 400: é o código que o ZodValidationPipe do app usa para corpo
     // sintaticamente válido e semanticamente recusado.

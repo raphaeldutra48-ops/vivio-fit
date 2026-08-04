@@ -7,6 +7,13 @@ export const TipoMidia = {
   AVATAR: 'AVATAR',
   /** Biblioteca do profissional: e-book, planilha, vídeo de apoio. */
   MATERIAL: 'MATERIAL',
+  /**
+   * O PDF ou a foto do laudo laboratorial.
+   *
+   * É a mídia mais restrita do app: só o médico e o próprio aluno recebem link
+   * de leitura. O nutricionista lê os marcadores do exame e nunca o arquivo.
+   */
+  LAUDO_EXAME: 'LAUDO_EXAME',
 } as const;
 export type TipoMidia = (typeof TipoMidia)[keyof typeof TipoMidia];
 
@@ -41,6 +48,12 @@ export const LIMITES_MIDIA: Record<
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/csv',
     ],
+  },
+  LAUDO_EXAME: {
+    // Laudo é PDF de poucas páginas ou foto do papel. 25 MB cobre folgado, e
+    // um teto baixo evita alguém anexar um exame de imagem inteiro aqui.
+    tamanhoMaximoBytes: 25 * 1024 * 1024,
+    mimesAceitos: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'],
   },
 };
 

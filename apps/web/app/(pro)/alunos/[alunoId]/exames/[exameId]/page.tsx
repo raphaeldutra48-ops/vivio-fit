@@ -2,15 +2,19 @@
 
 import {
   Classificacao,
+  LIMITES_MIDIA,
+  Papel,
   ROTULO_CLASSIFICACAO,
   ROTULO_FORCA,
+  TipoMidia,
   type ExameResumo,
   type MarcadorNoExame,
 } from '@vivio/contracts';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import { Aviso, Cartao } from '../../../../../../components/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Aviso, Botao, Cartao } from '../../../../../../components/ui';
+import { useSessao } from '../../../../../../lib/sessao';
 import {
   COR_DA_CLASSIFICACAO,
   agruparPorSistema,
@@ -30,17 +34,63 @@ type Filtro = Classificacao | 'TODOS';
  */
 export default function ResultadoDoExame() {
   const { alunoId, exameId } = useParams<{ alunoId: string; exameId: string }>();
+  const { usuario } = useSessao();
   const [exame, setExame] = useState<ExameResumo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('TODOS');
   const [aberto, setAberto] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const seletorDeArquivo = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    sdk.exames
+  // Anexar e ler o laudo são a mesma permissão: quem sobe precisa conseguir
+  // reabrir. O servidor decide de novo — isto aqui só evita mostrar o botão.
+  const podeMexerNoLaudo = usuario?.papel === Papel.MEDICO || usuario?.papel === Papel.ALUNO;
+
+  function carregar() {
+    return sdk.exames
       .obter(alunoId, exameId)
       .then(setExame)
       .catch(() => setErro('Não foi possível carregar este exame.'));
+  }
+
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alunoId, exameId]);
+
+  async function enviarLaudo(arquivo: File) {
+    const limite = LIMITES_MIDIA[TipoMidia.LAUDO_EXAME];
+
+    if (!limite.mimesAceitos.includes(arquivo.type)) {
+      setErro('Envie o laudo em PDF ou como foto (JPG, PNG, WEBP ou HEIC).');
+      return;
+    }
+    if (arquivo.size > limite.tamanhoMaximoBytes) {
+      setErro(`O arquivo passa de ${Math.round(limite.tamanhoMaximoBytes / 1024 / 1024)} MB.`);
+      return;
+    }
+
+    setEnviando(true);
+    setErro(null);
+    try {
+      // O arquivo vai direto para o armazenamento — não passa pela API.
+      const autorizacao = await sdk.midia.autorizarUpload({
+        tipo: TipoMidia.LAUDO_EXAME,
+        mimeType: arquivo.type,
+        tamanhoBytes: arquivo.size,
+      });
+      await sdk.midia.enviarArquivo(autorizacao, arquivo);
+      await sdk.exames.anexarLaudo(alunoId, exameId, {
+        chave: autorizacao.chave,
+        mimeType: arquivo.type,
+      });
+      await carregar();
+    } catch {
+      setErro('Não foi possível anexar o laudo.');
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   const visiveis = useMemo(
     () =>
@@ -129,12 +179,61 @@ export default function ResultadoDoExame() {
         </div>
       ))}
 
-      {exame.temArquivo && exame.arquivoUrl === null && (
-        <Aviso tipo="info">
-          Existe um arquivo anexado a este exame. Ele é acessível apenas ao médico da equipe e ao
-          próprio aluno.
-        </Aviso>
-      )}
+      <Cartao>
+        <p className="mb-sm font-semibold">Laudo do laboratório</p>
+
+        {exame.arquivoUrl ? (
+          <div className="flex flex-wrap items-center gap-md">
+            <a
+              href={exame.arquivoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              style={{ color: 'var(--vv-texto-primario)' }}
+            >
+              Abrir o laudo
+            </a>
+            <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+              O link vale poucos minutos — recarregue a página se expirar.
+            </span>
+          </div>
+        ) : exame.temArquivo ? (
+          <Aviso tipo="info">
+            Existe um laudo anexado. Ele é acessível apenas ao médico da equipe e ao próprio aluno.
+          </Aviso>
+        ) : (
+          <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+            Nenhum laudo anexado.
+          </p>
+        )}
+
+        {podeMexerNoLaudo && (
+          <div className="mt-md flex flex-wrap items-center gap-md">
+            <input
+              ref={seletorDeArquivo}
+              type="file"
+              accept=".pdf,image/jpeg,image/png,image/webp,image/heic"
+              className="hidden"
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                // Limpa o input para reenviar o mesmo arquivo depois de um erro.
+                e.target.value = '';
+                if (arquivo) void enviarLaudo(arquivo);
+              }}
+            />
+            <Botao
+              variante="neutra"
+              disabled={enviando}
+              onClick={() => seletorDeArquivo.current?.click()}
+            >
+              {enviando ? 'Enviando…' : exame.temArquivo ? 'Substituir laudo' : 'Anexar laudo'}
+            </Botao>
+            <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+              PDF ou foto, até 25 MB
+            </span>
+          </div>
+        )}
+      </Cartao>
 
       <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
         As faixas funcionais são referências de otimização, não critérios de diagnóstico. Veja de

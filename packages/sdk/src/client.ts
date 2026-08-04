@@ -22,6 +22,7 @@ import type {
   AvaliacaoResumo,
   ExameResumo,
   RegistrarExameInput,
+  AnexarLaudoInput,
   AlertaResumo,
   ReconhecerAlertaInput,
   CondicaoResumo,
@@ -656,6 +657,17 @@ export class VivioClient {
     registrar: (alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> =>
       this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames`, {
         metodo: 'POST',
+        corpo: dados,
+      }),
+
+    /** Só médico e aluno. O arquivo sobe antes, por `midia.autorizarUpload`. */
+    anexarLaudo: (
+      alunoId: string,
+      exameId: string,
+      dados: AnexarLaudoInput,
+    ): Promise<{ temArquivo: true }> =>
+      this.requisicao<{ temArquivo: true }>(`/alunos/${alunoId}/exames/${exameId}/laudo`, {
+        metodo: 'PATCH',
         corpo: dados,
       }),
   };

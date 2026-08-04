@@ -14,6 +14,7 @@ import {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { AlertasService } from '../alertas/alertas.service';
+import { MidiaService } from '../midia/midia.service';
 import { podeVerArquivo, podeVerMarcador } from './escopo';
 
 type LinhaExame = Prisma.ExameGetPayload<{
@@ -28,6 +29,7 @@ export class ExamesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alertas: AlertasService,
+    private readonly midia: MidiaService,
   ) {}
 
   async listar(alunoId: string, papel: Papel): Promise<ExameResumo[]> {
@@ -54,7 +56,54 @@ export class ExamesService {
     });
 
     if (!exame) throw ErroDominio.naoEncontrado('Exame');
-    return this.paraResumo(exame, papel);
+
+    const resumo = this.paraResumo(exame, papel);
+
+    /*
+      O link assinado só é emitido aqui, no exame individual — não na listagem.
+      Cada link custa uma assinatura e vale poucos minutos; gerar sessenta de
+      uma vez para uma lista que ninguém vai abrir é desperdício, e link com
+      vida curta na tela de lista provavelmente expiraria antes do clique.
+    */
+    if (exame.chaveArquivo && podeVerArquivo(papel)) {
+      const { url } = await this.midia.urlDeLeitura(exame.chaveArquivo);
+      resumo.arquivoUrl = url;
+    }
+
+    return resumo;
+  }
+
+  /**
+   * Vincula o laudo ao exame.
+   *
+   * O arquivo já subiu direto para o storage; aqui só se guarda a chave. Quem
+   * anexa é o médico ou o próprio aluno — as mesmas duas pessoas que podem
+   * ler. Deixar o nutricionista anexar seria pedir que ele suba um arquivo
+   * que não consegue reabrir.
+   */
+  async anexarLaudo(
+    alunoId: string,
+    exameId: string,
+    chave: string,
+    mimeType: string,
+  ): Promise<{ temArquivo: true }> {
+    const exame = await this.prisma.exame.findFirst({
+      where: { id: exameId, alunoId, deletadoEm: null },
+    });
+    if (!exame) throw ErroDominio.naoEncontrado('Exame');
+
+    await this.prisma.exame.update({
+      where: { id: exameId },
+      data: { chaveArquivo: chave, mimeType },
+    });
+
+    // Trocar o laudo não pode deixar o antigo ocupando disco para sempre.
+    // Depois do update: se a remoção falhar, o exame já aponta para o novo.
+    if (exame.chaveArquivo && exame.chaveArquivo !== chave) {
+      await this.midia.remover(exame.chaveArquivo).catch(() => undefined);
+    }
+
+    return { temArquivo: true };
   }
 
   /**
@@ -173,9 +222,8 @@ export class ExamesService {
       // Conta só o que este papel enxerga: dizer "45 marcadores" e listar 16
       // seria pior que não dizer nada.
       contagem,
-      // Link assinado ainda não é emitido (o upload entra junto com o storage
-      // externo, pendência 19). Quando entrar, é aqui que `podeVerArquivo`
-      // decide — e só médico e aluno recebem URL.
+      // Preenchido só em `obter`, e só para médico e aluno — ver o comentário
+      // lá sobre por que a listagem não emite link assinado.
       arquivoUrl: null,
       // Existir arquivo não é segredo: o nutricionista saber que ele existe é
       // honesto e ainda lhe permite pedir a leitura ao médico. O que ele nunca

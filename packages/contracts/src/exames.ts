@@ -518,6 +518,18 @@ export interface ExameResumo {
   temArquivo: boolean;
 }
 
+/**
+ * Vincula o arquivo do laudo ao exame já registrado.
+ *
+ * A chave vem de `midia.autorizarUpload` — o arquivo sobe direto para o
+ * storage e nunca passa pela API.
+ */
+export const anexarLaudoSchema = z.object({
+  chave: z.string().min(3).max(300),
+  mimeType: z.string().min(3).max(100),
+});
+export type AnexarLaudoInput = z.infer<typeof anexarLaudoSchema>;
+
 export const registrarExameSchema = z.object({
   laboratorio: z.string().min(2).max(120),
   dataColeta: z.coerce.date(),

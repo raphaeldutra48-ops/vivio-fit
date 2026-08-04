@@ -20,6 +20,7 @@ const PASTA_POR_TIPO: Record<TipoMidia, string> = {
   FOTO_EVOLUCAO: 'evolucao',
   AVATAR: 'avatares',
   MATERIAL: 'materiais',
+  LAUDO_EXAME: 'exames',
 };
 
 const EXTENSAO_POR_MIME: Record<string, string> = {

@@ -250,18 +250,47 @@ elas decidem quando um achado vira orientação para outro profissional, e o
 texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
 é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
 
-### 22. O exame ainda não aceita o arquivo do laudo
-**Assumida em:** leitor de exames (2026-08-02)
-**Estado:** o modelo `Exame` tem `chaveArquivo` e `mimeType`, e
-`podeVerArquivo()` já decide quem recebe link assinado (só médico e aluno).
-Falta a ponta do upload, que depende de storage que sobreviva a deploy.
-**Por que ficou para depois:** subir o PDF para o disco do contêiner seria
-gravar um arquivo que o próximo deploy apaga — e é justamente o problema da
-pendência 19. As duas se pagam juntas.
-**Enquanto isso:** a tela de resultado avisa quando existe arquivo e diz que
-ele é acessível só ao médico e ao aluno.
+### 23. Não há faxina de mídia órfã
+**Assumida em:** upload do laudo (2026-08-04)
+**Estado:** trocar o laudo de um exame apaga o arquivo anterior — isso está
+coberto. O que não existe é varredura para arquivo que ficou sem dono por
+outro caminho: registro apagado direto no banco, upload autorizado que o
+cliente nunca concluiu, exame removido no futuro por uma rota de exclusão que
+ainda não existe.
+**Tamanho do problema hoje:** pequeno. Nenhuma rota do app apaga exame, e o
+volume tem 5 GB. Mas cresce sozinho e em silêncio.
+**Pagar em:** quando houver rota de exclusão de exame ou de foto, que é
+quando o órfão passa a ser produzido de verdade. Uma tarefa periódica
+comparando as chaves do storage com as do banco resolve.
 
 ## Resolvidas
+
+### O laudo do exame passou a ter arquivo — resolvida em 2026-08-04
+**Era:** pendência 22. O modelo já tinha `chaveArquivo` e `podeVerArquivo()` já
+decidia quem recebe link, mas faltava a ponta do upload — que dependia de
+storage sobrevivendo ao deploy, ou seja, da pendência 19. As duas se pagaram
+juntas, na ordem certa.
+**Correção:** `LAUDO_EXAME` como tipo de mídia próprio, com teto de 25 MB e
+lista fechada de formatos (PDF ou foto). O arquivo sobe **direto para o
+armazenamento** pelo fluxo que já existia — autorizar, enviar, vincular a
+chave — e nunca passa pela API.
+**A permissão mais estreita do app, e é de propósito:** anexar e ler são a
+mesma permissão — médico e o próprio aluno. Deixar o nutricionista anexar seria
+pedir que ele suba um arquivo que não consegue reabrir. Ele continua lendo os
+marcadores e vendo que **existe** laudo, o que é honesto: dá para pedir a
+leitura ao médico.
+**Uma decisão de custo:** o link assinado só é emitido no exame individual,
+nunca na listagem. Cada link custa uma assinatura e vale poucos minutos; gerar
+sessenta de uma vez para uma lista que ninguém vai abrir é desperdício, e um
+link de vida curta numa lista provavelmente expiraria antes do clique.
+**Trocar o laudo apaga o anterior**, e a remoção vem depois do update: se ela
+falhar, o exame já aponta para o arquivo novo.
+**Verificado:** 7 testes e2e novos (21 no arquivo de exames) — incluindo que
+nutricionista e personal levam 403 ao anexar, que o aluno recebe o link do
+próprio laudo e que a listagem não emite link. E no navegador: o médico anexou
+um PDF, o link assinado devolveu **200 com o arquivo íntegro**, e o mesmo exame
+aberto pelo nutricionista mostrou o aviso sem link e sem botão.
+**Abriu a pendência 23:** não há faxina de mídia órfã.
 
 ### A bioimpedância parou de contrariar a própria legenda — resolvida em 2026-08-01
 **Era:** a terceira e última tela da leva da pendência 14b, e a mais fácil de
