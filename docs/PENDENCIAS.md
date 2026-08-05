@@ -110,11 +110,27 @@ seis que transformam entrada antes de enviar — plano alimentar, adipometria,
 bioimpedância, receitas, refeições e montagem de treino — passaram todas para o
 formato `lib/<tela>.ts`, com o estado guardando **texto**.
 
-**O que sobra desta pendência é cobertura, não defeito.** Três telas têm só
-teste de unidade da regra, sem teste de render da fiação:
-`plano-alimentar/receitas`, `plano-alimentar/refeicoes` e `treino/novo`. Foram
-operadas no navegador, mas nada impede alguém de desligar a fiação sem quebrar
-teste. As outras três têm os dois.
+**A cobertura fechou em 2026-08-05.** As três telas que tinham só teste de
+unidade da regra ganharam teste de render da fiação: `teste/montar-treino.test.tsx`
+(11), `teste/refeicoes-salvas.test.tsx` (10) e `teste/receitas.test.tsx` (9). As
+seis telas que transformam entrada agora têm os dois lados.
+
+O critério de escolha do que testar foi **o que a regra não consegue ver**, e não
+repetir a regra pela porta da frente:
+- **Treino:** três sessões dividindo os mesmos manipuladores. `adicionarExercicio`
+  e `alterarItem` fecham sobre `sessaoAtiva`; errar o índice ali escreve na sessão
+  errada sem quebrar nenhum teste de unidade, porque a regra recebe a sessão já
+  escolhida.
+- **Refeições:** o mesmo formulário serve a criar e a editar, distinguidos por
+  `editando` valer `''` na criação e o id na edição — e o `if (editando)` conta com
+  `''` ser falso. E a volta do servidor lê `porcoes` ou `quantidadeG` conforme o
+  tipo do item; ler o campo errado põe um número plausível no lugar certo.
+- **Receitas:** o `jaEscolhidos` passado à `BuscaDeAlimento`. A lista usa
+  `key={i.alimentoId}`, então o mesmo alimento duas vezes daria chave repetida no
+  React e as gramas passariam a ser escritas na linha errada.
+
+Os três casos acima foram verificados quebrando a fiação de propósito e conferindo
+que o teste acusa — teste que passa de qualquer jeito não é cobertura, é enfeite.
 
 **Uma instância remanescente, benigna:** `financeiro/page.tsx:226` faz
 `setRepetir(Math.max(1, Number(e.target.value)))`. O `Math.max` impede zero e
