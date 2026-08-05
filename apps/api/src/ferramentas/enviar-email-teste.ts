@@ -48,8 +48,9 @@ async function main(): Promise<void> {
 
   if (!url) {
     console.error('SMTP_URL não está definida — não há para onde enviar.');
-    console.error('No Railway ela só existe dentro do contêiner: defina EMAIL_TESTE_PARA nas');
-    console.error('variáveis do serviço e faça deploy — o entrada.sh chama este script.');
+    console.error('É a última peça que falta: contrate o provedor, verifique o domínio e');
+    console.error('defina SMTP_URL e EMAIL_REMETENTE. Ver docs/PASSO-A-PASSO-EMAIL.md.');
+    console.error('Depois apague EMAIL_SEM_ENTREGA, que é o que segura a API de pé sem e-mail.');
     process.exit(1);
   }
 
