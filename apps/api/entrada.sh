@@ -79,6 +79,20 @@ if [ "$SEMEAR_CATALOGO" = "true" ]; then
   echo "→ pronto. Pode remover SEMEAR_CATALOGO."
 fi
 
+# Confere a entrega de e-mail com a SMTP_URL real, de dentro do contêiner —
+# que é o único lugar onde ela existe. Sem isto, testar a configuração exigiria
+# cadastrar uma conta em produção e torcer, e a falha viria muda: o CorreioSmtp
+# engole o erro de propósito (pendência 16), para o provedor fora do ar não
+# derrubar um cadastro já gravado.
+if [ -n "$EMAIL_TESTE_PARA" ]; then
+  echo "→ EMAIL_TESTE_PARA presente: enviando mensagem de teste"
+  # Chamado pelo `dist`, e não por `npm run`: a imagem de produção não carrega
+  # o código-fonte, só o compilado. O script de package.json usa `tsx src/...`
+  # e serve para desenvolvimento.
+  como_node node dist/ferramentas/enviar-email-teste.js
+  echo "→ pronto. Apague EMAIL_TESTE_PARA."
+fi
+
 # --- aplicação ---------------------------------------------------------------
 
 set -e

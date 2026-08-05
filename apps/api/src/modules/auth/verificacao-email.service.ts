@@ -5,9 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { CORREIO, type Correio } from './correio';
-
-/** 24h: tempo de sobra para quem confirma no dia seguinte, curto para quem roubou o link. */
-const VALIDADE_HORAS = 24;
+import { VALIDADE_HORAS, montarEmailDeVerificacao } from './mensagem-verificacao';
 
 /**
  * Intervalo mínimo entre reenvios. Sem Redis não dá para ter rate limit de
@@ -122,29 +120,14 @@ export class VerificacaoEmailService {
   }
 
   private montarEmail(nome: string, para: string, token: string) {
-    const base = this.config.get<string>('WEB_PUBLIC_URL') ?? 'http://localhost:3000';
+    // A barra final de WEB_PUBLIC_URL é fácil de sobrar na variável do Railway,
+    // e `https://app.viviofit.com.br//verificar-email` não é a mesma rota.
+    const base = (this.config.get<string>('WEB_PUBLIC_URL') ?? 'http://localhost:3000').replace(
+      /\/+$/,
+      '',
+    );
     const link = `${base}/verificar-email?token=${encodeURIComponent(token)}`;
-    const primeiroNome = nome.split(' ')[0];
 
-    return {
-      para,
-      assunto: 'Confirme seu e-mail — Vívio Fit',
-      texto: [
-        `Olá, ${primeiroNome}.`,
-        '',
-        'Confirme seu e-mail para ativar sua conta no Vívio Fit:',
-        link,
-        '',
-        `O link vale por ${VALIDADE_HORAS} horas.`,
-        'Se não foi você quem se cadastrou, ignore esta mensagem — sem a confirmação a conta não é ativada.',
-      ].join('\n'),
-      html: [
-        `<p>Olá, ${primeiroNome}.</p>`,
-        '<p>Confirme seu e-mail para ativar sua conta no Vívio Fit:</p>',
-        `<p><a href="${link}">Confirmar meu e-mail</a></p>`,
-        `<p>O link vale por ${VALIDADE_HORAS} horas.</p>`,
-        '<p>Se não foi você quem se cadastrou, ignore esta mensagem — sem a confirmação a conta não é ativada.</p>',
-      ].join(''),
-    };
+    return montarEmailDeVerificacao(nome, para, link);
   }
 }

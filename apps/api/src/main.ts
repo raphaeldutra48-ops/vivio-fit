@@ -4,9 +4,29 @@ import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { problemasDeEntregaDeEmail } from './entrega-de-email';
 import { origensPermitidas } from './origens';
 
 async function bootstrap(): Promise<void> {
+  /*
+    Antes de construir o Nest: esta conferência só lê variáveis de ambiente, e
+    falhar aqui evita abrir conexão de banco para morrer logo depois.
+
+    Mesma régua da origem permitida — uma API de produção em que ninguém
+    consegue confirmar o cadastro está quebrada, e quebrada em silêncio. Ver
+    `entrega-de-email.ts` para por que isto derruba o arranque em vez de apenas
+    avisar, e como se assume a escolha de subir sem entrega.
+  */
+  const problemasDeEmail = problemasDeEntregaDeEmail();
+  if (problemasDeEmail.length > 0) {
+    for (const problema of problemasDeEmail) Logger.error(problema, 'Bootstrap');
+    Logger.error(
+      'Para subir assim mesmo, sabendo que ninguém vai conseguir se cadastrar, defina EMAIL_SEM_ENTREGA=true.',
+      'Bootstrap',
+    );
+    process.exit(1);
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const origens = origensPermitidas();
 

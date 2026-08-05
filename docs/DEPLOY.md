@@ -44,7 +44,12 @@ contestado depois, e aí tudo abaixo teria de ser refeito.
 
 **Sobre o e-mail:** sem isso ninguém confirma cadastro e ninguém entra
 (pendência 15). O Resend exige verificar o domínio por DNS — os registros saem
-no painel dele e entram no mesmo lugar do passo 5.
+no painel dele e entram no mesmo lugar do passo 5. O caminho inteiro, com o que
+digitar em cada campo, está em **[PASSO-A-PASSO-EMAIL.md](PASSO-A-PASSO-EMAIL.md)**.
+
+Em produção a API **se recusa a subir** sem `SMTP_URL` — subir e falhar calada é
+pior, porque o sintoma vira "o site não funciona", dias depois. Para subir antes
+de o provedor existir, `EMAIL_SEM_ENTREGA=true` assume a escolha explicitamente.
 
 ---
 
@@ -160,6 +165,7 @@ e executadas pelo `entrada.sh` no start do contêiner:
 |---|---|
 | `ADMIN_EMAIL` + `ADMIN_SENHA` (+ `ADMIN_NOME`) | cria a primeira conta ADMIN. Sem ela ninguém aprova profissional e o app sobe travado |
 | `SEMEAR_CATALOGO=true` | popula 23 exercícios globais e 45 alimentos. Sem isso não há o que usar para montar treino nem dieta |
+| `EMAIL_TESTE_PARA=voce@exemplo.com` | manda uma mensagem de teste pela `SMTP_URL` real e escreve o diagnóstico no log do deploy. Confere a configuração de e-mail sem sujar a base com cadastro de teste |
 
 Existem por variável, e não por comando, porque o Railway não dá terminal: o que
 se controla ali é variável e deploy.

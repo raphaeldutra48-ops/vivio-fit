@@ -126,14 +126,35 @@ O padrão inteiro está em [ADAPTACOES.md](ADAPTACOES.md).
 
 ### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
 **Assumida em:** verificação de e-mail
-**Estado:** o driver SMTP está escrito e é escolhido sozinho quando `SMTP_URL`
-está definida. Sem ela, o `CorreioDeLog` imprime a mensagem no log — que é o
-comportamento certo em dev e **inaceitável em produção**: ninguém receberia o
-link e ninguém conseguiria entrar.
-**Pagar em:** no deploy. Contratar o provedor (Resend, SES, Postmark…), colar a
-URL em `SMTP_URL` e `EMAIL_REMETENTE` nas variáveis do Railway, e conferir que
-`WEB_PUBLIC_URL` aponta para o domínio real — é ela que monta o link.
-**Como verificar:** cadastrar uma conta e receber o e-mail de fato.
+**Estado:** o código está pronto e a falha deixou de ser silenciosa. Falta um
+passo que não é de código: **contratar o provedor**. Hoje a produção roda com
+`EMAIL_SEM_ENTREGA=true`, o que significa que **ninguém consegue se cadastrar**
+— quem tenta recebe 201 e espera um e-mail que só existe no log.
+
+**O que foi feito de código enquanto a conta não existe:**
+- A API **recusa subir** em produção sem `SMTP_URL` ou sem `WEB_PUBLIC_URL`
+  válida (`src/entrega-de-email.ts`), porque o sintoma dessa configuração
+  faltando é "o site não funciona", relatado dias depois por quem não
+  conseguiu entrar. A escapatória `EMAIL_SEM_ENTREGA=true` existe para o
+  intervalo até o provedor existir, e é explícita para aparecer na lista de
+  variáveis de quem for olhar.
+- O nome do cadastro deixou de entrar cru na mensagem
+  (`src/modules/auth/mensagem-verificacao.ts`). Quem se cadastra **ainda não
+  provou ser dono do endereço** — é o que este e-mail vai verificar. Dava para
+  cadastrar o e-mail de outra pessoa, escolher o `nome`, e a vítima receberia,
+  assinado pelo nosso domínio, um parágrafo ou um link escrito pelo atacante.
+  Isso só passaria a valer no dia em que o e-mail saísse de verdade.
+- `src/ferramentas/enviar-email-teste.ts` confere a configuração sem sujar a
+  base com cadastro de teste, e separa "não conecta" de "conecta e recusa a
+  mensagem". Fica em `src/` porque a imagem de produção só carrega o
+  compilado — e o contêiner é o único lugar onde a `SMTP_URL` existe.
+
+**Falta (mãos do dono, não do código):** criar a conta no Resend, verificar o
+domínio `viviofit.com.br` com os registros de DNS no registro.br, e definir
+`SMTP_URL` e `EMAIL_REMETENTE` no Railway. Depois **apagar
+`EMAIL_SEM_ENTREGA`** — é ela que mantém a falha visível.
+**Como verificar:** `pnpm --filter @vivio/api email-teste` e receber a
+mensagem; depois um cadastro real de ponta a ponta.
 
 ### 16. Falha de SMTP é engolida
 **Assumida em:** verificação de e-mail
