@@ -4,8 +4,8 @@ Hoje o Vívio Fit **não envia e-mail nenhum**. Quem tenta se cadastrar vê "con
 sua caixa de entrada", mas a mensagem só existe no log do contêiner. Na prática:
 ninguém novo entra no app.
 
-Isso não é um bug de código — é uma conta que ainda não foi criada. São 4 passos,
-e só o último é meu.
+Isso não é um bug de código — é uma conta que ainda não foi criada. São 5 passos,
+uns 20 minutos, e o único que pode demorar é a propagação de DNS no passo 2.
 
 ---
 
@@ -60,19 +60,23 @@ já vale como vazada e tem que ser trocada. Guarde direto no Railway, no passo 4
 
 ## Passo 4 — As variáveis no Railway
 
-No serviço **@vivio/api** → aba **Variables**:
+No serviço **@vivio/api** → aba **Variables**, uma variável só:
 
 | Variável | Valor |
 |---|---|
-| `SMTP_URL` | `smtp://resend:SUA_CHAVE_AQUI@smtp.resend.com:587` |
-| `EMAIL_REMETENTE` | `Vívio Fit <nao-responda@viviofit.com.br>` |
+| `RESEND_API_KEY` | a chave `re_...`, colada inteira e sozinha |
 
-Detalhes que costumam derrubar:
+Nada de montar URL na mão. O código monta
+`smtp://resend:CHAVE@smtp.resend.com:587` sozinho — ver `urlDoSmtp` em
+`src/entrega-de-email.ts`. Exigir que alguém escreva isso dentro de um campo de
+painel é pedir para errar, e o erro sai como "não conecta", que é
+indistinguível de chave errada.
 
-- O usuário é a palavra **`resend`**, literal — não é o seu e-mail. A senha é a
-  chave `re_...`.
-- `EMAIL_REMETENTE` precisa usar o domínio **verificado no passo 2**. Um
-  `@gmail.com` aqui faz o Resend recusar o envio.
+`EMAIL_REMETENTE` já está configurada. Se um dia precisar mudar, ela tem de usar
+o domínio **verificado no passo 2** — um `@gmail.com` ali faz o Resend recusar.
+
+> `SMTP_URL` continua funcionando e ganha da chave quando as duas existem. É a
+> saída para trocar de provedor sem tocar em código.
 
 Depois **apague a variável `EMAIL_SEM_ENTREGA`**. Ela é a declaração de "eu sei
 que ninguém consegue se cadastrar"; com o SMTP no lugar, ela só serviria para

@@ -1,4 +1,5 @@
 import { createTransport } from 'nodemailer';
+import { urlDoSmtp } from '../entrega-de-email';
 import { montarEmailDeVerificacao } from '../modules/auth/mensagem-verificacao';
 
 /**
@@ -38,7 +39,7 @@ function descreverSemVazar(url: string): string {
 
 async function main(): Promise<void> {
   const para = process.env.EMAIL_TESTE_PARA?.trim();
-  const url = process.env.SMTP_URL?.trim();
+  const url = urlDoSmtp();
   const remetente = process.env.EMAIL_REMETENTE?.trim();
 
   if (!para) {
@@ -47,9 +48,9 @@ async function main(): Promise<void> {
   }
 
   if (!url) {
-    console.error('SMTP_URL não está definida — não há para onde enviar.');
-    console.error('É a última peça que falta: contrate o provedor, verifique o domínio e');
-    console.error('defina SMTP_URL e EMAIL_REMETENTE. Ver docs/PASSO-A-PASSO-EMAIL.md.');
+    console.error('Sem RESEND_API_KEY nem SMTP_URL — não há para onde enviar.');
+    console.error('Defina RESEND_API_KEY com a chave re_... que o Resend deu (só a chave,');
+    console.error('nada mais). Ver docs/PASSO-A-PASSO-EMAIL.md.');
     console.error('Depois apague EMAIL_SEM_ENTREGA, que é o que segura a API de pé sem e-mail.');
     process.exit(1);
   }

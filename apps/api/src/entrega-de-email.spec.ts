@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { problemasDeEntregaDeEmail } from './entrega-de-email';
+import { problemasDeEntregaDeEmail, urlDoSmtp } from './entrega-de-email';
+
+describe('urlDoSmtp', () => {
+  it('monta a URL a partir da chave do Resend', () => {
+    expect(urlDoSmtp({ RESEND_API_KEY: 're_abc123' })).toBe(
+      'smtp://resend:re_abc123@smtp.resend.com:587',
+    );
+  });
+
+  /*
+    A chave entra na parte de senha de uma URL. Um `@` ou `/` no meio dela
+    quebraria a análise, e o erro sairia como host inválido — que não parece
+    nada com "a chave tem um caractere especial".
+  */
+  it('escapa caractere especial na chave', () => {
+    const url = urlDoSmtp({ RESEND_API_KEY: 're_a@b/c' })!;
+    expect(url).toBe('smtp://resend:re_a%40b%2Fc@smtp.resend.com:587');
+    // E o resultado continua sendo uma URL que dá para analisar.
+    expect(new URL(url).hostname).toBe('smtp.resend.com');
+  });
+
+  it('SMTP_URL explícita ganha da chave — é a saída para trocar de provedor', () => {
+    expect(urlDoSmtp({ SMTP_URL: 'smtp://u:p@outro.com:25', RESEND_API_KEY: 're_abc' })).toBe(
+      'smtp://u:p@outro.com:25',
+    );
+  });
+
+  it('sem nenhuma das duas, não há para onde enviar', () => {
+    expect(urlDoSmtp({})).toBeNull();
+    expect(urlDoSmtp({ RESEND_API_KEY: '   ', SMTP_URL: '  ' })).toBeNull();
+  });
+});
 
 const producao = {
   NODE_ENV: 'production',
@@ -17,14 +48,20 @@ describe('conferência de entrega de e-mail no arranque', () => {
     expect(problemasDeEntregaDeEmail({})).toEqual([]);
   });
 
-  it('produção sem SMTP_URL é erro', () => {
+  it('produção sem nenhuma forma de enviar é erro', () => {
     const problemas = problemasDeEntregaDeEmail({ ...producao, SMTP_URL: undefined });
     expect(problemas).toHaveLength(1);
-    expect(problemas[0]).toContain('SMTP_URL');
+    expect(problemas[0]).toContain('RESEND_API_KEY');
   });
 
-  it('SMTP_URL só com espaço conta como ausente', () => {
+  it('só com espaço conta como ausente', () => {
     expect(problemasDeEntregaDeEmail({ ...producao, SMTP_URL: '   ' })).toHaveLength(1);
+  });
+
+  it('a chave do Resend sozinha já satisfaz o arranque', () => {
+    expect(
+      problemasDeEntregaDeEmail({ ...producao, SMTP_URL: undefined, RESEND_API_KEY: 're_abc' }),
+    ).toEqual([]);
   });
 
   it('produção sem WEB_PUBLIC_URL é erro — o link sairia para localhost', () => {

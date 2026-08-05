@@ -3,14 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { urlDoSmtp } from '../../entrega-de-email';
 import { CORREIO, CorreioDeLog, CorreioSmtp } from './correio';
 import { TokenService } from './token.service';
 import { VerificacaoEmailService } from './verificacao-email.service';
 
 /**
- * O driver de e-mail é escolhido por configuração: com `SMTP_URL` definida,
- * entrega de verdade; sem ela, imprime no log. Assim produção só precisa da
+ * O driver de e-mail é escolhido por configuração: havendo para onde enviar,
+ * entrega de verdade; sem isso, imprime no log. Assim produção só precisa da
  * variável — nenhum código muda.
+ *
+ * O "para onde enviar" sai de `RESEND_API_KEY` ou de `SMTP_URL` — ver
+ * `urlDoSmtp`, que é a mesma função que o arranque usa para decidir se a API
+ * pode subir. Duas leituras diferentes dessa configuração dariam uma API que
+ * sobe dizendo que está tudo bem e um correio que imprime no log.
  */
 @Module({
   imports: [JwtModule.register({})],
@@ -24,7 +30,7 @@ import { VerificacaoEmailService } from './verificacao-email.service';
       provide: CORREIO,
       inject: [ConfigService, CorreioDeLog],
       useFactory: (config: ConfigService, log: CorreioDeLog) => {
-        const url = config.get<string>('SMTP_URL');
+        const url = urlDoSmtp();
         if (!url) return log;
         return new CorreioSmtp(
           url,
