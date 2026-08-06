@@ -7,7 +7,9 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
+    // `prisma/` entra porque o catálogo de exercícios e alimentos mora lá: é
+    // conteúdo do produto, não script de apoio, e erra igual a código.
+    include: ['test/**/*.spec.ts', 'src/**/*.spec.ts', 'prisma/**/*.spec.ts'],
     environment: 'node',
     // Decide o banco antes de qualquer import — o PrismaClient lê DATABASE_URL
     // ao ser construído, então depois já é tarde.
