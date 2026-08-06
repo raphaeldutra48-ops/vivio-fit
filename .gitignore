@@ -39,3 +39,6 @@ media/
 # Dossie de revisao clinica: gerado sob demanda a partir das tabelas do codigo.
 # Versionar o HTML abriria espaco para ele divergir do que o app executa.
 revisao-clinica.html
+
+# Relatorio gerado por prisma/mapear-wger.ts — conferencia, nao fonte.
+apps/api/candidatos-wger.txt

@@ -286,6 +286,25 @@ model Exercicio {
   /// Chave no storage — a URL entregue ao cliente é sempre pré-assinada (C7).
   videoChave    String?
   thumbChave    String?
+  /// Imagem demonstrativa. Mesma regra do vídeo: só a chave, URL assinada.
+  imagemChave   String?
+  /*
+    Procedência da mídia. Existe porque acervo aberto (wger, Everkinetic) é
+    CC-BY ou CC-BY-SA: usar **obriga** creditar o autor de forma visível. Sem
+    guardar isso junto do arquivo, a atribuição vira promessa que o app não
+    consegue cumprir — e aí a licença deixa de valer para nós.
+
+    `null` significa mídia própria: gravada pelo profissional ou pela casa, sem
+    crédito a terceiro. É o caso mais comum e por isso é o padrão.
+
+    Texto já pronto para exibir ("Everkinetic — CC-BY-SA 3.0") em vez de autor
+    e licença em campos separados: é assim que a tela usa, e não há caso hoje
+    que precise filtrar por licença.
+  */
+  imagemCredito    String?
+  imagemOrigemUrl  String?
+  videoCredito     String?
+  videoOrigemUrl   String?
   instrucoes    String?
   escopo        EscopoExercicio @default(PRIVADO)
   criadoPorId   String?
