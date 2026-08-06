@@ -65,7 +65,10 @@ import type {
   RegistrarDispositivoInput,
   EscopoDado,
   LoginInput,
+  CheckinResumo,
   MedidaResumo,
+  RegistrarCheckinInput,
+  ResumoDeCheckins,
   ListarProfissionaisQuery,
   ProfissionalParaVerificar,
   RecusarProfissionalInput,
@@ -810,6 +813,25 @@ export class VivioClient {
   };
 
   // --- medidas ------------------------------------------------------------
+
+  readonly checkins = {
+    /** Mais recente primeiro — é a ordem que as telas usam. */
+    listar: (alunoId: string, dias = 30): Promise<CheckinResumo[]> =>
+      this.requisicao<CheckinResumo[]>(`/alunos/${alunoId}/checkins`, { query: { dias } }),
+
+    /** Adesão, energia média e dias sem registro — alimenta o painel do profissional. */
+    resumo: (alunoId: string, dias = 30): Promise<ResumoDeCheckins> =>
+      this.requisicao<ResumoDeCheckins>(`/alunos/${alunoId}/checkins/resumo`, {
+        query: { dias },
+      }),
+
+    /** Só o próprio aluno registra. Repetir no mesmo dia corrige o anterior. */
+    registrar: (alunoId: string, dados: RegistrarCheckinInput): Promise<CheckinResumo> =>
+      this.requisicao<CheckinResumo>(`/alunos/${alunoId}/checkins`, {
+        metodo: 'POST',
+        corpo: dados,
+      }),
+  };
 
   readonly medidas = {
     listar: (alunoId: string): Promise<MedidaResumo[]> =>

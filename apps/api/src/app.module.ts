@@ -19,6 +19,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { ConsentimentosModule } from './modules/consentimentos/consentimentos.module';
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
 import { FotosModule } from './modules/fotos/fotos.module';
+import { CheckinModule } from './modules/checkin/checkin.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
 import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
@@ -46,6 +47,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     VinculosModule,
     ConsentimentosModule,
     MedidasModule,
+    CheckinModule,
     ExerciciosModule,
     TreinosModule,
     FotosModule,

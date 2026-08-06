@@ -58,6 +58,7 @@ model User {
   sessoes            SessaoRefresh[]
   tokensDeVerificacao TokenVerificacaoEmail[]
   tokensDeRedefinicao TokenRedefinicaoSenha[]
+  checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
   perfilPublico      PerfilPublico?          @relation("PerfilPublicoDoProfissional")
@@ -446,6 +447,33 @@ model SerieExecutada {
   @@unique([execucaoId, itemTreinoId, serieNum])
   @@index([itemTreinoId])
   @@index([exercicioId])
+}
+
+/// Check-in diário do aluno — existe **com ou sem treino**.
+///
+/// Não confundir com `FeedbackTreino`: aquele só nasce quando há execução, e
+/// por isso é cego justamente para o dado que interessa ao acompanhamento —
+/// os dias em que a pessoa não treinou. É a ausência que antecede a
+/// desistência, e é ela que alimenta o alerta de baixa adesão.
+model CheckinDiario {
+  id         String   @id @default(cuid())
+  alunoId    String
+  aluno      User     @relation("CheckinsDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  /// Só a data, sem hora: o check-in é do DIA, e o fuso de quem registra não
+  /// pode fazer o mesmo dia virar dois registros.
+  data       DateTime @db.Date
+  treinou    Boolean
+  /// 1 = exausto, 5 = ótimo.
+  energia    Int
+  teveDor    Boolean  @default(false)
+  localDor   String?
+  observacao String?
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  /// Um por dia. Registrar de novo no mesmo dia corrige o anterior.
+  @@unique([alunoId, data])
+  @@index([alunoId, data])
 }
 
 /// Feedback pós-treino. Retroalimenta o personal e pode gerar alerta clínico
