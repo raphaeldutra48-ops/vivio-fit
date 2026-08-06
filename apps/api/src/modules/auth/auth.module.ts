@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { formaDeEnvio } from '../../entrega-de-email';
 import { CORREIO, CorreioDeLog, CorreioResend, CorreioSmtp } from './correio';
+import { RedefinicaoSenhaService } from './redefinicao-senha.service';
 import { TokenService } from './token.service';
 import { VerificacaoEmailService } from './verificacao-email.service';
 
@@ -25,6 +26,7 @@ import { VerificacaoEmailService } from './verificacao-email.service';
     AuthService,
     TokenService,
     VerificacaoEmailService,
+    RedefinicaoSenhaService,
     CorreioDeLog,
     {
       provide: CORREIO,

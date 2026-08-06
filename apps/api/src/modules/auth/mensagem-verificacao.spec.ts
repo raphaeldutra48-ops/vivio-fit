@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { montarEmailDeVerificacao, primeiroNomeSeguro } from './mensagem-verificacao';
+import {
+  montarEmailDeRedefinicao,
+  montarEmailDeVerificacao,
+  primeiroNomeSeguro,
+} from './mensagem-verificacao';
 
 const LINK = 'https://app.viviofit.com.br/verificar-email?token=abc123';
 
@@ -54,6 +58,53 @@ describe('mensagem de verificação de e-mail', () => {
       const email = montarEmailDeVerificacao('Sant"o&s', 'a@b.com', LINK);
       expect(email.html).toContain('&quot;');
       expect(email.html).toContain('&amp;');
+    });
+  });
+
+  /*
+    A mensagem de redefinição tem um destinatário que a de confirmação não tem:
+    quem NÃO pediu. Essa pessoa precisa saber, lendo, que nada aconteceu ainda —
+    senão a reação natural é achar que a conta foi invadida e correr para clicar
+    no link, que é exatamente o que um atacante quer.
+  */
+  describe('redefinição de senha', () => {
+    const LINK_R = 'https://app.viviofit.com.br/redefinir-senha?token=xyz789';
+
+    it('diz que a senha atual continua valendo', () => {
+      const email = montarEmailDeRedefinicao('Raphael', 'r@exemplo.com', LINK_R);
+      expect(email.texto).toContain('sua senha continua a mesma');
+      expect(email.html).toContain('sua senha continua a mesma');
+    });
+
+    it('avisa que o link é de uso único e tem hora para acabar', () => {
+      const email = montarEmailDeRedefinicao('Raphael', 'r@exemplo.com', LINK_R);
+      expect(email.texto).toContain('1 hora');
+      expect(email.texto).toContain('uma vez');
+    });
+
+    it('o assunto distingue da confirmação de cadastro', () => {
+      const redef = montarEmailDeRedefinicao('Raphael', 'r@exemplo.com', LINK_R);
+      const conf = montarEmailDeVerificacao('Raphael', 'r@exemplo.com', LINK);
+      expect(redef.assunto).toContain('Redefinir sua senha');
+      expect(redef.assunto).not.toBe(conf.assunto);
+    });
+
+    /** O nome vem do cadastro e recebe o mesmo tratamento da outra mensagem. */
+    it('marcação no nome não vira link clicável', () => {
+      const email = montarEmailDeRedefinicao(
+        '<a href="http://golpe.example">Clique</a>',
+        'vitima@exemplo.com',
+        LINK_R,
+      );
+      expect(email.html.match(/href=/g)).toHaveLength(1);
+      expect(email.html).toContain(`href="${LINK_R}"`);
+      expect(email.texto).not.toContain('golpe.example');
+    });
+
+    it('o link sai inteiro nas duas versões', () => {
+      const email = montarEmailDeRedefinicao('Raphael', 'r@exemplo.com', LINK_R);
+      expect(email.texto).toContain(LINK_R);
+      expect(email.html).toContain(LINK_R);
     });
   });
 

@@ -57,6 +57,7 @@ model User {
   perfilProfissional PerfilProfissional?
   sessoes            SessaoRefresh[]
   tokensDeVerificacao TokenVerificacaoEmail[]
+  tokensDeRedefinicao TokenRedefinicaoSenha[]
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
   perfilPublico      PerfilPublico?          @relation("PerfilPublicoDoProfissional")
@@ -1518,6 +1519,25 @@ model TokenVerificacaoEmail {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// O e-mail alvo fica registrado: se a pessoa trocar de e-mail antes de
   /// confirmar, o token antigo não vale para o endereço novo.
+  email     String
+  tokenHash String    @unique
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime  @default(now())
+
+  @@index([userId, usadoEm])
+}
+
+/// Token de redefinição de senha. Tabela separada da de verificação de e-mail
+/// de propósito: são poderes diferentes — um confirma posse do endereço, o
+/// outro troca a credencial. Misturar faria um token servir para o que não foi
+/// emitido.
+model TokenRedefinicaoSenha {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Mesmo motivo do token de verificação: trocar de e-mail invalida o link
+  /// que foi enviado para o endereço antigo.
   email     String
   tokenHash String    @unique
   expiraEm  DateTime

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ErroFilter } from '../src/common/filters/erro.filter';
 import { PrismaService } from '../src/infra/prisma.service';
+import { CORREIO, type Email } from '../src/modules/auth/correio';
 import { criarContaVerificada } from './apoio';
 
 describe('Auth (e2e)', () => {
@@ -17,8 +18,23 @@ describe('Auth (e2e)', () => {
   const senha = 'Senha@123';
   let tokenDeVerificacao: string;
 
+  /*
+    O correio vira espião: é assim que o teste alcança o link de redefinição,
+    que por desenho não volta em resposta nenhuma (a rota devolve 204 exista o
+    e-mail ou não). De quebra, prova que a mensagem sai de verdade e que o link
+    dentro dela está inteiro.
+  */
+  const enviados: Email[] = [];
+  const ultimoEmailPara = (para: string) =>
+    [...enviados].reverse().find((e) => e.para === para);
+  const tokenDoLink = (email: Email | undefined) =>
+    email?.texto.match(/token=([A-Za-z0-9_-]+)/)?.[1] ?? '';
+
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(CORREIO)
+      .useValue({ enviar: async (e: Email) => void enviados.push(e) })
+      .compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalFilters(new ErroFilter());
@@ -473,6 +489,157 @@ describe('Auth (e2e)', () => {
 
       // Se a contagem não tivesse zerado, o décimo erro já bloquearia.
       await errar(emailLimpo).expect(401);
+    });
+  });
+
+  describe('recuperação de senha', () => {
+    // `recupera.` já é usado pelo teste de limite de login, mais acima.
+    const alvo = `redefine.${sufixo}@exemplo.com`;
+    const senhaNova = 'NovaSenha@456';
+
+    const pedirLink = (para: string) =>
+      request(app.getHttpServer()).post(url('/auth/esqueci-senha')).send({ email: para });
+
+    const redefinir = (token: string, novaSenha: string) =>
+      request(app.getHttpServer()).post(url('/auth/redefinir-senha')).send({ token, senha: novaSenha });
+
+    /** Deixa o relógio do intervalo mínimo para trás, sem esperar de verdade. */
+    const envelhecerToken = (para: string) =>
+      prisma.tokenRedefinicaoSenha.updateMany({
+        where: { user: { email: para } },
+        data: { criadoEm: new Date(Date.now() - 5 * 60 * 1000) },
+      });
+
+    beforeAll(async () => {
+      await criarContaVerificada(app.getHttpServer(), '/auth/registrar/aluno', {
+        nome: 'Recupera Senha',
+        email: alvo,
+        senha,
+        dataNascimento: '1992-02-02',
+      });
+    });
+
+    /*
+      A defesa central desta rota: ela não pode virar um jeito de descobrir
+      quem tem conta. A lista de clientes aqui é uma lista de pessoas em
+      tratamento de saúde.
+    */
+    it('responde 204 para e-mail que não existe, e não manda nada', async () => {
+      const fantasma = `fantasma-senha.${sufixo}@exemplo.com`;
+      await pedirLink(fantasma).expect(204);
+      expect(ultimoEmailPara(fantasma)).toBeUndefined();
+    });
+
+    it('manda o link para quem tem conta', async () => {
+      await pedirLink(alvo).expect(204);
+
+      const email = ultimoEmailPara(alvo);
+      expect(email?.assunto).toContain('Redefinir sua senha');
+      // A frase que diz que nada aconteceu ainda: é o que segura quem recebeu
+      // sem ter pedido e acha que foi invadido.
+      expect(email?.texto).toContain('sua senha continua a mesma');
+      expect(tokenDoLink(email)).toHaveLength(43);
+    });
+
+    it('recusa token inventado', async () => {
+      const r = await redefinir('token-que-nunca-existiu-mas-tem-tamanho', senhaNova).expect(401);
+      expect(r.body.erro.codigo).toBe('TOKEN_INVALIDO');
+    });
+
+    it('recusa senha fraca — a mesma regra do cadastro', async () => {
+      const token = tokenDoLink(ultimoEmailPara(alvo));
+      const r = await redefinir(token, '123').expect(422);
+      expect(r.body.erro.codigo).toBe('DADOS_INVALIDOS');
+      expect(r.body.erro.detalhes.campos.senha).toBeTruthy();
+    });
+
+    it('pedir de novo invalida o link anterior', async () => {
+      const antigo = tokenDoLink(ultimoEmailPara(alvo));
+      await envelhecerToken(alvo);
+      await pedirLink(alvo).expect(204);
+
+      const novo = tokenDoLink(ultimoEmailPara(alvo));
+      expect(novo).not.toBe(antigo);
+      await redefinir(antigo, senhaNova).expect(401);
+    });
+
+    it('recusa link expirado', async () => {
+      await prisma.tokenRedefinicaoSenha.updateMany({
+        where: { user: { email: alvo } },
+        data: { expiraEm: new Date(Date.now() - 1000) },
+      });
+
+      await redefinir(tokenDoLink(ultimoEmailPara(alvo)), senhaNova).expect(401);
+    });
+
+    /*
+      O caso completo, e o que ele tem de provar além da troca: a sessão que
+      existia ANTES morre. Se a senha precisou ser redefinida, a hipótese é que
+      ela estava perdida — e o que está perdido pode estar com outra pessoa.
+    */
+    it('troca a senha, abre sessão e derruba as sessões antigas', async () => {
+      const antes = await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: alvo, senha })
+        .expect(200);
+      const refreshAntigo = antes.body.refreshToken as string;
+
+      await envelhecerToken(alvo);
+      await pedirLink(alvo).expect(204);
+
+      const r = await redefinir(tokenDoLink(ultimoEmailPara(alvo)), senhaNova).expect(200);
+      expect(r.body.accessToken).toBeTruthy();
+      expect(r.body.usuario.email).toBe(alvo);
+
+      await request(app.getHttpServer())
+        .post(url('/auth/refresh'))
+        .send({ refreshToken: refreshAntigo })
+        .expect(401);
+    });
+
+    it('a senha nova entra e a antiga não', async () => {
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: alvo, senha: senhaNova })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: alvo, senha })
+        .expect(401);
+    });
+
+    it('o mesmo link não vale duas vezes', async () => {
+      await redefinir(tokenDoLink(ultimoEmailPara(alvo)), 'OutraSenha@789').expect(401);
+    });
+
+    /*
+      O beco sem saída: quem se cadastrou, nunca confirmou e esqueceu a senha.
+      Sem isto, ele redefine com sucesso e continua sem conseguir entrar, porque
+      o login exige e-mail verificado — e não há nada na tela que explique.
+      Abrir este link prova posse da caixa de entrada, que é exatamente o que a
+      confirmação prova.
+    */
+    it('redefinir também confirma o e-mail de quem nunca confirmou', async () => {
+      const pendente = `pendente-senha.${sufixo}@exemplo.com`;
+      await request(app.getHttpServer())
+        .post(url('/auth/registrar/aluno'))
+        .send({ nome: 'Nunca Confirmou', email: pendente, senha, dataNascimento: '1991-01-01' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: pendente, senha })
+        .expect(403);
+
+      await pedirLink(pendente).expect(204);
+      const r = await redefinir(tokenDoLink(ultimoEmailPara(pendente)), senhaNova).expect(200);
+      expect(r.body.usuario.emailVerificado).toBe(true);
+
+      await request(app.getHttpServer())
+        .post(url('/auth/login'))
+        .send({ email: pendente, senha: senhaNova })
+        .expect(200);
     });
   });
 });

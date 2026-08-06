@@ -11,10 +11,9 @@ import type {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { ContextoRequisicao, TokenService } from './token.service';
+import { OPCOES_ARGON } from './argon';
+import { RedefinicaoSenhaService } from './redefinicao-senha.service';
 import { VerificacaoEmailService } from './verificacao-email.service';
-
-/** argon2id com parâmetros acima do mínimo — é senha de conta com dado de saúde. */
-const OPCOES_ARGON = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
 @Injectable()
 export class AuthService {
@@ -22,6 +21,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly verificacao: VerificacaoEmailService,
+    private readonly redefinicao: RedefinicaoSenhaService,
   ) {}
 
   /** Cadastro não abre sessão: dispara a confirmação e devolve só o essencial. */
@@ -139,6 +139,20 @@ export class AuthService {
   /** Confirmação bem-sucedida já abre a sessão: o link prova posse do e-mail. */
   async confirmarEmail(token: string, ctx: ContextoRequisicao): Promise<RespostaAutenticacao> {
     const usuario = await this.verificacao.verificar(token);
+    return this.montarResposta(usuario, ctx);
+  }
+
+  /**
+   * Redefinição concluída também abre a sessão, pelo mesmo motivo da
+   * confirmação — e a sessão nova é emitida **depois** de o serviço apagar as
+   * antigas, então a pessoa sai daqui com a única sessão viva da conta.
+   */
+  async concluirRedefinicao(
+    token: string,
+    senhaNova: string,
+    ctx: ContextoRequisicao,
+  ): Promise<RespostaAutenticacao> {
+    const usuario = await this.redefinicao.redefinir(token, senhaNova);
     return this.montarResposta(usuario, ctx);
   }
 

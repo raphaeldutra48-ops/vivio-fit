@@ -2,15 +2,19 @@ import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  esqueciSenhaSchema,
   loginSchema,
   refreshSchema,
   registrarAlunoSchema,
   registrarProfissionalSchema,
+  redefinirSenhaSchema,
   reenviarVerificacaoSchema,
   verificarEmailSchema,
+  type EsqueciSenhaInput,
   type LoginInput,
   type ParDeTokens,
   type RefreshInput,
+  type RedefinirSenhaInput,
   type ReenviarVerificacaoInput,
   type RegistrarAlunoInput,
   type RegistrarProfissionalInput,
@@ -31,6 +35,7 @@ import {
   refreshDoCookie,
 } from './cookie-refresh';
 import { ContextoRequisicao, TokenService } from './token.service';
+import { RedefinicaoSenhaService } from './redefinicao-senha.service';
 import { VerificacaoEmailService } from './verificacao-email.service';
 
 function contextoDe(req: Request): ContextoRequisicao {
@@ -44,6 +49,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly tokens: TokenService,
     private readonly verificacao: VerificacaoEmailService,
+    private readonly redefinicao: RedefinicaoSenhaService,
     private readonly config: ConfigService,
   ) {}
 
@@ -111,6 +117,52 @@ export class AuthController {
     @Body(new ZodValidationPipe(reenviarVerificacaoSchema)) dados: ReenviarVerificacaoInput,
   ): Promise<void> {
     await this.verificacao.reenviar(dados.email);
+  }
+
+  /**
+   * Pedido de redefinição de senha.
+   *
+   * Mesmo desenho do reenvio acima, e pelo mesmo motivo: responde **204
+   * sempre**, exista o e-mail ou não. Um endpoint que responde diferente para
+   * endereço cadastrado e não cadastrado é uma lista de clientes aberta ao
+   * público — e aqui a lista é de pessoas em tratamento de saúde.
+   *
+   * O limite é por requisição (`todas`), porque sem "falha" para contar ele
+   * viraria um jeito gratuito de encher a caixa de entrada de alguém.
+   */
+  @Publico()
+  @Post('esqueci-senha')
+  @HttpCode(204)
+  @Limite({ conta: 'todas', campo: 'email', porIdentificador: 5, porIp: 20, janelaSegundos: 900 })
+  @ApiOperation({ summary: 'Envia o link de redefinição. Responde 204 sempre' })
+  async esqueciSenha(
+    @Body(new ZodValidationPipe(esqueciSenhaSchema)) dados: EsqueciSenhaInput,
+  ): Promise<void> {
+    await this.redefinicao.solicitar(dados.email);
+  }
+
+  /**
+   * Troca a senha pelo token do link e já abre a sessão — quem abriu o link
+   * provou ter a caixa de entrada e acabou de escolher a senha.
+   *
+   * O limite existe porque o token tem entropia de sobra, mas adivinhação em
+   * massa não precisa ser de graça. Mesma régua da confirmação de e-mail.
+   */
+  @Publico()
+  @Post('redefinir-senha')
+  @HttpCode(200)
+  @Limite({ conta: 'falhas', porIp: 30, janelaSegundos: 900 })
+  @ApiOperation({ summary: 'Redefine a senha pelo token do link e devolve os tokens' })
+  async redefinirSenha(
+    @Body(new ZodValidationPipe(redefinirSenhaSchema)) dados: RedefinirSenhaInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<RespostaAutenticacao> {
+    return this.entregarSessao(
+      req,
+      res,
+      await this.auth.concluirRedefinicao(dados.token, dados.senha, contextoDe(req)),
+    );
   }
 
   /**

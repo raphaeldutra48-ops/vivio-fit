@@ -92,3 +92,16 @@ export const reenviarVerificacaoSchema = z.object({
   email: z.string().email().max(160),
 });
 export type ReenviarVerificacaoInput = z.infer<typeof reenviarVerificacaoSchema>;
+
+// --- recuperação de senha ----------------------------------------------------
+
+export const esqueciSenhaSchema = z.object({
+  email: z.string().email().max(160),
+});
+export type EsqueciSenhaInput = z.infer<typeof esqueciSenhaSchema>;
+
+export const redefinirSenhaSchema = z.object({
+  token: z.string().min(10).max(200),
+  senha: senhaSchema,
+});
+export type RedefinirSenhaInput = z.infer<typeof redefinirSenhaSchema>;

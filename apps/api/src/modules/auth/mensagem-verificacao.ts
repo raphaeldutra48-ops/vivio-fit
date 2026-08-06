@@ -28,7 +28,17 @@ export function primeiroNomeSeguro(nome: string): string {
   return semControles.split(/\s+/)[0].slice(0, LIMITE_NOME);
 }
 
-function escaparHtml(bruto: string): string {
+/**
+ * Uma hora, e não as 24 da confirmação.
+ *
+ * Este link **troca a senha** — é mais poder que confirmar um endereço, e o
+ * risco de ele ficar parado numa caixa de entrada é proporcional. Uma hora dá
+ * folga para quem pediu e não abriu na hora, e é curto para quem alcançou a
+ * caixa de outra pessoa.
+ */
+export const VALIDADE_REDEFINICAO_HORAS = 1;
+
+export function escaparHtml(bruto: string): string {
   return bruto
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -66,6 +76,44 @@ export function montarEmailDeVerificacao(nome: string, para: string, link: strin
       `<p><a href="${linkHtml}">Confirmar meu e-mail</a></p>`,
       `<p>O link vale por ${VALIDADE_HORAS} horas.</p>`,
       '<p>Se não foi você quem se cadastrou, ignore esta mensagem — sem a confirmação a conta não é ativada.</p>',
+    ].join(''),
+  };
+}
+
+/**
+ * Mensagem de redefinição de senha.
+ *
+ * A frase final não é gentileza: quem recebe isto sem ter pedido precisa saber
+ * que **nada aconteceu ainda** e que a senha atual continua valendo. Sem isso,
+ * a reação natural é achar que a conta foi invadida — e correr para clicar no
+ * link, que é exatamente o que um atacante quer.
+ */
+export function montarEmailDeRedefinicao(nome: string, para: string, link: string): Email {
+  const primeiro = primeiroNomeSeguro(nome);
+  const saudacao = primeiro ? `Olá, ${primeiro}.` : 'Olá.';
+  const linkHtml = escaparHtml(link);
+  const validade = `${VALIDADE_REDEFINICAO_HORAS} hora`;
+
+  return {
+    para,
+    assunto: 'Redefinir sua senha — Vívio Fit',
+    texto: [
+      saudacao,
+      '',
+      'Recebemos um pedido para redefinir a senha da sua conta no Vívio Fit.',
+      'Para escolher uma senha nova, abra este link:',
+      link,
+      '',
+      `O link vale por ${validade} e só pode ser usado uma vez.`,
+      'Se não foi você quem pediu, ignore esta mensagem: sua senha continua a mesma',
+      'e ninguém consegue trocá-la sem abrir o link acima.',
+    ].join('\n'),
+    html: [
+      `<p>${escaparHtml(saudacao)}</p>`,
+      '<p>Recebemos um pedido para redefinir a senha da sua conta no Vívio Fit.</p>',
+      `<p><a href="${linkHtml}">Escolher uma senha nova</a></p>`,
+      `<p>O link vale por ${validade} e só pode ser usado uma vez.</p>`,
+      '<p>Se não foi você quem pediu, ignore esta mensagem: sua senha continua a mesma e ninguém consegue trocá-la sem abrir o link acima.</p>',
     ].join(''),
   };
 }

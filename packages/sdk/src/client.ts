@@ -110,6 +110,8 @@ import type {
   RegistrarExecucaoInput,
   RegistrarMedidaInput,
   RegistrarProfissionalInput,
+  EsqueciSenhaInput,
+  RedefinirSenhaInput,
   ReenviarVerificacaoInput,
   RespostaAutenticacao,
   RespostaRegistro,
@@ -318,6 +320,25 @@ export class VivioClient {
         corpo: dados,
         autenticada: false,
       }),
+
+    /** Responde 204 exista o e-mail ou não — a tela não deve inventar diferença. */
+    esqueciSenha: (dados: EsqueciSenhaInput): Promise<void> =>
+      this.requisicao<void>('/auth/esqueci-senha', {
+        metodo: 'POST',
+        corpo: dados,
+        autenticada: false,
+      }),
+
+    /** Troca a senha pelo token do link e já abre a sessão. */
+    redefinirSenha: async (dados: RedefinirSenhaInput): Promise<RespostaAutenticacao> => {
+      const r = await this.requisicao<RespostaAutenticacao>('/auth/redefinir-senha', {
+        metodo: 'POST',
+        corpo: dados,
+        autenticada: false,
+      });
+      await this.guardar(r);
+      return r;
+    },
 
     login: async (dados: LoginInput): Promise<RespostaAutenticacao> => {
       const r = await this.requisicao<RespostaAutenticacao>('/auth/login', {

@@ -94,6 +94,12 @@ export default function Login() {
               {enviando ? 'Entrando…' : 'Entrar'}
             </Botao>
 
+            <p className="text-center text-sm">
+              <Link href="/esqueci-senha" className="underline">
+                Esqueci minha senha
+              </Link>
+            </p>
+
             <p className="text-center text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
               Ainda não tem conta?{' '}
               <Link href="/cadastrar" className="underline">
