@@ -140,20 +140,31 @@ mexida no financeiro, não isolado.
 
 O padrão inteiro está em [ADAPTACOES.md](ADAPTACOES.md).
 
-### 15. E-mail de produção depende de uma SMTP_URL que ainda não existe
+### 15. E-mail de produção — PAGA em 2026-08-06
 **Assumida em:** verificação de e-mail
-**Estado:** o código está pronto e a falha deixou de ser silenciosa. Falta um
-passo que não é de código: **contratar o provedor**. Hoje a produção roda com
-`EMAIL_SEM_ENTREGA=true`, o que significa que **ninguém consegue se cadastrar**
-— quem tenta recebe 201 e espera um e-mail que só existe no log.
+**Estado:** **resolvida.** Resend configurado, domínio `viviofit.com.br`
+verificado (DKIM + SPF + MX + DMARC no registro.br, conferidos por consulta a
+dois resolvedores públicos), e o primeiro envio real caiu na **caixa de
+entrada** — não no spam, o que para domínio novo é melhor que o esperado.
+`EMAIL_SEM_ENTREGA` foi apagada; a API agora recusa subir sem entrega de
+e-mail.
 
-**O que foi feito de código enquanto a conta não existe:**
-- A API **recusa subir** em produção sem `SMTP_URL` ou sem `WEB_PUBLIC_URL`
-  válida (`src/entrega-de-email.ts`), porque o sintoma dessa configuração
-  faltando é "o site não funciona", relatado dias depois por quem não
-  conseguiu entrar. A escapatória `EMAIL_SEM_ENTREGA=true` existe para o
-  intervalo até o provedor existir, e é explícita para aparecer na lista de
-  variáveis de quem for olhar.
+**A pedra do caminho, que vale lembrar:** o primeiro teste falhou com
+`Connection timeout` no SMTP. O **Railway bloqueia saída na porta 587**, como
+quase toda plataforma faz contra abuso de spam — nenhuma chave nem DNS
+resolveria. O envio passou para a **API HTTP do Resend**, na 443. Se algum dia
+outro serviço de e-mail entrar aqui, começar por HTTP e não por SMTP.
+
+**Configuração final:** só `RESEND_API_KEY` (a chave crua) e `EMAIL_REMETENTE`.
+`SMTP_URL` continua existindo para outro provedor e ganha da chave.
+
+**O que foi feito de código no caminho:**
+- A API **recusa subir** em produção sem forma de enviar ou sem
+  `WEB_PUBLIC_URL` válida (`src/entrega-de-email.ts`), porque o sintoma dessa
+  configuração faltando é "o site não funciona", relatado dias depois por quem
+  não conseguiu entrar. A escapatória `EMAIL_SEM_ENTREGA=true` continua no
+  código para um eventual intervalo sem provedor, e é explícita para aparecer
+  na lista de variáveis de quem for olhar.
 - O nome do cadastro deixou de entrar cru na mensagem
   (`src/modules/auth/mensagem-verificacao.ts`). Quem se cadastra **ainda não
   provou ser dono do endereço** — é o que este e-mail vai verificar. Dava para
@@ -161,19 +172,23 @@ passo que não é de código: **contratar o provedor**. Hoje a produção roda c
   assinado pelo nosso domínio, um parágrafo ou um link escrito pelo atacante.
   Isso só passaria a valer no dia em que o e-mail saísse de verdade.
 - `src/ferramentas/enviar-email-teste.ts` confere a configuração sem sujar a
-  base com cadastro de teste, e separa "não conecta" de "conecta e recusa a
-  mensagem". Fica em `src/` porque a imagem de produção só carrega o
-  compilado — e o contêiner é o único lugar onde a `SMTP_URL` existe.
+  base com cadastro de teste, e distingue "não conecta" de "o provedor recusou
+  a mensagem" — foi ela que identificou o bloqueio de porta em vez de nos
+  deixar trocando a chave à toa. Fica em `src/` porque a imagem de produção só
+  carrega o compilado, e o contêiner é o único lugar onde a chave existe.
+  Aciona-se por `EMAIL_TESTE_PARA` no Railway, como as outras tarefas.
+- A chave é **censurada em qualquer texto que vá para o log**, inclusive no
+  texto de exceção que vem de fora e que não dá para controlar.
 
-**Falta (mãos do dono, não do código):** criar a conta no Resend, verificar o
-domínio `viviofit.com.br` com os registros de DNS no registro.br, e definir
-`SMTP_URL` e `EMAIL_REMETENTE` no Railway. Depois **apagar
-`EMAIL_SEM_ENTREGA`** — é ela que mantém a falha visível.
-**Como verificar:** `pnpm --filter @vivio/api email-teste` e receber a
-mensagem; depois um cadastro real de ponta a ponta.
+**Como verificar de novo, se um dia desconfiar:** definir `EMAIL_TESTE_PARA` no
+Railway, fazer deploy, ler o log — e depois **apagar a variável**, ou todo
+deploy manda e-mail.
 
-### 16. Falha de SMTP é engolida
+### 16. Falha de envio é engolida
 **Assumida em:** verificação de e-mail
+**Atualizada em:** 2026-08-06 — vale igual para o `CorreioResend`, que faz a
+mesma escolha pelo mesmo motivo. Ficou **mais visível** agora que o e-mail
+realmente sai: antes ninguém recebia nada de qualquer forma.
 **Estado:** `CorreioSmtp.enviar` captura o erro e apenas registra no log. Um
 cadastro com provedor fora do ar responde 201 como se tudo tivesse dado certo, e
 a pessoa fica esperando um e-mail que não vem.
