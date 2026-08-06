@@ -61,10 +61,27 @@ export class AuthService {
     };
   }
 
+  /**
+   * Cria a conta traduzindo **só** o erro de banco.
+   *
+   * O `try` cobria também o `concluirRegistro`, que gera o token e dispara o
+   * e-mail. Uma falha ali saía disfarçada de erro de Prisma — mensagem sobre
+   * banco de dados para um problema que não é de banco. É o tipo de disfarce
+   * que faz procurar horas no lugar errado.
+   */
+  private async criarConta<T>(criar: () => Promise<T>): Promise<T> {
+    try {
+      return await criar();
+    } catch (erro) {
+      throw this.traduzirErroDePrisma(erro);
+    }
+  }
+
   async registrarAluno(dados: RegistrarAlunoInput): Promise<RespostaRegistro> {
     const senhaHash = await hash(dados.senha, OPCOES_ARGON);
-    try {
-      const usuario = await this.prisma.user.create({
+
+    const usuario = await this.criarConta(() =>
+      this.prisma.user.create({
         data: {
           email: dados.email.toLowerCase().trim(),
           nome: dados.nome.trim(),
@@ -80,11 +97,10 @@ export class AuthService {
             },
           },
         },
-      });
-      return this.concluirRegistro(usuario);
-    } catch (erro) {
-      throw this.traduzirErroDePrisma(erro);
-    }
+      }),
+    );
+
+    return this.concluirRegistro(usuario);
   }
 
   /**
@@ -94,8 +110,9 @@ export class AuthService {
    */
   async registrarProfissional(dados: RegistrarProfissionalInput): Promise<RespostaRegistro> {
     const senhaHash = await hash(dados.senha, OPCOES_ARGON);
-    try {
-      const usuario = await this.prisma.user.create({
+
+    const usuario = await this.criarConta(() =>
+      this.prisma.user.create({
         data: {
           email: dados.email.toLowerCase().trim(),
           nome: dados.nome.trim(),
@@ -113,11 +130,10 @@ export class AuthService {
             },
           },
         },
-      });
-      return this.concluirRegistro(usuario);
-    } catch (erro) {
-      throw this.traduzirErroDePrisma(erro);
-    }
+      }),
+    );
+
+    return this.concluirRegistro(usuario);
   }
 
   /** Confirmação bem-sucedida já abre a sessão: o link prova posse do e-mail. */
