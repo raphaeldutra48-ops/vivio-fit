@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { urlDoSmtp } from '../../entrega-de-email';
-import { CORREIO, CorreioDeLog, CorreioSmtp } from './correio';
+import { formaDeEnvio } from '../../entrega-de-email';
+import { CORREIO, CorreioDeLog, CorreioResend, CorreioSmtp } from './correio';
 import { TokenService } from './token.service';
 import { VerificacaoEmailService } from './verificacao-email.service';
 
@@ -30,12 +30,15 @@ import { VerificacaoEmailService } from './verificacao-email.service';
       provide: CORREIO,
       inject: [ConfigService, CorreioDeLog],
       useFactory: (config: ConfigService, log: CorreioDeLog) => {
-        const url = urlDoSmtp();
-        if (!url) return log;
-        return new CorreioSmtp(
-          url,
-          config.get<string>('EMAIL_REMETENTE') ?? 'Vívio Fit <nao-responda@viviofit.com.br>',
-        );
+        const forma = formaDeEnvio();
+        if (!forma) return log;
+
+        const remetente =
+          config.get<string>('EMAIL_REMETENTE') ?? 'Vívio Fit <nao-responda@viviofit.com.br>';
+
+        return forma.via === 'RESEND'
+          ? new CorreioResend(forma.chave, remetente)
+          : new CorreioSmtp(forma.url, remetente);
       },
     },
   ],

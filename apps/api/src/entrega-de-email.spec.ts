@@ -1,34 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { problemasDeEntregaDeEmail, urlDoSmtp } from './entrega-de-email';
+import { formaDeEnvio, problemasDeEntregaDeEmail } from './entrega-de-email';
 
-describe('urlDoSmtp', () => {
-  it('monta a URL a partir da chave do Resend', () => {
-    expect(urlDoSmtp({ RESEND_API_KEY: 're_abc123' })).toBe(
-      'smtp://resend:re_abc123@smtp.resend.com:587',
-    );
-  });
-
+describe('formaDeEnvio', () => {
   /*
-    A chave entra na parte de senha de uma URL. Um `@` ou `/` no meio dela
-    quebraria a análise, e o erro sairia como host inválido — que não parece
-    nada com "a chave tem um caractere especial".
+    O Resend sai por HTTP e não por SMTP porque o Railway bloqueia a saída na
+    porta 587 — a tentativa morre em `Connection timeout`, que se parece com
+    chave errada e não é. Custou um deploy para descobrir.
   */
-  it('escapa caractere especial na chave', () => {
-    const url = urlDoSmtp({ RESEND_API_KEY: 're_a@b/c' })!;
-    expect(url).toBe('smtp://resend:re_a%40b%2Fc@smtp.resend.com:587');
-    // E o resultado continua sendo uma URL que dá para analisar.
-    expect(new URL(url).hostname).toBe('smtp.resend.com');
+  it('com a chave do Resend, a saída é HTTP', () => {
+    expect(formaDeEnvio({ RESEND_API_KEY: 're_abc123' })).toEqual({
+      via: 'RESEND',
+      chave: 're_abc123',
+    });
   });
 
-  it('SMTP_URL explícita ganha da chave — é a saída para trocar de provedor', () => {
-    expect(urlDoSmtp({ SMTP_URL: 'smtp://u:p@outro.com:25', RESEND_API_KEY: 're_abc' })).toBe(
-      'smtp://u:p@outro.com:25',
-    );
+  it('SMTP_URL explícita ganha da chave — é a saída para outro provedor', () => {
+    expect(formaDeEnvio({ SMTP_URL: 'smtp://u:p@outro.com:25', RESEND_API_KEY: 're_abc' })).toEqual({
+      via: 'SMTP',
+      url: 'smtp://u:p@outro.com:25',
+    });
   });
 
   it('sem nenhuma das duas, não há para onde enviar', () => {
-    expect(urlDoSmtp({})).toBeNull();
-    expect(urlDoSmtp({ RESEND_API_KEY: '   ', SMTP_URL: '  ' })).toBeNull();
+    expect(formaDeEnvio({})).toBeNull();
+    expect(formaDeEnvio({ RESEND_API_KEY: '   ', SMTP_URL: '  ' })).toBeNull();
+  });
+
+  it('espaço em volta da chave não vai junto', () => {
+    expect(formaDeEnvio({ RESEND_API_KEY: '  re_abc  ' })).toEqual({
+      via: 'RESEND',
+      chave: 're_abc',
+    });
   });
 });
 

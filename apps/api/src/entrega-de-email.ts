@@ -1,32 +1,30 @@
-/** Servidor SMTP do Resend. O usuário é a palavra `resend`, literal. */
-const SMTP_RESEND = 'smtp.resend.com';
-const PORTA_RESEND = 587;
-
 /**
- * A URL de SMTP, montada a partir da chave do Resend quando é o caso.
+ * Por onde a mensagem sai.
  *
- * Existem dois caminhos de propósito. `SMTP_URL` continua valendo e é o que
- * permite trocar de provedor sem tocar em código. Mas exigir que alguém monte
- * `smtp://resend:CHAVE@smtp.resend.com:587` na mão, dentro de um campo de
- * painel, é pedir para errar — e o erro aparece como "não conecta", que é
- * indistinguível de chave errada.
+ * O Resend vai por **HTTP**, e não por SMTP, por um motivo aprendido em
+ * produção: o Railway bloqueia a saída na porta 587, e a tentativa morre em
+ * `Connection timeout` — que se parece com chave errada e não é. A API HTTP usa
+ * a 443, que nenhuma plataforma bloqueia porque é a mesma do resto da internet.
  *
- * Com `RESEND_API_KEY`, quem configura só cola a chave que o Resend deu, sem
- * cirurgia de texto. O resto é sempre igual e mora aqui.
+ * `SMTP_URL` continua existindo e ganha da chave quando as duas estão postas:
+ * é a saída para outro provedor sem tocar em código. Em plataforma que bloqueia
+ * porta de e-mail ela não vai funcionar — mas isso é escolha de quem a definir,
+ * e o diagnóstico está escrito na ferramenta de teste.
  */
-export function urlDoSmtp(
+export type FormaDeEnvio =
+  | { via: 'RESEND'; chave: string }
+  | { via: 'SMTP'; url: string };
+
+export function formaDeEnvio(
   ambiente: Record<string, string | undefined> = process.env,
-): string | null {
-  const direta = ambiente.SMTP_URL?.trim();
-  if (direta) return direta;
+): FormaDeEnvio | null {
+  const url = ambiente.SMTP_URL?.trim();
+  if (url) return { via: 'SMTP', url };
 
   const chave = ambiente.RESEND_API_KEY?.trim();
-  if (!chave) return null;
+  if (chave) return { via: 'RESEND', chave };
 
-  // `encodeURIComponent` porque a chave entra na parte de senha de uma URL: um
-  // `@` ou `/` no meio dela quebraria a análise e o erro sairia como host
-  // inválido, que não parece nada com "a chave tem um caractere especial".
-  return `smtp://resend:${encodeURIComponent(chave)}@${SMTP_RESEND}:${PORTA_RESEND}`;
+  return null;
 }
 
 /**
@@ -55,7 +53,7 @@ export function problemasDeEntregaDeEmail(
 
   const problemas: string[] = [];
 
-  if (!urlDoSmtp(ambiente)) {
+  if (!formaDeEnvio(ambiente)) {
     problemas.push(
       'Sem RESEND_API_KEY nem SMTP_URL: o e-mail de confirmação só iria para o log e ninguém conseguiria ativar a conta.',
     );

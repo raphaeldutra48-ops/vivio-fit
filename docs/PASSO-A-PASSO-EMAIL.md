@@ -66,11 +66,13 @@ No serviço **@vivio/api** → aba **Variables**, uma variável só:
 |---|---|
 | `RESEND_API_KEY` | a chave `re_...`, colada inteira e sozinha |
 
-Nada de montar URL na mão. O código monta
-`smtp://resend:CHAVE@smtp.resend.com:587` sozinho — ver `urlDoSmtp` em
-`src/entrega-de-email.ts`. Exigir que alguém escreva isso dentro de um campo de
-painel é pedir para errar, e o erro sai como "não conecta", que é
-indistinguível de chave errada.
+Só a chave, sozinha. Nada de montar URL.
+
+> **Por que não SMTP:** o Railway **bloqueia a saída na porta 587**. A tentativa
+> morre em `Connection timeout`, que se parece com chave errada e não é —
+> custou um deploy para descobrir. O envio vai pela API HTTP do Resend, na
+> porta 443, que nenhuma plataforma bloqueia. Ver `formaDeEnvio` em
+> `src/entrega-de-email.ts`.
 
 `EMAIL_REMETENTE` já está configurada. Se um dia precisar mudar, ela tem de usar
 o domínio **verificado no passo 2** — um `@gmail.com` ali faz o Resend recusar.
