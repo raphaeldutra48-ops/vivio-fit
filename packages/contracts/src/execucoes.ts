@@ -74,8 +74,15 @@ export interface ExecucaoResumo {
   iniciadoEm: string;
   finalizadoEm: string | null;
   duracaoSeg: number | null;
+  /** Séries de trabalho — aquecimento não entra na conta. */
   totalSeries: number;
-  /** Soma de carga × repetições — o indicador de volume da sessão. */
+  /**
+   * Soma de carga × repetições — o indicador de volume da sessão.
+   *
+   * Aquecimento fica de fora, mesma regra do gráfico de progressão. Antes esta
+   * conta somava tudo e a do gráfico não, então a mesma sessão tinha dois
+   * volumes em duas telas.
+   */
   volumeTotalKg: number;
   series: SerieExecutadaResumo[];
   feedback: {
@@ -87,6 +94,11 @@ export interface ExecucaoResumo {
   } | null;
   /** true quando o envio já existia — o cliente pode limpar a fila local. */
   jaRegistrada?: boolean;
+  /**
+   * Recordes superados nesta sessão. Vazio no caso comum — é isso que faz a
+   * medalha valer alguma coisa quando aparece.
+   */
+  recordes: RecordeBatido[];
 }
 
 // --- Histórico de carga -----------------------------------------------------
@@ -111,6 +123,24 @@ export interface AnterioresDaSessao {
   porExercicio: Record<string, SerieAnterior[]>;
   /** exercicioId -> data ISO da última execução. */
   ultimaVezEm: Record<string, string>;
+}
+
+export type TipoRecorde = 'PESO' | 'VOLUME' | 'UM_RM';
+
+/** Rótulo curto para a medalha, como o aluno lê. */
+export const ROTULO_RECORDE: Record<TipoRecorde, string> = {
+  PESO: 'Peso',
+  VOLUME: 'Volume',
+  UM_RM: '1RM',
+};
+
+export interface RecordeBatido {
+  exercicioId: string;
+  exercicioNome: string;
+  tipo: TipoRecorde;
+  valor: number;
+  /** O melhor anterior. Mostrar "de 100 para 105" vale mais que só "105". */
+  anterior: number | null;
 }
 
 export interface PontoHistoricoCarga {

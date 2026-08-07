@@ -288,4 +288,72 @@ describe('Execução de treino (e2e)', () => {
       expect(registro?.escopo).toBe('TREINO');
     });
   });
+
+  describe('volume e recordes', () => {
+    const enviar = (series: Record<string, unknown>[]) =>
+      request(app.getHttpServer())
+        .post(url(`/alunos/${idAna}/execucoes`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .send({
+          clienteUuid: randomUUID(),
+          sessaoId: idSessao,
+          iniciadoEm: '2026-08-01T10:00:00.000Z',
+          finalizadoEm: '2026-08-01T11:00:00.000Z',
+          series: series.map((s, i) => ({ itemTreinoId: idItemSupino, serieNum: i + 1, ...s })),
+        });
+
+    /*
+      A conta do volume vivia em dois lugares com regras diferentes: aqui somava
+      tudo, no gráfico de progressão o aquecimento ficava de fora. A mesma
+      sessão tinha dois volumes em duas telas.
+    */
+    it('aquecimento não entra no volume nem na contagem de séries', async () => {
+      const r = await enviar([
+        { repsFeitas: 20, cargaKg: 20, tipo: 'AQUECIMENTO' },
+        { repsFeitas: 10, cargaKg: 100 },
+      ]).expect(201);
+
+      // Só a série de trabalho: 100 × 10. O aquecimento somaria 400.
+      expect(r.body.volumeTotalKg).toBe(1000);
+      expect(r.body.totalSeries).toBe(1);
+    });
+
+    it('bater carga e 1RM devolve as medalhas, com o valor anterior', async () => {
+      const r = await enviar([{ repsFeitas: 10, cargaKg: 200 }]).expect(201);
+
+      const tipos = r.body.recordes.map((x: { tipo: string }) => x.tipo);
+      expect(tipos).toContain('PESO');
+      expect(tipos).toContain('UM_RM');
+
+      const peso = r.body.recordes.find((x: { tipo: string }) => x.tipo === 'PESO');
+      expect(peso.valor).toBe(200);
+      // Mostrar "de X para Y" vale mais que só "Y".
+      expect(peso.anterior).toBeLessThan(200);
+      expect(peso.exercicioNome).toBeTruthy();
+    });
+
+    /*
+      Empate não é recorde. Se fosse, todo treino de manutenção viraria três
+      medalhas e o aviso perderia o sentido em duas semanas.
+    */
+    it('repetir a mesma marca não gera medalha', async () => {
+      const r = await enviar([{ repsFeitas: 10, cargaKg: 200 }]).expect(201);
+      expect(r.body.recordes).toEqual([]);
+    });
+
+    it('treino mais leve não gera medalha', async () => {
+      const r = await enviar([{ repsFeitas: 5, cargaKg: 60 }]).expect(201);
+      expect(r.body.recordes).toEqual([]);
+    });
+
+    /** Listar histórico não apura recorde: seria uma consulta por linha. */
+    it('a listagem não traz medalha', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/execucoes`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .expect(200);
+
+      for (const execucao of r.body) expect(execucao.recordes).toEqual([]);
+    });
+  });
 });

@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { ExecucaoResumo, RegistrarExecucaoInput } from '@vivio/contracts';
+import type { RecordeBatido } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
+import { marcasDe, recordesBatidos, seriesDeTrabalho, volumeKg } from './metricas';
 
 type ExecucaoCompleta = Prisma.ExecucaoTreinoGetPayload<{
   include: { sessao: { select: { nome: true; planoId: true } }; series: true; feedback: true };
@@ -83,7 +85,13 @@ export class ExecucoesService {
         },
         include: INCLUDE,
       });
-      return this.paraResumo(criada);
+      /*
+        Os recordes são apurados DEPOIS de gravar, comparando o que veio agora
+        com o que já existia antes desta execução. Fazer antes exigiria confiar
+        que o envio vai dar certo; fazer depois de gravar significa que a
+        medalha só aparece para treino que ficou registrado.
+      */
+      return { ...this.paraResumo(criada), recordes: await this.apurarRecordes(alunoId, criada) };
     } catch (erro) {
       // Corrida: dois envios simultâneos do mesmo uuid. O segundo lê o do primeiro.
       if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === 'P2002') {
@@ -107,6 +115,67 @@ export class ExecucoesService {
     return execucoes.map((e) => this.paraResumo(e));
   }
 
+  /**
+   * Quais marcas desta execução superaram o melhor de antes.
+   *
+   * "Antes" exclui a própria execução (`id: { not: ... }`) — sem isso a série
+   * recém-gravada entraria na comparação e nada nunca seria recorde, porque o
+   * melhor histórico já incluiria o de hoje.
+   */
+  private async apurarRecordes(
+    alunoId: string,
+    execucao: ExecucaoCompleta,
+  ): Promise<RecordeBatido[]> {
+    const porExercicio = new Map<string, { cargaKg: number; repsFeitas: number; tipo: string }[]>();
+    for (const s of execucao.series) {
+      const atual = porExercicio.get(s.exercicioId) ?? [];
+      atual.push({ cargaKg: Number(s.cargaKg), repsFeitas: s.repsFeitas, tipo: s.tipo });
+      porExercicio.set(s.exercicioId, atual);
+    }
+
+    const nomes = new Map(
+      (
+        await this.prisma.exercicio.findMany({
+          where: { id: { in: [...porExercicio.keys()] } },
+          select: { id: true, nome: true },
+        })
+      ).map((e) => [e.id, e.nome]),
+    );
+
+    const batidos: RecordeBatido[] = [];
+
+    for (const [exercicioId, series] of porExercicio) {
+      const hoje = marcasDe(series);
+      if (!hoje) continue;
+
+      const anteriores = await this.prisma.serieExecutada.findMany({
+        where: {
+          exercicioId,
+          execucao: { alunoId, id: { not: execucao.id } },
+        },
+        select: { cargaKg: true, repsFeitas: true, tipo: true },
+      });
+
+      const antes = marcasDe(
+        anteriores.map((s) => ({
+          cargaKg: Number(s.cargaKg),
+          repsFeitas: s.repsFeitas,
+          tipo: s.tipo,
+        })),
+      );
+
+      for (const r of recordesBatidos(hoje, antes)) {
+        batidos.push({
+          exercicioId,
+          exercicioNome: nomes.get(exercicioId) ?? 'Exercício',
+          ...r,
+        });
+      }
+    }
+
+    return batidos;
+  }
+
   private paraResumo(e: ExecucaoCompleta): ExecucaoResumo {
     const series = e.series.map((s) => ({
       itemTreinoId: s.itemTreinoId,
@@ -126,10 +195,15 @@ export class ExecucoesService {
       iniciadoEm: e.iniciadoEm.toISOString(),
       finalizadoEm: e.finalizadoEm?.toISOString() ?? null,
       duracaoSeg: e.duracaoSeg,
-      totalSeries: series.length,
-      volumeTotalKg: Number(
-        series.reduce((soma, s) => soma + s.cargaKg * s.repsFeitas, 0).toFixed(2),
-      ),
+      totalSeries: seriesDeTrabalho(series).length,
+      volumeTotalKg: volumeKg(series),
+      /*
+        Vazio por padrão. Só o registro de uma execução nova apura recorde —
+        listar o histórico não deve fazer uma consulta por exercício por linha,
+        e "bateu recorde" é notícia do momento, não atributo permanente da
+        sessão.
+      */
+      recordes: [],
       series,
       feedback: e.feedback
         ? {
