@@ -53,6 +53,9 @@ function exercicio(id: string, nome: string): ExercicioResumo {
     escopo: 'GLOBAL',
     temVideo: false,
     criadoPorId: null,
+    imagemUrl: null,
+    imagemCredito: null,
+    videoCredito: null,
   };
 }
 

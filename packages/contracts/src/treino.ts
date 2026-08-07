@@ -44,6 +44,17 @@ export interface ExercicioResumo {
   escopo: 'GLOBAL' | 'PRIVADO';
   temVideo: boolean;
   criadoPorId: string | null;
+  /** Link assinado da imagem demonstrativa; `null` quando não há. */
+  imagemUrl: string | null;
+  /**
+   * Crédito a exibir junto da imagem — `null` quando a mídia é própria.
+   *
+   * Vem do resumo, e não de uma consulta à parte, porque licença aberta exige
+   * que o crédito apareça **onde a imagem aparece**. Separar os dois é o jeito
+   * mais fácil de a tela mostrar uma sem a outra.
+   */
+  imagemCredito: string | null;
+  videoCredito: string | null;
 }
 
 // --- Plano de treino --------------------------------------------------------

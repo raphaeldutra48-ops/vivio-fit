@@ -262,6 +262,15 @@ export class PlanosService {
           escopo: i.exercicio.escopo,
           temVideo: i.exercicio.videoChave !== null,
           criadoPorId: i.exercicio.criadoPorId,
+          /*
+            Sem link assinado aqui: o plano de treino traz dezenas de itens e
+            cada assinatura vale poucos minutos — para a maioria, expiraria
+            antes de alguém rolar até ela. A tela pede a imagem pela biblioteca
+            quando precisa mostrar.
+          */
+          imagemUrl: null,
+          imagemCredito: i.exercicio.imagemCredito,
+          videoCredito: i.exercicio.videoCredito,
         } satisfies ExercicioResumo,
       })),
     }));

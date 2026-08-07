@@ -13,7 +13,7 @@ import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { MidiaService } from '../midia/midia.service';
 
-function paraResumo(e: {
+interface LinhaExercicio {
   id: string;
   nome: string;
   grupoMuscular: string;
@@ -22,7 +22,12 @@ function paraResumo(e: {
   escopo: EscopoExercicio;
   videoChave: string | null;
   criadoPorId: string | null;
-}): ExercicioResumo {
+  imagemChave?: string | null;
+  imagemCredito?: string | null;
+  videoCredito?: string | null;
+}
+
+function paraResumo(e: LinhaExercicio, imagemUrl: string | null = null): ExercicioResumo {
   return {
     id: e.id,
     nome: e.nome,
@@ -32,6 +37,9 @@ function paraResumo(e: {
     escopo: e.escopo,
     temVideo: e.videoChave !== null,
     criadoPorId: e.criadoPorId,
+    imagemUrl,
+    imagemCredito: e.imagemCredito ?? null,
+    videoCredito: e.videoCredito ?? null,
   };
 }
 
@@ -41,6 +49,13 @@ export class ExerciciosService {
     private readonly prisma: PrismaService,
     private readonly midia: MidiaService,
   ) {}
+
+  /** Resumo com o link assinado da imagem, quando houver. */
+  private async comImagem(e: LinhaExercicio): Promise<ExercicioResumo> {
+    if (!e.imagemChave) return paraResumo(e);
+    const { url } = await this.midia.urlDeLeitura(e.imagemChave);
+    return paraResumo(e, url);
+  }
 
   /** Vincula ao exercício o vídeo já enviado ao storage. */
   async vincularVideo(
@@ -104,7 +119,13 @@ export class ExerciciosService {
       orderBy: [{ grupoMuscular: 'asc' }, { nome: 'asc' }],
       take: consulta.limit,
     });
-    return exercicios.map(paraResumo);
+    /*
+      A imagem é assinada AQUI, na listagem, e não só no exercício individual —
+      diferente do laudo de exame, onde a decisão foi a oposta. O motivo é o
+      uso: a biblioteca é navegada olhando, e uma lista de nomes sem figura não
+      serve para escolher exercício. Assinar é um HMAC por item, barato.
+    */
+    return Promise.all(exercicios.map((e) => this.comImagem(e)));
   }
 
   async obter(usuario: UsuarioAutenticado, id: string): Promise<ExercicioResumo> {
@@ -113,7 +134,7 @@ export class ExerciciosService {
     if (exercicio.escopo === EscopoExercicio.PRIVADO && exercicio.criadoPorId !== usuario.id) {
       throw ErroDominio.naoEncontrado('Exercício');
     }
-    return paraResumo(exercicio);
+    return this.comImagem(exercicio);
   }
 
   /** Só o admin cria exercício GLOBAL. Profissional cria para a própria biblioteca. */
