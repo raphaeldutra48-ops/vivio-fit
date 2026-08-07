@@ -44,6 +44,15 @@ export interface ExercicioResumo {
   escopo: 'GLOBAL' | 'PRIVADO';
   temVideo: boolean;
   criadoPorId: string | null;
+  /**
+   * Passo a passo de execução. Vazio é normal: nem todo exercício tem, e a
+   * tela cai para `instrucoes`, a linha única.
+   *
+   * As duas coisas convivem porque servem a momentos diferentes — `instrucoes`
+   * é o erro a evitar, para ler entre séries; `passos` ensina o movimento a
+   * quem nunca fez.
+   */
+  passos: string[];
   /** Link assinado da imagem demonstrativa; `null` quando não há. */
   imagemUrl: string | null;
   /**

@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { EXERCICIOS_GLOBAIS } from './exercicios-globais';
+import { PASSOS_EXERCICIOS } from './passos-exercicios';
 
 /**
  * Catálogo que a aplicação precisa para ser usável: biblioteca global de
@@ -21,18 +22,48 @@ export async function semearCatalogo(
   // A lista mora em `exercicios-globais.ts`: são ~160 itens, e misturada com a
   // tabela de alimentos aqui nenhuma das duas era navegável.
   for (const [nome, grupoMuscular, equipamento, instrucoes] of EXERCICIOS_GLOBAIS) {
+    const passos = [...(PASSOS_EXERCICIOS[nome] ?? [])];
+
     const existente = await prisma.exercicio.findFirst({
       where: { nome, escopo: 'GLOBAL' },
     });
+
     if (!existente) {
       await prisma.exercicio.create({
+        data: { nome, grupoMuscular, equipamento, instrucoes, passos, escopo: 'GLOBAL', criadoPorId },
+      });
+      continue;
+    }
+
+    /*
+      Exercício GLOBAL que já existe é SINCRONIZADO com o catálogo.
+
+      A primeira versão só criava o que faltava, e isso deixou um rastro ruim:
+      os 23 exercícios do catálogo antigo ficaram com a instrução velha
+      ("descer até paralela") enquanto a nova, escrita para ser lida sozinho na
+      academia, existia só no arquivo. Justamente os mais usados.
+
+      O catálogo é a fonte da verdade do conteúdo GLOBAL — é para isso que ele
+      é código versionado. Quem precisa de uma variação própria cria um
+      exercício PRIVADO, que a semeadura nunca toca.
+
+      Mídia e procedência ficam de fora do update: vêm do importador e do
+      upload do profissional, não daqui.
+    */
+    const precisaSincronizar =
+      existente.grupoMuscular !== grupoMuscular ||
+      existente.equipamento !== equipamento ||
+      existente.instrucoes !== instrucoes ||
+      (passos.length > 0 && existente.passos.length === 0);
+
+    if (precisaSincronizar) {
+      await prisma.exercicio.update({
+        where: { id: existente.id },
         data: {
-          nome,
           grupoMuscular,
           equipamento,
           instrucoes,
-          escopo: 'GLOBAL',
-          criadoPorId,
+          ...(passos.length > 0 ? { passos } : {}),
         },
       });
     }

@@ -306,6 +306,17 @@ model Exercicio {
   imagemOrigemUrl  String?
   videoCredito     String?
   videoOrigemUrl   String?
+  /*
+    Passo a passo de execução, um item por passo.
+
+    Convive com `instrucoes` de propósito, porque servem a momentos
+    diferentes: `instrucoes` é UMA linha, o erro que se comete naquele
+    movimento, para ler entre uma série e outra; `passos` ensina o movimento
+    de quem nunca fez, e se lê uma vez.
+
+    Vazio é estado normal — a tela cai para a linha única.
+  */
+  passos           String[]
   instrucoes    String?
   escopo        EscopoExercicio @default(PRIVADO)
   criadoPorId   String?

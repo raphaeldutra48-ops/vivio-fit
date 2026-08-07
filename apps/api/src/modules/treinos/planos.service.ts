@@ -259,6 +259,7 @@ export class PlanosService {
           grupoMuscular: i.exercicio.grupoMuscular as GrupoMuscular,
           equipamento: i.exercicio.equipamento,
           instrucoes: i.exercicio.instrucoes,
+          passos: i.exercicio.passos,
           escopo: i.exercicio.escopo,
           temVideo: i.exercicio.videoChave !== null,
           criadoPorId: i.exercicio.criadoPorId,

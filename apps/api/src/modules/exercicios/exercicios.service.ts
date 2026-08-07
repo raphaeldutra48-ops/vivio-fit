@@ -22,6 +22,7 @@ interface LinhaExercicio {
   escopo: EscopoExercicio;
   videoChave: string | null;
   criadoPorId: string | null;
+  passos?: string[];
   imagemChave?: string | null;
   imagemCredito?: string | null;
   videoCredito?: string | null;
@@ -34,6 +35,7 @@ function paraResumo(e: LinhaExercicio, imagemUrl: string | null = null): Exercic
     grupoMuscular: e.grupoMuscular as GrupoMuscular,
     equipamento: e.equipamento,
     instrucoes: e.instrucoes,
+    passos: e.passos ?? [],
     escopo: e.escopo,
     temVideo: e.videoChave !== null,
     criadoPorId: e.criadoPorId,
