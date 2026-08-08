@@ -17,7 +17,8 @@
     "redefinir-senha": "tsx prisma/redefinir-senha.ts",
     "revisao-clinica": "tsx scripts/gerar-revisao-clinica.ts",
     "semear-catalogo": "tsx prisma/semear-catalogo.ts",
-    "email-teste": "tsx src/ferramentas/enviar-email-teste.ts"
+    "email-teste": "tsx src/ferramentas/enviar-email-teste.ts",
+    "importar-wger": "tsx prisma/importar-wger.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

@@ -84,6 +84,15 @@ fi
 # cadastrar uma conta em produção e torcer, e a falha viria muda: o CorreioSmtp
 # engole o erro de propósito (pendência 16), para o provedor fora do ar não
 # derrubar um cadastro já gravado.
+# Baixa as imagens do wger para o volume. Roda aqui, e não da máquina de quem
+# desenvolve, porque o disco de destino só existe dentro do contêiner.
+# Idempotente: exercício que já tem imagem é pulado.
+if [ "$IMPORTAR_WGER" = "true" ]; then
+  echo "→ IMPORTAR_WGER=true: baixando imagens dos exercícios"
+  como_node npm run --silent importar-wger
+  echo "→ pronto. Pode remover IMPORTAR_WGER."
+fi
+
 if [ -n "$EMAIL_TESTE_PARA" ]; then
   echo "→ EMAIL_TESTE_PARA presente: enviando mensagem de teste"
   # Chamado pelo `dist`, e não por `npm run`: a imagem de produção não carrega
