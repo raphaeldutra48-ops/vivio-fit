@@ -4,8 +4,22 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@vivio/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@vivio/web",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@vivio/api",
+        "dev"
+      ],
+      "port": 3333
     }
   ]
 }

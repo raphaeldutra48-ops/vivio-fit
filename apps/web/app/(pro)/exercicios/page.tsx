@@ -8,6 +8,7 @@ import {
   type GrupoMuscular,
 } from '@vivio/contracts';
 import { useEffect, useRef, useState } from 'react';
+import { FichaDeExercicio } from '../../../components/FichaDeExercicio';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
 
@@ -25,6 +26,8 @@ export default function Exercicios() {
 
   const [enviandoVideoDe, setEnviandoVideoDe] = useState<string | null>(null);
   const [videoAberto, setVideoAberto] = useState<{ id: string; url: string } | null>(null);
+  /** Qual exercício está com a ficha aberta — um por vez. */
+  const [aberto, setAberto] = useState<string | null>(null);
   const inputArquivo = useRef<HTMLInputElement>(null);
   const exercicioAlvo = useRef<string | null>(null);
 
@@ -121,15 +124,51 @@ export default function Exercicios() {
     return (
       <section className="flex flex-col gap-md">
         <h2 className="text-lg font-semibold">{titulo}</h2>
-        {itens.map((e) => (
+        {itens.map((e) =>
+          aberto === e.id ? (
+            <FichaDeExercicio
+              key={e.id}
+              exercicio={e}
+              aoFechar={() => {
+                setAberto(null);
+                setVideoAberto(null);
+              }}
+              videoUrl={videoAberto?.id === e.id ? videoAberto.url : null}
+              aoPedirVideo={() => void verVideo(e.id)}
+            />
+          ) : (
           <Cartao key={e.id}>
             <div className="flex flex-wrap items-center justify-between gap-md">
-              <div>
-                <p className="font-semibold">{e.nome}</p>
-                <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                  {e.grupoMuscular.replace('_', ' ')}
-                  {e.equipamento && ` · ${e.equipamento}`}
-                </p>
+              <div className="flex items-center gap-md">
+                {/*
+                  Miniatura na lista: biblioteca se navega olhando. Sem ela, a
+                  tela é uma lista de nomes e escolher exercício exige abrir um
+                  por um.
+                */}
+                {e.imagemUrl && (
+                  <img
+                    src={e.imagemUrl}
+                    alt=""
+                    aria-hidden
+                    width={56}
+                    height={56}
+                    className="rounded-md"
+                    style={{ objectFit: 'contain', background: 'var(--vv-fundo)' }}
+                  />
+                )}
+                <div>
+                  <button
+                    onClick={() => setAberto(e.id)}
+                    className="text-left font-semibold underline"
+                  >
+                    {e.nome}
+                  </button>
+                  <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                    {e.grupoMuscular.replace('_', ' ')}
+                    {e.equipamento && ` · ${e.equipamento}`}
+                    {e.passos.length > 0 && ' · passo a passo'}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-md">
                 {e.temVideo ? (
@@ -169,7 +208,8 @@ export default function Exercicios() {
               />
             )}
           </Cartao>
-        ))}
+          ),
+        )}
       </section>
     );
   }
