@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
+import { PainelDeProgresso } from '../../../../components/PainelDeProgresso';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
 import { useSessao } from '../../../../lib/sessao';
@@ -125,6 +126,20 @@ export default function FichaDoAluno() {
           ))}
         </div>
       </section>
+
+      {/*
+        Acima do plano de propósito: o plano diz o que foi prescrito, o painel
+        diz o que aconteceu. Quem abre a ficha quer saber como a pessoa está
+        antes de olhar o que foi mandado ela fazer.
+
+        Sem condicionar a `semConsentimento`: aquele sinalizador é do escopo
+        TREINO, e o painel exige EVOLUCAO. Escondê-lo aqui deixava sem painel
+        quem autorizou evolução e não treino — que é justamente quem mais
+        aparece, porque evolução é o consentimento mais comum.
+
+        O próprio painel trata a falta de autorização.
+      */}
+      <PainelDeProgresso alunoId={alunoId} nomeDoAluno={aluno.nome} />
 
       <section>
         <h2 className="mb-md text-lg font-semibold">Treino</h2>
