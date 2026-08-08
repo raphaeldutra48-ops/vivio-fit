@@ -67,6 +67,8 @@ import type {
   LoginInput,
   CheckinResumo,
   PainelDeProgresso,
+  CriarMetaInput,
+  MetaResumo,
   MedidaResumo,
   RegistrarCheckinInput,
   ResumoDeCheckins,
@@ -814,6 +816,29 @@ export class VivioClient {
   };
 
   // --- medidas ------------------------------------------------------------
+
+  readonly metas = {
+    /** O progresso vem aferido na hora, a partir de medidas e execuções. */
+    listar: (alunoId: string): Promise<MetaResumo[]> =>
+      this.requisicao<MetaResumo[]>(`/alunos/${alunoId}/metas`),
+
+    criar: (alunoId: string, dados: CriarMetaInput): Promise<MetaResumo> =>
+      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas`, { metodo: 'POST', corpo: dados }),
+
+    /** Único caminho da meta LIVRE; nas demais, a aferição já basta. */
+    concluir: (alunoId: string, metaId: string): Promise<MetaResumo> =>
+      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas/${metaId}/concluir`, {
+        metodo: 'PATCH',
+      }),
+
+    reabrir: (alunoId: string, metaId: string): Promise<MetaResumo> =>
+      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas/${metaId}/reabrir`, {
+        metodo: 'PATCH',
+      }),
+
+    remover: (alunoId: string, metaId: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/metas/${metaId}`, { metodo: 'DELETE' }),
+  };
 
   readonly progresso = {
     /** Frequência, volume, tempo, adesão e evolução de carga, numa chamada só. */

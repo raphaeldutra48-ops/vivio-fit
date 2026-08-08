@@ -59,6 +59,8 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   tokensDeRedefinicao TokenRedefinicaoSenha[]
   checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
+  metas               Meta[]                 @relation("MetasDoAluno")
+  metasCriadas        Meta[]                 @relation("MetasCriadas")
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
 
   perfilPublico      PerfilPublico?          @relation("PerfilPublicoDoProfissional")
@@ -327,6 +329,7 @@ model Exercicio {
 
   itens            ItemTreino[]
   seriesExecutadas SerieExecutada[]
+  metas            Meta[]
 
   @@index([grupoMuscular])
   @@index([criadoPorId, escopo])
@@ -458,6 +461,38 @@ model SerieExecutada {
   @@unique([execucaoId, itemTreinoId, serieNum])
   @@index([itemTreinoId])
   @@index([exercicioId])
+}
+
+/// Meta do aluno, definida pelo profissional.
+///
+/// Guarda o ALVO e o VALOR INICIAL; nunca o progresso. O progresso é aferido
+/// na leitura, a partir de medidas e execuções — guardá-lo criaria um número
+/// que envelhece sozinho e diverge da origem sem ninguém perceber.
+model Meta {
+  id           String    @id @default(cuid())
+  alunoId      String
+  aluno        User      @relation("MetasDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  criadoPorId  String
+  criadoPor    User      @relation("MetasCriadas", fields: [criadoPorId], references: [id])
+  tipo         String
+  titulo       String
+  /// Nulo em meta LIVRE, que não tem número.
+  alvo         Decimal?  @db.Decimal(8, 2)
+  /// Só em CARGA_EXERCICIO.
+  exercicioId  String?
+  exercicio    Exercicio? @relation(fields: [exercicioId], references: [id])
+  /// Valor no dia em que a meta nasceu — é a régua do progresso. Sem ele,
+  /// "faltam 3 kg" não diz se a pessoa andou 10% ou 90% do caminho.
+  valorInicial Decimal?  @db.Decimal(8, 2)
+  prazo        DateTime? @db.Date
+  observacao   String?
+  /// Marcada à mão (meta LIVRE) ou no momento em que o sistema detectou.
+  concluidaEm  DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  deletadoEm   DateTime?
+
+  @@index([alunoId, deletadoEm])
 }
 
 /// Check-in diário do aluno — existe **com ou sem treino**.
