@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
+import { MetasDoAluno } from '../../../../components/MetasDoAluno';
 import { PainelDeProgresso } from '../../../../components/PainelDeProgresso';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
@@ -140,6 +141,9 @@ export default function FichaDoAluno() {
         O próprio painel trata a falta de autorização.
       */}
       <PainelDeProgresso alunoId={alunoId} nomeDoAluno={aluno.nome} />
+
+      {/* Logo abaixo do painel: a meta e o que da sentido aos numeros dele. */}
+      <MetasDoAluno alunoId={alunoId} />
 
       <section>
         <h2 className="mb-md text-lg font-semibold">Treino</h2>
