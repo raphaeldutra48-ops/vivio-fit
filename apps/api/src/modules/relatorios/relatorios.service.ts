@@ -52,7 +52,7 @@ export class RelatoriosService {
 
     // Um SELECT por conjunto, não por aluno: com 200 alunos na carteira, o
     // laço viraria 800 consultas.
-    const [consentimentos, execucoes, medidas, registros] = await Promise.all([
+    const [consentimentos, execucoes, medidas, registros, checkins] = await Promise.all([
       this.prisma.consentimento.findMany({
         // A mesma regra que o ConsentGuard aplica, vinda do mesmo lugar: já
         // divergiu uma vez, e o relatório mostrava como "não autorizado" quem
@@ -74,7 +74,25 @@ export class RelatoriosService {
         where: { alunoId: { in: alunoIds }, data: { gte: de } },
         select: { alunoId: true, status: true },
       }),
+      /*
+        O último check-in de cada aluno, SEM recorte de período.
+
+        Diferente das execuções, que só interessam dentro da janela: aqui o que
+        importa é há quanto tempo a pessoa sumiu, e limitar aos últimos 30 dias
+        transformaria "parou há 90 dias" em "nunca registrou" — que é
+        exatamente o contrário do alerta que se quer dar.
+      */
+      this.prisma.checkinDiario.findMany({
+        where: { alunoId: { in: alunoIds } },
+        select: { alunoId: true, data: true },
+        orderBy: { data: 'desc' },
+      }),
     ]);
+
+    const ultimoCheckin = new Map<string, Date>();
+    for (const c of checkins) {
+      if (!ultimoCheckin.has(c.alunoId)) ultimoCheckin.set(c.alunoId, c.data);
+    }
 
     const autorizados = new Map<string, Set<EscopoDado>>();
     for (const c of consentimentos) {
@@ -122,6 +140,12 @@ export class RelatoriosService {
           podeNutricao && refeicoes.length > 0
             ? Math.round((feitas / refeicoes.length) * 100)
             : null,
+
+        diasSemCheckin: (() => {
+          const ultimoC = ultimoCheckin.get(v.alunoId);
+          if (!podeEvolucao || !ultimoC) return null;
+          return Math.floor((ate.getTime() - ultimoC.getTime()) / DIA_EM_MS);
+        })(),
       };
     });
 

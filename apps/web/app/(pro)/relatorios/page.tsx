@@ -67,7 +67,13 @@ export default function Relatorios() {
       .finally(() => setCarregando(false));
   }, [dias]);
 
-  const atencao = (dados?.linhas ?? []).filter(precisaDeAtencao);
+  /*
+    Seta explícita, e não `filter(precisaDeAtencao)`: o `filter` passa o
+    ÍNDICE como segundo argumento, que hoje é o parâmetro de limiares. Com a
+    referência direta, o aluno na posição 30 da lista seria avaliado com
+    limiar 30 — silenciosamente, se o TypeScript não recusasse.
+  */
+  const atencao = (dados?.linhas ?? []).filter((linha) => precisaDeAtencao(linha));
 
   const Metrica = ({ rotulo, valor }: { rotulo: string; valor: string | number }) => (
     <Cartao className="flex-1 min-w-[150px]">

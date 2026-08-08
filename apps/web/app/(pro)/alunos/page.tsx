@@ -1,6 +1,11 @@
 'use client';
 
-import type { VinculoResumo } from '@vivio/contracts';
+import {
+  TEXTO_MOTIVO,
+  motivoDeAtencao,
+  type MotivoDeAtencao,
+  type VinculoResumo,
+} from '@vivio/contracts';
 import { areaTemaClaro } from '@vivio/ui';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -13,6 +18,15 @@ export default function CarteiraDeAlunos() {
   const [erro, setErro] = useState<string | null>(null);
   const [emailConvite, setEmailConvite] = useState('');
   const [mensagem, setMensagem] = useState<string | null>(null);
+  /**
+   * Quem precisa de atencao, por aluno.
+   *
+   * Vem do relatorio da carteira, que ja cruza treino, check-in e
+   * consentimento numa consulta so. Falha aqui NAO quebra a lista: sem o
+   * alerta a tela continua util, e um erro de relatorio nao pode impedir o
+   * profissional de ver os proprios alunos.
+   */
+  const [atencaoPorAluno, setAtencaoPorAluno] = useState<Map<string, MotivoDeAtencao>>(new Map());
 
   async function recarregar() {
     setCarregando(true);
@@ -28,6 +42,18 @@ export default function CarteiraDeAlunos() {
 
   useEffect(() => {
     void recarregar();
+
+    sdk.relatorios
+      .carteira(30)
+      .then((r) => {
+        const mapa = new Map<string, MotivoDeAtencao>();
+        for (const linha of r.linhas) {
+          const motivo = motivoDeAtencao(linha);
+          if (motivo) mapa.set(linha.alunoId, motivo);
+        }
+        setAtencaoPorAluno(mapa);
+      })
+      .catch(() => undefined);
   }, []);
 
   async function convidar(evento: React.FormEvent) {
@@ -114,7 +140,19 @@ export default function CarteiraDeAlunos() {
                     {v.contraparte.email}
                   </p>
                 </div>
-                <Etiqueta texto="Ativo" cor={areaTemaClaro.treino.texto} />
+                {/*
+                  O motivo, e não só uma cor. "Precisa de atenção" em vermelho
+                  faz abrir a ficha para descobrir por quê; "parou de fazer
+                  check-in" já diz qual conversa ter.
+                */}
+                {atencaoPorAluno.get(v.contraparte.id) ? (
+                  <Etiqueta
+                    texto={TEXTO_MOTIVO[atencaoPorAluno.get(v.contraparte.id)!]}
+                    cor="var(--vv-alerta)"
+                  />
+                ) : (
+                  <Etiqueta texto="Ativo" cor={areaTemaClaro.treino.texto} />
+                )}
               </div>
             </Cartao>
           </Link>
