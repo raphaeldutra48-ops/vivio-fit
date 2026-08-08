@@ -20,6 +20,7 @@ import { ConsentimentosModule } from './modules/consentimentos/consentimentos.mo
 import { ExerciciosModule } from './modules/exercicios/exercicios.module';
 import { FotosModule } from './modules/fotos/fotos.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
+import { ProgressoModule } from './modules/progresso/progresso.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
 import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
@@ -48,6 +49,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     ConsentimentosModule,
     MedidasModule,
     CheckinModule,
+    ProgressoModule,
     ExerciciosModule,
     TreinosModule,
     FotosModule,

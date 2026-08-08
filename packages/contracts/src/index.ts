@@ -14,6 +14,7 @@ export * from './medidas';
 export * from './treino';
 export * from './execucoes';
 export * from './checkin';
+export * from './progresso';
 export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';

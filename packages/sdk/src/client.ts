@@ -66,6 +66,7 @@ import type {
   EscopoDado,
   LoginInput,
   CheckinResumo,
+  PainelDeProgresso,
   MedidaResumo,
   RegistrarCheckinInput,
   ResumoDeCheckins,
@@ -813,6 +814,12 @@ export class VivioClient {
   };
 
   // --- medidas ------------------------------------------------------------
+
+  readonly progresso = {
+    /** Frequência, volume, tempo, adesão e evolução de carga, numa chamada só. */
+    painel: (alunoId: string, dias = 30): Promise<PainelDeProgresso> =>
+      this.requisicao<PainelDeProgresso>(`/alunos/${alunoId}/progresso`, { query: { dias } }),
+  };
 
   readonly checkins = {
     /** Mais recente primeiro — é a ordem que as telas usam. */
