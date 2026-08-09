@@ -67,6 +67,7 @@ import type {
   LoginInput,
   CheckinResumo,
   PainelDeProgresso,
+  ComparativoDeEvolucao,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -816,6 +817,14 @@ export class VivioClient {
   };
 
   // --- medidas ------------------------------------------------------------
+
+  readonly comparativo = {
+    /** Antes e depois de 30, 60, 90 ou 120 dias. */
+    montar: (alunoId: string, dias = 60): Promise<ComparativoDeEvolucao> =>
+      this.requisicao<ComparativoDeEvolucao>(`/alunos/${alunoId}/comparativo`, {
+        query: { dias },
+      }),
+  };
 
   readonly metas = {
     /** O progresso vem aferido na hora, a partir de medidas e execuções. */

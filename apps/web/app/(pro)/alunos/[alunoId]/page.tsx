@@ -82,6 +82,11 @@ export default function FichaDoAluno() {
           <Link href={`/alunos/${alunoId}/anamnese`}>
             <Botao variante="neutra">Anamnese</Botao>
           </Link>
+          {/* Sem condicionar a `semConsentimento`: o comparativo é de EVOLUCAO,
+              não de TREINO, e a própria tela trata a falta de autorização. */}
+          <Link href={`/alunos/${alunoId}/comparativo`}>
+            <Botao variante="neutra">Comparativo</Botao>
+          </Link>
           {usuario && PRESCRITORES.includes(usuario.papel) && (
             <>
               <Link href={`/alunos/${alunoId}/prescricoes`}>

@@ -35,7 +35,9 @@ export default function LayoutProfissional({ children }: { children: React.React
 
   return (
     <div className="min-h-dvh">
+      {/* Cabeçalho e menu são a ferramenta, não o documento: saem no papel. */}
       <header
+        data-nao-imprime
         className="sticky top-0 z-20 flex items-center justify-between border-b px-lg py-md"
         style={{ borderColor: 'var(--vv-borda)', background: 'var(--vv-superficie)' }}
       >
@@ -72,6 +74,7 @@ export default function LayoutProfissional({ children }: { children: React.React
       <div className="flex">
         {/* Menu fixo no desktop */}
         <aside
+          data-nao-imprime
           className="hidden w-[260px] shrink-0 border-r lg:block"
           style={{
             borderColor: 'var(--vv-borda)',

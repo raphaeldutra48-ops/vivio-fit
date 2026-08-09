@@ -21,3 +21,56 @@
     outline-offset: 2px;
   }
 }
+
+/*
+  Impressão e "salvar em PDF" — o mesmo caminho no navegador.
+
+  O app não gera PDF no servidor de propósito: isso exigiria embutir um
+  navegador inteiro na imagem de produção, e o que o documento tem de mais
+  importante (as fotos de evolução) o navegador já imprime nativamente.
+
+  Duas coisas mudam no papel. Primeiro, tudo que é navegação some: menu, botões
+  e cabeçalho do app não são o documento, são a ferramenta. Segundo, o tema
+  escuro vira claro — imprimir fundo escuro gasta uma carga de toner e sai
+  ilegível em quase toda impressora doméstica.
+*/
+@media print {
+  [data-nao-imprime] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Vale para o documento inteiro: nada dentro dele herda cor de tema escuro. */
+  .documento,
+  .documento * {
+    background: transparent !important;
+    color: #000 !important;
+    border-color: #999 !important;
+    box-shadow: none !important;
+  }
+
+  /* Sem isto o navegador descarta os fundos coloridos das faixas do documento. */
+  .documento {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  /* Nem foto nem bloco de números devem ser partidos entre duas páginas. */
+  .sem-quebrar {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
