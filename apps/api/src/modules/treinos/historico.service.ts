@@ -5,9 +5,11 @@ import type {
   HistoricoCarga,
   PontoHistoricoCarga,
   SerieAnterior,
+  SugestaoDeCarga,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
+import { sugerirCarga } from './progressao';
 
 interface LinhaSerie {
   exercicioId: string;
@@ -16,6 +18,7 @@ interface LinhaSerie {
   repsFeitas: number;
   cargaKg: Prisma.Decimal;
   tipo: TipoSerie;
+  rpe: number | null;
   iniciadoEm: Date;
 }
 
@@ -41,7 +44,9 @@ export class HistoricoService {
       where: { id: sessaoId },
       include: {
         plano: { select: { alunoId: true } },
-        itens: { select: { exercicioId: true } },
+        // `repsAlvo` entra porque a sugestão é dupla progressão: sem saber a
+        // faixa que o plano pede, não dá para dizer se o aluno fechou o topo.
+        itens: { select: { exercicioId: true, repsAlvo: true } },
       },
     });
     if (!sessao || sessao.plano.alunoId !== alunoId) {
@@ -49,19 +54,40 @@ export class HistoricoService {
     }
 
     const exercicioIds = [...new Set(sessao.itens.map((i) => i.exercicioId))];
-    if (exercicioIds.length === 0) return { porExercicio: {}, ultimaVezEm: {} };
+    if (exercicioIds.length === 0) return { porExercicio: {}, ultimaVezEm: {}, sugestao: {} };
 
     // Todas as séries desses exercícios, mais recentes primeiro. O corte por
     // execução é feito abaixo: só interessa a ÚLTIMA vez de cada exercício.
     const linhas = await this.prisma.$queryRaw<LinhaSerie[]>`
       SELECT s."exercicioId", s."execucaoId", s."serieNum", s."repsFeitas", s."cargaKg",
-             s."tipo", e."iniciadoEm"
+             s."tipo", s."rpe", e."iniciadoEm"
       FROM "SerieExecutada" s
       JOIN "ExecucaoTreino" e ON e.id = s."execucaoId"
       WHERE e."alunoId" = ${alunoId}
         AND s."exercicioId" = ANY(${exercicioIds})
       ORDER BY e."iniciadoEm" DESC, e."criadoEm" DESC, s."serieNum" ASC
     `;
+
+    /*
+      Dor relatada no treino, por execucao. E a guarda que vem ANTES do numero:
+      quem completou as repeticoes sentindo dor e exatamente quem nao deve
+      subir carga, e e quem a regra numerica sozinha mandaria subir.
+    */
+    const execucoesComDor = new Set(
+      (
+        await this.prisma.feedbackTreino.findMany({
+          where: { teveDor: true, execucao: { alunoId } },
+          select: { execucaoId: true },
+        })
+      ).map((f) => f.execucaoId),
+    );
+
+    /** `execucaoId:serieNum` -> RPE informado. O contrato de SerieAnterior nao
+     *  carrega RPE (a coluna ANTERIOR nao o mostra), mas a sugestao precisa. */
+    const rpePorSerie = new Map<string, number>();
+    for (const l of linhas) {
+      if (l.rpe !== null) rpePorSerie.set(`${l.execucaoId}:${l.serieNum}`, l.rpe);
+    }
 
     const porExercicio: Record<string, SerieAnterior[]> = {};
     const ultimaVezEm: Record<string, string> = {};
@@ -88,7 +114,36 @@ export class HistoricoService {
       });
     }
 
-    return { porExercicio, ultimaVezEm };
+    /*
+      A sugestão é calculada por EXERCÍCIO, e não por item do plano: o mesmo
+      exercício pode aparecer duas vezes na sessão, e as duas vezes têm o mesmo
+      histórico. Se um item pede 8-12 e outro pede 15-20, vence o primeiro —
+      caso raro, e uma sugestão consistente é melhor que duas conflitantes na
+      mesma tela.
+    */
+    const alvoPorExercicio = new Map<string, string>();
+    for (const item of sessao.itens) {
+      if (!alvoPorExercicio.has(item.exercicioId)) {
+        alvoPorExercicio.set(item.exercicioId, item.repsAlvo);
+      }
+    }
+
+    const sugestao: Record<string, SugestaoDeCarga> = {};
+    for (const exercicioId of exercicioIds) {
+      const series = porExercicio[exercicioId] ?? [];
+      sugestao[exercicioId] = sugerirCarga({
+        ultimaSessao: series.map((s) => ({
+          cargaKg: s.cargaKg,
+          repsFeitas: s.repsFeitas,
+          tipo: s.tipo,
+          rpe: rpePorSerie.get(`${execucaoEscolhida[exercicioId]}:${s.serieNum}`) ?? null,
+        })),
+        repsAlvo: alvoPorExercicio.get(exercicioId) ?? '',
+        teveDorNoTreino: execucoesComDor.has(execucaoEscolhida[exercicioId] ?? ''),
+      });
+    }
+
+    return { porExercicio, ultimaVezEm, sugestao };
   }
 
   /**

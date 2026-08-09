@@ -346,6 +346,23 @@ describe('Execução de treino (e2e)', () => {
       expect(r.body.recordes).toEqual([]);
     });
 
+    /*
+      A sugestão viaja junto da coluna ANTERIOR porque é lida no mesmo
+      instante: o aluno olha "80 kg × 10" e precisa saber se repete ou sobe.
+    */
+    it('a sugestão de carga vem junto dos anteriores', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/sessoes/${idSessao}/anteriores`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .expect(200);
+
+      const sugestao = r.body.sugestao[idExercicioSupino];
+      expect(sugestao).toBeTruthy();
+      expect(['AUMENTAR', 'MANTER', 'REDUZIR', 'SEM_DADO']).toContain(sugestao.acao);
+      // A frase chega pronta: a tela não remonta o texto.
+      expect(sugestao.porque.length).toBeGreaterThan(20);
+    });
+
     /** Listar histórico não apura recorde: seria uma consulta por linha. */
     it('a listagem não traz medalha', async () => {
       const r = await request(app.getHttpServer())

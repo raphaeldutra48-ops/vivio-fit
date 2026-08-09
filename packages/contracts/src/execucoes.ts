@@ -118,11 +118,30 @@ export interface SerieAnterior {
  * Indexado por exercicioId, não por item do plano: cada versão nova do plano
  * cria itens novos, e o histórico se perderia a cada ajuste do personal.
  */
+export type AcaoSugerida = 'AUMENTAR' | 'MANTER' | 'REDUZIR' | 'SEM_DADO';
+
+export interface SugestaoDeCarga {
+  acao: AcaoSugerida;
+  cargaKg: number | null;
+  variacaoKg: number;
+  /** Frase pronta, na voz de quem orienta — a tela não remonta o texto. */
+  porque: string;
+}
+
 export interface AnterioresDaSessao {
   /** exercicioId -> séries da última execução daquele exercício. */
   porExercicio: Record<string, SerieAnterior[]>;
   /** exercicioId -> data ISO da última execução. */
   ultimaVezEm: Record<string, string>;
+  /**
+   * exercicioId -> o que fazer com a carga desta vez.
+   *
+   * Chega junto das séries anteriores porque é lido no mesmo momento: o aluno
+   * olha "80 kg × 10" e precisa saber se repete ou sobe. Uma segunda chamada
+   * para isso significaria a sugestão aparecendo depois de a série já ter
+   * começado.
+   */
+  sugestao: Record<string, SugestaoDeCarga>;
 }
 
 export type TipoRecorde = 'PESO' | 'VOLUME' | 'UM_RM';
