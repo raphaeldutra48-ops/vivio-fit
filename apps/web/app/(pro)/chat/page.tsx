@@ -1,6 +1,7 @@
 'use client';
 
 import type { ConversaResumo, MensagemResumo } from '@vivio/contracts';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Aviso, Botao, Cartao } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
@@ -14,12 +15,17 @@ function horaDe(iso: string): string {
 }
 
 export default function Chat() {
+  // `?com=<alunoId>` abre direto a conversa daquele aluno. É o que transforma
+  // "vi que ele sentiu dor" em "falei com ele" sem passar por uma lista.
+  const alunoPedido = useSearchParams().get('com');
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [ativa, setAtiva] = useState<ConversaResumo | null>(null);
   const [mensagens, setMensagens] = useState<MensagemResumo[]>([]);
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const fimDaLista = useRef<HTMLDivElement>(null);
+  /** Aluno cuja conversa já foi pedida — ver o efeito de `?com=`. */
+  const jaTentou = useRef<string | null>(null);
 
   const carregarConversas = useCallback(async () => {
     try {
@@ -50,6 +56,42 @@ export default function Chat() {
       setErro('Não foi possível abrir a conversa.');
     }
   }, [carregarConversas]);
+
+  /*
+    Abre a conversa pedida por `?com=`. Só uma vez: sem a guarda de `ativa`, a
+    sondagem de 15 segundos jogaria o profissional de volta para esta conversa
+    a cada recarga, mesmo depois de ele trocar.
+
+    Quando ela ainda não existe, cria. Sem isso, quem clicasse em "responder"
+    vindo do feedback de um aluno com quem nunca falou cairia numa tela vazia
+    — justamente no momento em que tinha algo para dizer.
+  */
+  useEffect(() => {
+    if (!alunoPedido || ativa || jaTentou.current === alunoPedido) return;
+    /*
+      Marca ANTES de chamar. `ativa` só é definido depois de uma ida ao
+      servidor, e nesse intervalo o efeito roda de novo — em desenvolvimento o
+      StrictMode garante isso. Sem a trava, as duas chamadas encontram "nenhuma
+      conversa" e criam uma cada: o profissional termina com duas linhas do
+      mesmo aluno na lista.
+    */
+    jaTentou.current = alunoPedido;
+
+    void (async () => {
+      const existente = conversas.find((c) => c.alunoId === alunoPedido);
+      if (existente) {
+        await abrir(existente);
+        return;
+      }
+      try {
+        const nova = await sdk.chat.abrir(alunoPedido);
+        await carregarConversas();
+        await abrir(nova);
+      } catch {
+        setErro('Não foi possível abrir a conversa com este aluno.');
+      }
+    })();
+  }, [alunoPedido, ativa, conversas, abrir, carregarConversas]);
 
   useEffect(() => {
     fimDaLista.current?.scrollIntoView({ behavior: 'smooth' });

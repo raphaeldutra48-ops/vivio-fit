@@ -325,6 +325,31 @@ com mais de N dias. Nunca começar pelo que apaga.
 **Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
 uns 60% sem explicação.
 
+### 24. `abrirConversa` é procura-depois-cria, sem trava no banco
+**Encontrada em:** área de feedback (2026-08-10), ao ligar o botão "responder
+no chat".
+**O que acontece:** `ChatService.abrirConversa` faz `findFirst` e, se não achar,
+`create`. Duas chamadas simultâneas para o mesmo par aluno–profissional não
+enxergam uma à outra e criam **duas conversas**, que aparecem como duas linhas
+do mesmo aluno na lista. Foi exatamente o que aconteceu: o efeito do `?com=`
+disparou duas vezes e duplicou a conversa da Ana no banco de desenvolvimento.
+**O que já foi corrigido:** a trava do lado do cliente
+(`apps/web/app/(pro)/chat/page.tsx`), que agora só pede a abertura uma vez por
+aluno. Isso fecha o caminho que existe hoje na interface.
+**Por que continua aberta:** a corrida é do servidor. Dois aparelhos, dois
+cliques rápidos ou um retry de rede reproduzem sem passar pela tela. Nenhum
+dado se perde — as mensagens ficam na conversa em que foram enviadas — mas o
+profissional vê o aluno duas vezes e pode responder na conversa que o aluno
+não está lendo, o que é pior do que parece.
+**Por que não foi resolvida agora:** a correção certa é um índice único, e não
+existe chave natural: o par aluno–profissional mora na tabela de participantes,
+não em `Conversa`. Resolver exige decidir entre desnormalizar um
+`profissionalId` em `Conversa` (com unique em `(alunoId, profissionalId)`) ou
+um unique em `(conversaId, userId)` mais uma reescrita da busca. É decisão de
+modelagem com migração, e não cabia dentro da área de feedback.
+**Enquanto isso:** conversa duplicada e vazia é inofensiva e dá para apagar à
+mão. Se aparecer em produção, apagar a que não tem mensagem.
+
 ## Resolvidas
 
 ### O laudo do exame passou a ter arquivo — resolvida em 2026-08-04

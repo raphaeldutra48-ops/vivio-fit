@@ -20,6 +20,16 @@
         "dev"
       ],
       "port": 3333
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@vivio/mobile",
+        "web"
+      ],
+      "port": 8081
     }
   ]
 }

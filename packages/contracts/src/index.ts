@@ -17,6 +17,7 @@ export * from './checkin';
 export * from './progresso';
 export * from './metas';
 export * from './comparativo';
+export * from './feedback';
 export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';

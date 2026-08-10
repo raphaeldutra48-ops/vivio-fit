@@ -17,6 +17,130 @@ const prisma = new PrismaClient();
 const SENHA_PADRAO = 'Senha@123';
 const VERSAO_TERMO = '2026-07-v1';
 
+/**
+ * Treinos executados da Ana, com feedback.
+ *
+ * Sem isto o seed não tinha uma execução sequer, e metade do lado profissional
+ * do app abria vazia numa demonstração: painel de progresso, evolução de
+ * carga, recordes, sugestão de carga e a área de feedback. "Zero treinos" é um
+ * estado legítimo do produto, mas é o pior primeiro contato possível com ele.
+ *
+ * A história é a de quem está progredindo com um incômodo no ombro: a carga do
+ * supino sobe ao longo das semanas, e no meio aparecem dois treinos seguidos
+ * com dor — que é exatamente o padrão que a área de feedback existe para
+ * mostrar antes de virar lesão.
+ */
+async function semearTreinosDaAna(
+  alunoId: string,
+  personalId: string,
+  diaDeTras: (dias: number) => Date,
+): Promise<void> {
+  const nome = 'Full body A';
+
+  // Idempotente: rodar o seed de novo não empilha planos nem treinos.
+  const jaTem = await prisma.planoTreino.findFirst({ where: { alunoId, nome } });
+  if (jaTem) return;
+
+  const [supino, agachamento, remada] = await Promise.all([
+    prisma.exercicio.findFirst({ where: { nome: 'Supino reto com barra', escopo: 'GLOBAL' } }),
+    prisma.exercicio.findFirst({ where: { nome: 'Agachamento livre', escopo: 'GLOBAL' } }),
+    prisma.exercicio.findFirst({ where: { nome: 'Remada curvada com barra', escopo: 'GLOBAL' } }),
+  ]);
+  if (!supino || !agachamento || !remada) return;
+
+  const plano = await prisma.planoTreino.create({
+    data: {
+      alunoId,
+      personalId,
+      nome,
+      objetivo: 'Hipertrofia — 3x por semana',
+      status: 'ATIVO',
+      inicioEm: diaDeTras(28),
+      sessoes: {
+        create: [
+          {
+            nome: 'Treino A — corpo inteiro',
+            ordem: 1,
+            itens: {
+              create: [
+                { exercicioId: supino.id, ordem: 1, series: 3, repsAlvo: '8-10', cargaSugeridaKg: 30 },
+                { exercicioId: agachamento.id, ordem: 2, series: 3, repsAlvo: '10-12', cargaSugeridaKg: 40 },
+                { exercicioId: remada.id, ordem: 3, series: 3, repsAlvo: '10', cargaSugeridaKg: 25 },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    include: { sessoes: { include: { itens: true } } },
+  });
+
+  const sessao = plano.sessoes[0]!;
+  const itemDe = (exercicioId: string) => sessao.itens.find((i) => i.exercicioId === exercicioId)!;
+
+  /*
+    Uma linha por treino: [dias atrás, carga do supino, dificuldade, dor].
+    A carga sobe de 30 para 37,5 em quatro semanas — progressão realista, não
+    a curva perfeita que só existe em captura de tela.
+  */
+  const treinos: [number, number, number, boolean][] = [
+    [26, 30, 3, false],
+    [24, 30, 2, false],
+    [21, 32.5, 3, false],
+    [19, 32.5, 4, false],
+    [17, 32.5, 3, false],
+    [14, 35, 4, false],
+    [12, 35, 4, true],
+    [10, 35, 5, true],
+    [7, 32.5, 3, false],
+    [5, 35, 3, false],
+    [2, 37.5, 4, false],
+  ];
+
+  const comentarios: Record<number, string> = {
+    12: 'Senti um incômodo no ombro na última série do supino.',
+    10: 'O ombro incomodou de novo, dessa vez desde o começo.',
+    7: 'Baixei a carga como combinamos e não doeu nada.',
+    2: 'Consegui as 3 séries completas! Achei que não ia.',
+  };
+
+  for (const [dias, carga, dificuldade, teveDor] of treinos) {
+    const inicio = new Date(diaDeTras(dias).getTime() + 18 * 60 * 60 * 1000);
+    const duracaoSeg = (48 + (dias % 5)) * 60;
+
+    await prisma.execucaoTreino.create({
+      data: {
+        alunoId,
+        sessaoId: sessao.id,
+        clienteUuid: crypto.randomUUID(),
+        iniciadoEm: inicio,
+        finalizadoEm: new Date(inicio.getTime() + duracaoSeg * 1000),
+        duracaoSeg,
+        series: {
+          create: [
+            { itemTreinoId: itemDe(supino.id).id, exercicioId: supino.id, serieNum: 1, repsFeitas: 10, cargaKg: carga, rpe: 7 },
+            { itemTreinoId: itemDe(supino.id).id, exercicioId: supino.id, serieNum: 2, repsFeitas: 9, cargaKg: carga, rpe: 8 },
+            { itemTreinoId: itemDe(supino.id).id, exercicioId: supino.id, serieNum: 3, repsFeitas: 8, cargaKg: carga, rpe: 9 },
+            { itemTreinoId: itemDe(agachamento.id).id, exercicioId: agachamento.id, serieNum: 1, repsFeitas: 12, cargaKg: carga + 10, rpe: 7 },
+            { itemTreinoId: itemDe(agachamento.id).id, exercicioId: agachamento.id, serieNum: 2, repsFeitas: 11, cargaKg: carga + 10, rpe: 8 },
+            { itemTreinoId: itemDe(remada.id).id, exercicioId: remada.id, serieNum: 1, repsFeitas: 10, cargaKg: carga - 5, rpe: 8 },
+            { itemTreinoId: itemDe(remada.id).id, exercicioId: remada.id, serieNum: 2, repsFeitas: 10, cargaKg: carga - 5, rpe: 8 },
+          ],
+        },
+        feedback: {
+          create: {
+            dificuldade,
+            teveDor,
+            localDor: teveDor ? 'ombro direito' : null,
+            sensacao: teveDor ? 'Cansada' : 'Bem',
+            comentario: comentarios[dias] ?? null,
+          },
+        },
+      },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const senhaHash = await hash(SENHA_PADRAO);
 
@@ -230,6 +354,8 @@ async function main(): Promise<void> {
   // O mesmo módulo que a produção usa: catálogo é conteúdo do produto, não
   // dado de demonstração, e manter duas cópias faria as duas divergirem.
   const catalogo = await semearCatalogo(prisma, admin.id);
+
+  await semearTreinosDaAna(ana.id, personal.id, diaDeTras);
 
   console.log('\nSeed concluído. Senha de todos: ' + SENHA_PADRAO);
   console.log(`Tabela de alimentos: ${catalogo.alimentos} itens`);

@@ -81,6 +81,9 @@ export const MENU: BlocoDeMenu[] = [
         itens: [],
       },
       { rotulo: 'Relatórios', icone: '📊', href: '/relatorios', estado: 'pronto', itens: [] },
+      /* Ao lado de Relatórios: os dois respondem "como está indo", um pelos
+         números e o outro pelo que o aluno falou. */
+      { rotulo: 'Feedback', icone: '🗣️', href: '/feedback', estado: 'pronto', itens: [] },
     ],
   },
   {

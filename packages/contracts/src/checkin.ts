@@ -33,6 +33,24 @@ export const registrarCheckinSchema = z.object({
 });
 export type RegistrarCheckinInput = z.infer<typeof registrarCheckinSchema>;
 
+/**
+ * O "hoje" do aluno, em `AAAA-MM-DD`.
+ *
+ * Existe porque `new Date().toISOString().slice(0, 10)` é a forma errada e
+ * óbvia de fazer isto: `toISOString` converte para UTC, e no Brasil (UTC-3)
+ * qualquer registro feito depois das 21h sairia com a data de **amanhã**. O
+ * aluno que faz o check-in antes de dormir teria o dia de hoje marcado como
+ * não registrado e o de amanhã já respondido — e o alerta de adesão do
+ * personal leria isso como um dia perdido.
+ *
+ * Os componentes locais dão a data do relógio de quem está registrando, que é
+ * exatamente o que o check-in significa.
+ */
+export function dataLocalDoCheckin(agora: Date = new Date()): string {
+  const doisDigitos = (n: number) => String(n).padStart(2, '0');
+  return `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`;
+}
+
 export const consultaCheckinsSchema = z.object({
   /** Janela em dias, contada para trás a partir de hoje. */
   dias: z.coerce.number().int().min(1).max(365).default(30),

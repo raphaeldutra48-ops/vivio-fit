@@ -23,6 +23,8 @@ function Navegacao() {
         <Stack.Screen name="lembretes" options={{ title: 'Lembretes' }} />
         <Stack.Screen name="composicao" options={{ title: 'Composição corporal' }} />
         <Stack.Screen name="medidas" options={{ title: 'Registrar medidas' }} />
+        <Stack.Screen name="checkin" options={{ title: 'Check-in de hoje' }} />
+        <Stack.Screen name="chat" options={{ title: 'Conversas' }} />
       </Stack>
     </>
   );

@@ -68,6 +68,7 @@ import type {
   CheckinResumo,
   PainelDeProgresso,
   ComparativoDeEvolucao,
+  PainelDeFeedback,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -128,6 +129,7 @@ import type {
   UsuarioAutenticado,
   VinculoResumo,
 } from '@vivio/contracts';
+import { DIAS_PADRAO_FEEDBACK } from '@vivio/contracts';
 import { ErroApi } from './erro';
 
 export interface TokensArmazenados {
@@ -817,6 +819,12 @@ export class VivioClient {
   };
 
   // --- medidas ------------------------------------------------------------
+
+  readonly feedback = {
+    /** Feedback pos-treino da carteira, o mais grave primeiro. */
+    daCarteira: (dias = DIAS_PADRAO_FEEDBACK, apenasAtencao = false): Promise<PainelDeFeedback> =>
+      this.requisicao<PainelDeFeedback>('/feedback', { query: { dias, apenasAtencao } }),
+  };
 
   readonly comparativo = {
     /** Antes e depois de 30, 60, 90 ou 120 dias. */
