@@ -6,6 +6,7 @@ import {
   type AnterioresDaSessao,
   type ExecucaoResumo,
   type HistoricoCarga,
+  type MeusRecordes,
   type RegistrarExecucaoInput,
 } from '@vivio/contracts';
 import { HistoricoService } from './historico.service';
@@ -16,6 +17,7 @@ import { ConsentGuard } from '../../common/guards/consent.guard';
 import { AuditoriaInterceptor } from '../../common/interceptors/auditoria.interceptor';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ExecucoesService } from './execucoes.service';
+import { RecordesService } from './recordes.service';
 
 @ApiTags('execucoes')
 @ApiBearerAuth()
@@ -28,6 +30,7 @@ export class ExecucoesController {
   constructor(
     private readonly execucoes: ExecucoesService,
     private readonly historico: HistoricoService,
+    private readonly recordesService: RecordesService,
   ) {}
 
   @Get('sessoes/:sessaoId/anteriores')
@@ -57,6 +60,16 @@ export class ExecucoesController {
     @Query('limit') limit?: string,
   ): Promise<ExecucaoResumo[]> {
     return this.execucoes.listar(alunoId, limit ? Number(limit) : undefined);
+  }
+
+  /*
+    Fica aqui, e não num controlador próprio, porque recorde é leitura de série
+    executada: mesmos guardas, mesmo escopo de consentimento, mesma auditoria.
+  */
+  @Get('recordes')
+  @ApiOperation({ summary: 'Marcas pessoais do aluno, uma por exercício' })
+  recordes(@Param('alunoId') alunoId: string): Promise<MeusRecordes> {
+    return this.recordesService.doAluno(alunoId);
   }
 
   @Post('execucoes')

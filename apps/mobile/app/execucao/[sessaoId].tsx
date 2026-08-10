@@ -1,9 +1,11 @@
 import {
+  ROTULO_RECORDE,
   SIGLA_TIPO_SERIE,
   TipoSerie,
   formatarSerieAnterior,
   type AnterioresDaSessao,
   type PlanoTreinoCompleto,
+  type RecordeBatido,
   type SerieExecutadaInput,
   type SessaoTreinoResumo,
 } from '@vivio/contracts';
@@ -41,6 +43,8 @@ export default function Execucao() {
   const { sessaoId } = useLocalSearchParams<{ sessaoId: string }>();
   const { usuario, tema } = useSessao();
   const { registrarTreino } = useSincronizacao();
+  /** Recordes desta sessão. Preenchido só quando o servidor confirmou na hora. */
+  const [recordes, setRecordes] = useState<RecordeBatido[] | null>(null);
   const router = useRouter();
   const [offline, setOffline] = useState(false);
 
@@ -206,7 +210,7 @@ export default function Execucao() {
 
       // Vai para a fila local ANTES de tentar a rede. Falhar o envio não perde
       // o treino — ele sai da fila só quando o servidor confirmar.
-      await registrarTreino(usuario.id, {
+      const resumo = await registrarTreino(usuario.id, {
         clienteUuid: clienteUuid.current,
         sessaoId,
         iniciadoEm: iniciadoEm.current,
@@ -215,12 +219,118 @@ export default function Execucao() {
         feedback: { dificuldade, teveDor },
       });
 
+      /*
+        A medalha vem antes da navegação, e só quando o servidor respondeu
+        agora: os recordes são apurados no registro e não ficam guardados. Sem
+        rede a pessoa não vê nada aqui — e é por isso que "meus recordes"
+        existe como tela própria, derivada das séries.
+      */
+      if (resumo && resumo.recordes.length > 0) {
+        setRecordes(resumo.recordes);
+        return;
+      }
+
       router.replace('/(tabs)/evolucao');
     } catch {
       setErro('Não foi possível salvar o treino no aparelho.');
     } finally {
       setEnviando(false);
     }
+  }
+
+  /*
+    Tela de conquista. Ocupa tudo de propósito: a medalha dividindo espaço com
+    a lista de séries vira notificação, e notificação a gente fecha sem ler.
+  */
+  if (recordes) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: tema.fundo }}
+        contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg, flexGrow: 1 }}
+      >
+        <View style={{ alignItems: 'center', gap: espacamento.sm, marginTop: espacamento.xl }}>
+          <Text style={{ fontSize: 56 }}>🏆</Text>
+          <Text
+            style={{
+              color: tema.textoPrimario,
+              fontSize: tipografia.tamanho['2xl'],
+              fontWeight: '700',
+              textAlign: 'center',
+            }}
+          >
+            {recordes.length === 1 ? 'Você bateu um recorde!' : `Você bateu ${recordes.length} recordes!`}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, textAlign: 'center' }}>
+            Treino salvo. Isto é o que você nunca tinha feito antes.
+          </Text>
+        </View>
+
+        {recordes.map((r, i) => (
+          <View
+            key={`${r.exercicioId}-${r.tipo}-${i}`}
+            style={{
+              backgroundColor: tema.superficie,
+              borderRadius: raio.lg,
+              borderWidth: 2,
+              borderColor: tema.acaoFundo,
+              padding: espacamento.lg,
+              gap: espacamento.xs,
+            }}
+          >
+            <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+              {ROTULO_RECORDE[r.tipo]}
+            </Text>
+            <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>{r.exercicioNome}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: espacamento.sm }}>
+              <Text
+                style={{
+                  color: tema.textoPrimario,
+                  fontSize: tipografia.tamanho['2xl'],
+                  fontWeight: '700',
+                }}
+              >
+                {r.valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg
+              </Text>
+              {/*
+                O "de X para Y" vale mais que só o Y: é a diferença que mostra
+                o tamanho do passo, e é ela que a pessoa conta para alguém.
+              */}
+              {r.anterior !== null && (
+                <Text style={{ color: tema.textoSecundario }}>
+                  antes {r.anterior.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg
+                </Text>
+              )}
+            </View>
+          </View>
+        ))}
+
+        <View style={{ gap: espacamento.md, marginTop: 'auto' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ver todos os meus recordes"
+            onPress={() => router.replace('/recordes')}
+            style={{
+              minHeight: 56,
+              borderRadius: raio.md,
+              backgroundColor: tema.acaoFundo,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: tema.acaoTexto, fontWeight: '700', fontSize: tipografia.tamanho.lg }}>
+              Ver meus recordes
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace('/(tabs)/evolucao')}
+            style={{ minHeight: alvoToqueMin, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: tema.textoSecundario }}>Continuar</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
   }
 
   if (erro && !sessao) {

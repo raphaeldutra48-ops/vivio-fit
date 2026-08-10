@@ -86,8 +86,11 @@ export default function Evolucao() {
         ))}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: espacamento.sm }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.sm }}>
         {[
+          // Primeiro dos três: é o único que responde "estou melhorando?" com
+          // um sim, e é o motivo de alguém abrir a aba de evolução.
+          { rotulo: '🏆 Recordes', destino: '/recordes' as const },
           { rotulo: '📈 Composição', destino: '/composicao' as const },
           { rotulo: '📸 Fotos', destino: '/fotos' as const },
         ].map((atalho) => (

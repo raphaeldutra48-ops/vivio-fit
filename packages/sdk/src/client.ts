@@ -69,6 +69,7 @@ import type {
   PainelDeProgresso,
   ComparativoDeEvolucao,
   PainelDeFeedback,
+  MeusRecordes,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -861,6 +862,12 @@ export class VivioClient {
     /** Frequência, volume, tempo, adesão e evolução de carga, numa chamada só. */
     painel: (alunoId: string, dias = 30): Promise<PainelDeProgresso> =>
       this.requisicao<PainelDeProgresso>(`/alunos/${alunoId}/progresso`, { query: { dias } }),
+  };
+
+  readonly recordes = {
+    /** Marcas pessoais do aluno, conquista mais recente primeiro. */
+    meus: (alunoId: string): Promise<MeusRecordes> =>
+      this.requisicao<MeusRecordes>(`/alunos/${alunoId}/recordes`),
   };
 
   readonly checkins = {
