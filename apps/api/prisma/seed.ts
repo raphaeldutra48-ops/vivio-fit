@@ -141,6 +141,65 @@ async function semearTreinosDaAna(
   }
 }
 
+/**
+ * Metas da Ana.
+ *
+ * Três, escolhidas para cobrir os três estados que a tela precisa saber
+ * desenhar: uma em andamento com prazo folgado, uma **com prazo vencido** e
+ * uma sem medição para acompanhar. Só com meta bem-comportada, a tela nunca
+ * mostraria o que faz numa situação ruim — que é quando ela importa.
+ *
+ * O `valorInicial` fica em branco de propósito: o serviço o congela na
+ * criação, e escrevê-lo aqui à mão criaria uma régua que não corresponde ao
+ * que a pessoa media naquele dia.
+ */
+async function semearMetasDaAna(
+  alunoId: string,
+  personalId: string,
+  diaDeTras: (dias: number) => Date,
+): Promise<void> {
+  const jaTem = await prisma.meta.findFirst({ where: { alunoId, deletadoEm: null } });
+  if (jaTem) return;
+
+  const primeiraMedida = await prisma.medida.findFirst({
+    where: { alunoId },
+    orderBy: { data: 'asc' },
+  });
+
+  await prisma.meta.createMany({
+    data: [
+      {
+        alunoId,
+        criadoPorId: personalId,
+        tipo: 'PESO_CORPORAL',
+        titulo: 'Chegar a 62 kg',
+        alvo: 62,
+        valorInicial: primeiraMedida?.pesoKg ?? null,
+        prazo: diaDeTras(-60),
+        observacao: 'Sem pressa: dois meses.',
+      },
+      {
+        alunoId,
+        criadoPorId: personalId,
+        tipo: 'FREQUENCIA_SEMANAL',
+        titulo: 'Treinar 3x por semana',
+        alvo: 3,
+        prazo: diaDeTras(-30),
+      },
+      {
+        alunoId,
+        criadoPorId: personalId,
+        tipo: 'MEDIDA_CINTURA',
+        titulo: 'Cintura em 70 cm',
+        alvo: 70,
+        valorInicial: primeiraMedida?.cinturaCm ?? null,
+        // No passado: é a meta que mostra como a tela trata prazo vencido.
+        prazo: diaDeTras(5),
+      },
+    ],
+  });
+}
+
 async function main(): Promise<void> {
   const senhaHash = await hash(SENHA_PADRAO);
 
@@ -356,6 +415,7 @@ async function main(): Promise<void> {
   const catalogo = await semearCatalogo(prisma, admin.id);
 
   await semearTreinosDaAna(ana.id, personal.id, diaDeTras);
+  await semearMetasDaAna(ana.id, personal.id, diaDeTras);
 
   console.log('\nSeed concluído. Senha de todos: ' + SENHA_PADRAO);
   console.log(`Tabela de alimentos: ${catalogo.alimentos} itens`);

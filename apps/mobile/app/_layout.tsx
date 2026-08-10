@@ -26,6 +26,7 @@ function Navegacao() {
         <Stack.Screen name="checkin" options={{ title: 'Check-in de hoje' }} />
         <Stack.Screen name="chat" options={{ title: 'Conversas' }} />
         <Stack.Screen name="recordes" options={{ title: 'Meus recordes' }} />
+        <Stack.Screen name="metas" options={{ title: 'Minhas metas' }} />
       </Stack>
     </>
   );

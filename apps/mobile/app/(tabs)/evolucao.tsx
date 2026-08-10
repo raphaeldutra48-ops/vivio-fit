@@ -88,9 +88,11 @@ export default function Evolucao() {
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.sm }}>
         {[
-          // Primeiro dos três: é o único que responde "estou melhorando?" com
-          // um sim, e é o motivo de alguém abrir a aba de evolução.
+          // Recorde e meta primeiro: são os dois que respondem "estou
+          // melhorando?" — um pelo que já foi feito, outro pelo que falta. É
+          // por isso que se abre a aba de evolução.
           { rotulo: '🏆 Recordes', destino: '/recordes' as const },
+          { rotulo: '🎯 Metas', destino: '/metas' as const },
           { rotulo: '📈 Composição', destino: '/composicao' as const },
           { rotulo: '📸 Fotos', destino: '/fotos' as const },
         ].map((atalho) => (
