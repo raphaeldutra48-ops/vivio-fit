@@ -16,6 +16,8 @@ export default function Inicio() {
   const [semPlano, setSemPlano] = useState(false);
   const [checkinDeHoje, setCheckinDeHoje] = useState<CheckinResumo | null>(null);
   const [naoLidas, setNaoLidas] = useState(0);
+  const [convitesAbertos, setConvitesAbertos] = useState(0);
+  const [temProfissional, setTemProfissional] = useState(true);
 
   useEffect(() => {
     if (!usuario) return;
@@ -38,6 +40,13 @@ export default function Inicio() {
     sdk.chat
       .listarConversas()
       .then((cs) => setNaoLidas(cs.reduce((total, c) => total + c.naoLidas, 0)))
+      .catch(() => undefined);
+    sdk.vinculos
+      .meusProfissionais()
+      .then((vs) => {
+        setConvitesAbertos(vs.filter((v) => v.aguardandoMinhaResposta).length);
+        setTemProfissional(vs.some((v) => v.status === 'ATIVO'));
+      })
       .catch(() => undefined);
   }, [usuario, hoje]);
 
@@ -69,29 +78,65 @@ export default function Inicio() {
         </Text>
       </View>
 
-      {semPlano && (
-        <View
+      {/*
+        Acima de tudo, inclusive das mensagens: enquanto o convite não for
+        respondido não existe vínculo, e sem vínculo o app não tem treino,
+        dieta nem acompanhamento — a pessoa fica olhando telas vazias sem
+        entender o que falta.
+      */}
+      {convitesAbertos > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${convitesAbertos} ${convitesAbertos === 1 ? 'convite aguardando' : 'convites aguardando'} sua resposta`}
+          onPress={() => router.push('/equipe')}
+          style={{
+            backgroundColor: tema.acaoFundo,
+            borderRadius: raio.lg,
+            padding: espacamento.lg,
+            gap: espacamento.xs,
+          }}
+        >
+          <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>
+            ✋ {convitesAbertos === 1 ? 'Um profissional quer te acompanhar' : `${convitesAbertos} profissionais querem te acompanhar`}
+          </Text>
+          <Text style={{ color: tema.acaoTexto, fontSize: tipografia.tamanho.sm }}>
+            Toque para aceitar — é o que libera seu treino.
+          </Text>
+        </Pressable>
+      )}
+
+      {/*
+        Sem profissional e sem convite: a pessoa criou a conta e não tem o que
+        fazer. Dizer o e-mail dela aqui é o que destrava — é esse endereço que
+        o profissional precisa para convidar.
+      */}
+      {convitesAbertos === 0 && !temProfissional && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ver minha equipe"
+          onPress={() => router.push('/equipe')}
           style={{
             backgroundColor: tema.superficie,
             borderRadius: raio.lg,
             borderWidth: 1,
             borderColor: tema.borda,
             padding: espacamento.lg,
+            gap: espacamento.xs,
           }}
         >
-          <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
-            Nenhum treino ativo
+          <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+            Você ainda não tem profissional
           </Text>
-          <Text style={{ color: tema.textoSecundario, marginTop: espacamento.xs }}>
-            Seu personal ainda não montou ou ativou um plano para você.
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            Peça para te convidarem usando o e-mail {usuario?.email}. Toque para ver os detalhes.
           </Text>
-        </View>
+        </Pressable>
       )}
 
       {/*
-        Antes de tudo. Recado do personal ou do médico não pode depender de a
-        pessoa rolar a tela até um quadradinho no rodapé — foi onde ele estava
-        e não é lugar de mensagem que espera resposta.
+        Recado do personal ou do médico não pode depender de a pessoa rolar a
+        tela até um quadradinho no rodapé — foi onde ele estava e não é lugar
+        de mensagem que espera resposta.
       */}
       {naoLidas > 0 && (
         <Pressable
@@ -111,6 +156,29 @@ export default function Inicio() {
             Toque para ler e responder.
           </Text>
         </Pressable>
+      )}
+
+      {/*
+        Só quando já existe profissional e nenhum convite pendente. Antes
+        disso, "seu personal não montou um plano" é resposta para a pergunta
+        errada: o que falta é aceitar o convite, e dizer as duas coisas ao
+        mesmo tempo faz a pessoa tentar resolver a que não depende dela.
+      */}
+      {semPlano && temProfissional && convitesAbertos === 0 && (
+        <View
+          style={{
+            backgroundColor: tema.superficie,
+            borderRadius: raio.lg,
+            borderWidth: 1,
+            borderColor: tema.borda,
+            padding: espacamento.lg,
+          }}
+        >
+          <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>Nenhum treino ativo</Text>
+          <Text style={{ color: tema.textoSecundario, marginTop: espacamento.xs }}>
+            Seu personal ainda não montou ou ativou um plano para você.
+          </Text>
+        </View>
       )}
 
       {/*
@@ -232,6 +300,7 @@ export default function Inicio() {
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.md }}>
         {[
+          { rotulo: '👥 Minha equipe', destino: '/equipe', descricao: 'Equipe e autorizacoes' },
           { rotulo: '💬 Conversas', destino: '/chat', descricao: 'Conversas com a equipe' },
           { rotulo: '⏰ Lembretes', destino: '/lembretes', descricao: 'Configurar lembretes' },
           { rotulo: '📋 Prescrições', destino: '/prescricoes', descricao: 'Minhas prescrições' },
