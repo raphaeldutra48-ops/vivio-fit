@@ -79,6 +79,15 @@ if [ "$SEMEAR_CATALOGO" = "true" ]; then
   echo "→ pronto. Pode remover SEMEAR_CATALOGO."
 fi
 
+# Par de contas para a primeira rodada de teste: profissional já verificado,
+# aluno já vinculado e com consentimentos, e um treino ativo. Vem DEPOIS do
+# catálogo porque o plano de treino precisa dos exercícios existirem.
+if [ -n "$TESTE_EMAIL_PRO" ]; then
+  echo "→ TESTE_EMAIL_PRO presente: preparando as contas de teste"
+  como_node npm run --silent preparar-teste
+  echo "→ pronto. Apague TESTE_EMAIL_PRO, TESTE_EMAIL_ALUNO e TESTE_SENHA."
+fi
+
 # Confere a entrega de e-mail com a SMTP_URL real, de dentro do contêiner —
 # que é o único lugar onde ela existe. Sem isto, testar a configuração exigiria
 # cadastrar uma conta em produção e torcer, e a falha viria muda: o CorreioSmtp
