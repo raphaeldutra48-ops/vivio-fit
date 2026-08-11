@@ -19,3 +19,6 @@ allowBuilds:
   '@scarf/scarf': false # telemetria — sem uso para nos
   '@swc/core': true # binario nativo; compila decorators nos testes
   sharp: true # binario nativo de imagem, usado pelo next/image
+
+minimumReleaseAgeExclude:
+  - expo-updates@57.0.13
