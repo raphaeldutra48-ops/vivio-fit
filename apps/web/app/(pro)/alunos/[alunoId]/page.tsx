@@ -74,7 +74,22 @@ export default function FichaDoAluno() {
           </p>
         </div>
         <div className="flex flex-wrap gap-md">
-          {!semConsentimento && (
+          {/*
+            Sem autorização o botão fica visível e desligado, em vez de sumir.
+            Sumir foi o comportamento anterior e ensinava a coisa errada: o
+            profissional procurava um botão que não existia mais e concluía que
+            o app estava quebrado, quando o que faltava era uma decisão do
+            aluno — que ele nem sabia que existia.
+          */}
+          {semConsentimento ? (
+            <Botao
+              variante="neutra"
+              disabled
+              title="O aluno precisa autorizar o compartilhamento dos dados de treino no aplicativo dele."
+            >
+              Montar treino · aguardando o aluno
+            </Botao>
+          ) : (
             <Link href={`/alunos/${alunoId}/treino/novo`}>
               <Botao variante="neutra">Montar treino</Botao>
             </Link>
@@ -157,9 +172,20 @@ export default function FichaDoAluno() {
           <Cartao>
             <p className="mb-xs font-semibold">Dados de treino não compartilhados</p>
             <Aviso tipo="info">
-              {aluno.nome.split(' ')[0]} ainda não autorizou o compartilhamento dos dados de treino.
-              A autorização é dada pelo próprio aluno, no aplicativo.
+              {aluno.nome.split(' ')[0]} ainda não autorizou o compartilhamento dos dados de treino,
+              e por isso não é possível montar o plano ainda.
             </Aviso>
+            {/*
+              O caminho exato, e não só a informação de que falta autorização.
+              Sem ele o profissional sabe o que está errado e não sabe o que
+              dizer ao aluno — e quem paga por isso é o aluno, que recebe um
+              "autoriza lá" sem saber onde é "lá".
+            */}
+            <p className="mt-md text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+              Peça a {aluno.nome.split(' ')[0]} para abrir o aplicativo e tocar em{' '}
+              <strong>Minha equipe</strong> → em <strong>O que eu compartilho</strong>, tocar em{' '}
+              <strong>Treino</strong>. A decisão é dele e pode ser desfeita quando quiser.
+            </p>
           </Cartao>
         ) : planos.length === 0 ? (
           <Aviso tipo="info">Nenhum plano montado ainda.</Aviso>
