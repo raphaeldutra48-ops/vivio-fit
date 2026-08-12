@@ -4,6 +4,8 @@ import {
   TipoSerie,
   formatarSerieAnterior,
   type AnterioresDaSessao,
+  type ExercicioResumo,
+  type MidiaDeExercicios,
   type PlanoTreinoCompleto,
   type RecordeBatido,
   type SerieExecutadaInput,
@@ -17,6 +19,8 @@ import { lerAnteriores, lerPlano, salvarAnteriores, salvarPlano } from '../../sr
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 import { useSincronizacao } from '../../src/sincronizacao';
+import { Demonstracao, DemonstracaoAmpliada } from '../../src/componentes/Demonstracao';
+import { DOR_VAZIA, QuestionarioDeDor, type RespostaDeDor } from '../../src/componentes/QuestionarioDeDor';
 import { gerarUuid } from '../../src/uuid';
 
 interface SerieNaTela {
@@ -39,6 +43,28 @@ function formatarDescanso(segundos: number): string {
   return min > 0 ? `${min}min ${seg}s` : `${seg}s`;
 }
 
+/** `MM:SS` — o formato de relógio, que se lê de relance no meio da série. */
+function cronometro(segundos: number): string {
+  const min = Math.floor(segundos / 60);
+  const seg = segundos % 60;
+  return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+}
+
+/**
+ * A escala de dificuldade com nome.
+ *
+ * O número sozinho não quer dizer a mesma coisa para duas pessoas: "4" é
+ * pesado para quem começou ontem e leve para quem treina há dez anos. A
+ * palavra ancora a escala — e é ela que o personal lê do outro lado.
+ */
+const DIFICULDADE: { valor: number; rotulo: string; detalhe: string }[] = [
+  { valor: 1, rotulo: 'Muito fácil', detalhe: 'sobrou muito' },
+  { valor: 2, rotulo: 'Fácil', detalhe: 'daria mais' },
+  { valor: 3, rotulo: 'Na medida', detalhe: 'terminei bem' },
+  { valor: 4, rotulo: 'Difícil', detalhe: 'foi no limite' },
+  { valor: 5, rotulo: 'Muito difícil', detalhe: 'não completei' },
+];
+
 export default function Execucao() {
   const { sessaoId } = useLocalSearchParams<{ sessaoId: string }>();
   const { usuario, tema } = useSessao();
@@ -57,6 +83,11 @@ export default function Execucao() {
   const [dificuldade, setDificuldade] = useState(3);
   const [teveDor, setTeveDor] = useState(false);
   const [descansoRestante, setDescansoRestante] = useState<number | null>(null);
+  const [midia, setMidia] = useState<MidiaDeExercicios>({});
+  const [ampliado, setAmpliado] = useState<ExercicioResumo | null>(null);
+  /** Segundos desde que o treino começou. Zera só ao sair da tela. */
+  const [decorrido, setDecorrido] = useState(0);
+  const [dor, setDor] = useState<RespostaDeDor>(DOR_VAZIA);
 
   const clienteUuid = useRef(gerarUuid());
   const iniciadoEm = useRef(new Date());
@@ -116,9 +147,38 @@ export default function Execucao() {
           const emCache = await lerAnteriores(usuario.id, sessaoId);
           if (emCache) setAnteriores(emCache.porExercicio);
         }
+
+        /*
+          A demonstração é pedida agora, no começo do treino, e não guardada
+          junto do plano: o link é assinado e vale poucos minutos, então em
+          cache chegaria morto. Sem rede fica sem imagem — e a tela mostra o
+          passo a passo, que vem no plano e sobrevive offline.
+        */
+        try {
+          setMidia(await sdk.exercicios.midia(encontrada.itens.map((i) => i.exercicio.id)));
+        } catch {
+          // Silêncio proposital: treinar sem a imagem é pior, mas possível.
+        }
       }
     })();
   }, [usuario, sessaoId]);
+
+  /*
+    Cronômetro do treino inteiro. Conta desde a abertura da tela e não a
+    partir da primeira série: o aquecimento e a montagem do aparelho fazem
+    parte do tempo que a pessoa passou treinando, e é esse número que ela
+    compara com o da semana passada.
+
+    Deriva de `iniciadoEm` a cada tique em vez de somar +1: se o celular
+    dormir, somar perderia o tempo em que a tela ficou parada, e o treino de
+    50 minutos apareceria como 12.
+  */
+  useEffect(() => {
+    const id = setInterval(() => {
+      setDecorrido(Math.floor((Date.now() - iniciadoEm.current.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Cronômetro de descanso, disparado ao concluir uma série.
   useEffect(() => {
@@ -216,7 +276,20 @@ export default function Execucao() {
         iniciadoEm: iniciadoEm.current,
         finalizadoEm: new Date(),
         series: payload,
-        feedback: { dificuldade, teveDor },
+        feedback: {
+          dificuldade,
+          teveDor,
+          /*
+            Campo em branco vai como `undefined`, não como string vazia: o
+            banco precisa distinguir "não respondeu" de "respondeu nada", e a
+            tela do personal mostra coisas diferentes nos dois casos.
+          */
+          localDor: teveDor && dor.local.trim() ? dor.local.trim() : undefined,
+          dorTipo: teveDor && dor.tipo ? dor.tipo : undefined,
+          dorMomento: teveDor && dor.momento ? dor.momento : undefined,
+          dorExercicioId: teveDor && dor.exercicioId ? dor.exercicioId : undefined,
+          comentario: teveDor && dor.relato.trim() ? dor.relato.trim() : undefined,
+        },
       });
 
       /*
@@ -375,17 +448,37 @@ export default function Execucao() {
           backgroundColor: tema.superficie,
         }}
       >
-        <Text
-          accessibilityLiveRegion="polite"
-          style={{
-            fontSize: tipografia.tamanho.xl,
-            fontWeight: '700',
-            color: descansoRestante !== null ? tema.acaoFundo : tema.textoSecundario,
-            fontVariant: ['tabular-nums'],
-          }}
-        >
-          {descansoRestante !== null ? formatarDescanso(descansoRestante) : `${concluidas}/${series.length}`}
-        </Text>
+        {/*
+          Três informações, e nenhuma esconde a outra. Antes o relógio de
+          descanso ocupava o mesmo lugar do contador de séries, e durante o
+          descanso a pessoa perdia de vista quanto faltava — justamente no
+          minuto em que ela olha para o celular.
+        */}
+        <View>
+          <Text
+            accessibilityLabel={`Treino em andamento há ${Math.floor(decorrido / 60)} minutos`}
+            style={{
+              fontSize: tipografia.tamanho['2xl'],
+              fontWeight: '700',
+              color: tema.textoPrimario,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {cronometro(decorrido)}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            {concluidas}/{series.length} séries
+            {descansoRestante !== null && (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{ color: tema.acaoFundo, fontWeight: '700' }}
+              >
+                {'  ·  descanso '}
+                {formatarDescanso(descansoRestante)}
+              </Text>
+            )}
+          </Text>
+        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -458,6 +551,25 @@ export default function Execucao() {
                   </Pressable>
                 )}
               </View>
+
+              {/*
+                A demonstração DENTRO do treino, e não atrás de um toque.
+                Quem nunca fez o movimento não sabe que precisa procurar — e
+                o personal está online, não do lado para corrigir a postura.
+                Tocar abre em tela cheia com o passo a passo.
+              */}
+              <Demonstracao
+                exercicio={item.exercicio}
+                url={midia[item.exercicio.id]?.imagemUrl ?? null}
+                aoAmpliar={() => setAmpliado(item.exercicio)}
+                tema={tema}
+              />
+
+              {item.exercicio.instrucoes ? (
+                <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                  {item.exercicio.instrucoes}
+                </Text>
+              ) : null}
 
               {item.observacao ? (
                 <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
@@ -628,35 +740,53 @@ export default function Execucao() {
             <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
               Dificuldade
             </Text>
-            <View style={{ flexDirection: 'row', gap: espacamento.sm }}>
-              {[1, 2, 3, 4, 5].map((nivel) => (
-                <Pressable
-                  key={nivel}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: dificuldade === nivel }}
-                  accessibilityLabel={`Dificuldade ${nivel} de 5`}
-                  onPress={() => setDificuldade(nivel)}
-                  style={{
-                    flex: 1,
-                    minHeight: alvoToqueMin,
-                    borderRadius: raio.md,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: dificuldade === nivel ? tema.acaoFundo : 'transparent',
-                    borderWidth: 1,
-                    borderColor: dificuldade === nivel ? tema.acaoFundo : tema.borda,
-                  }}
-                >
-                  <Text
+            {/*
+              Uma linha por nível, com a palavra e o que ela significa. Cinco
+              quadradinhos numerados obrigavam a pessoa a inventar a própria
+              escala, e o "4" de um não era o "4" do outro — o que chegava ao
+              personal era ruído com aparência de dado.
+            */}
+            <View style={{ gap: espacamento.xs }}>
+              {DIFICULDADE.map((nivel) => {
+                const escolhido = dificuldade === nivel.valor;
+                return (
+                  <Pressable
+                    key={nivel.valor}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: escolhido }}
+                    accessibilityLabel={`${nivel.rotulo} — ${nivel.detalhe}`}
+                    onPress={() => setDificuldade(nivel.valor)}
                     style={{
-                      color: dificuldade === nivel ? tema.acaoTexto : tema.textoPrimario,
-                      fontWeight: '700',
+                      minHeight: alvoToqueMin,
+                      borderRadius: raio.md,
+                      paddingHorizontal: espacamento.md,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: espacamento.sm,
+                      backgroundColor: escolhido ? tema.acaoFundo : 'transparent',
+                      borderWidth: 1,
+                      borderColor: escolhido ? tema.acaoFundo : tema.borda,
                     }}
                   >
-                    {nivel}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      style={{
+                        color: escolhido ? tema.acaoTexto : tema.textoPrimario,
+                        fontWeight: '700',
+                      }}
+                    >
+                      {nivel.rotulo}
+                    </Text>
+                    <Text
+                      style={{
+                        color: escolhido ? tema.acaoTexto : tema.textoSecundario,
+                        fontSize: tipografia.tamanho.sm,
+                      }}
+                    >
+                      {nivel.detalhe}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Pressable
@@ -677,11 +807,32 @@ export default function Execucao() {
                 {teveDor ? '✓ Senti dor durante o treino' : 'Senti dor durante o treino'}
               </Text>
             </Pressable>
+
+            {/*
+              O questionário só abre depois do "senti dor". Perguntar sobre dor
+              a quem não sentiu ensina a responder no automático, e aí a
+              resposta de quem sentiu de verdade vale menos.
+            */}
+            {teveDor && (
+              <QuestionarioDeDor
+                itens={sessao.itens.map((i) => ({ id: i.exercicio.id, nome: i.exercicio.nome }))}
+                valor={dor}
+                aoMudar={setDor}
+                tema={tema}
+              />
+            )}
           </View>
         )}
 
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
       </ScrollView>
+
+      <DemonstracaoAmpliada
+        exercicio={ampliado}
+        url={ampliado ? (midia[ampliado.id]?.imagemUrl ?? null) : null}
+        aoFechar={() => setAmpliado(null)}
+        tema={tema}
+      />
     </View>
   );
 }

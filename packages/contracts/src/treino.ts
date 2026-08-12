@@ -134,3 +134,21 @@ export interface PlanoTreinoResumo {
 export interface PlanoTreinoCompleto extends PlanoTreinoResumo {
   sessoes: SessaoTreinoResumo[];
 }
+
+/**
+ * Demonstração dos exercícios de uma sessão, pedida no começo do treino.
+ *
+ * Separada do plano de propósito: o plano fica em cache para o app funcionar
+ * sem rede, e link assinado dura poucos minutos — guardado junto, chegaria
+ * morto. Aqui é pedido na hora de treinar, quando o link ainda vale.
+ */
+export const midiaDeExerciciosSchema = z.object({
+  ids: z.array(z.string().cuid()).min(1).max(50),
+});
+export type MidiaDeExerciciosInput = z.infer<typeof midiaDeExerciciosSchema>;
+
+/** Exercício sem mídia nenhuma não aparece no mapa — a tela trata a ausência. */
+export type MidiaDeExercicios = Record<
+  string,
+  { imagemUrl: string | null; videoUrl: string | null }
+>;

@@ -330,6 +330,7 @@ model Exercicio {
   itens            ItemTreino[]
   seriesExecutadas SerieExecutada[]
   metas            Meta[]
+  doresRelatadas   FeedbackTreino[] @relation("DoresNoExercicio")
 
   @@index([grupoMuscular])
   @@index([criadoPorId, escopo])
@@ -532,6 +533,19 @@ model FeedbackTreino {
   dificuldade Int
   teveDor     Boolean        @default(false)
   localDor    String?
+  /// FISGADA | ARTICULAR | MUSCULAR | OUTRA.
+  ///
+  /// A distinção não é preciosismo: fisgada e dor articular mudam a conduta do
+  /// personal na hora, enquanto ardência muscular é esperada depois de treinar.
+  /// Sem separar, tudo vira "sentiu dor" e o alerta perde o poder de assustar
+  /// quando precisa.
+  dorTipo     String?
+  /// DURANTE | DEPOIS | JA_TINHA — separa o que veio do treino do que já existia.
+  dorMomento  String?
+  /// Em qual exercício doeu. Nulo quando a pessoa não soube dizer, que é um
+  /// estado legítimo: obrigar a escolher faria alguém apontar o errado.
+  dorExercicioId String?
+  dorExercicio   Exercicio? @relation("DoresNoExercicio", fields: [dorExercicioId], references: [id])
   sensacao    String?
   comentario  String?
   criadoEm    DateTime       @default(now())

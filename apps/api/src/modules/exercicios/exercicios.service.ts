@@ -100,6 +100,44 @@ export class ExerciciosService {
   }
 
   /**
+   * Links assinados da demonstração de vários exercícios de uma vez.
+   *
+   * Existe por causa da tela de execução: o plano de treino não traz
+   * `imagemUrl` de propósito — assinatura vale poucos minutos e o plano fica
+   * em cache offline, então o link chegaria morto. Mas quem está treinando
+   * precisa **ver o movimento na hora**, e pedir uma assinatura por exercício
+   * seriam seis idas à rede no meio da academia.
+   *
+   * Aqui é uma só, no começo do treino, para os exercícios daquela sessão.
+   * Exercício sem mídia simplesmente não aparece no mapa — a tela trata a
+   * ausência, que é o caso da maioria do catálogo hoje.
+   */
+  async midiaDeVarios(
+    usuario: UsuarioAutenticado,
+    ids: string[],
+  ): Promise<Record<string, { imagemUrl: string | null; videoUrl: string | null }>> {
+    const exercicios = await this.prisma.exercicio.findMany({
+      where: {
+        id: { in: ids },
+        deletadoEm: null,
+        // Mesma regra do link individual: ninguém alcança a biblioteca alheia.
+        OR: [{ escopo: EscopoExercicio.GLOBAL }, { criadoPorId: usuario.id }],
+      },
+      select: { id: true, imagemChave: true, videoChave: true },
+    });
+
+    const mapa: Record<string, { imagemUrl: string | null; videoUrl: string | null }> = {};
+    for (const e of exercicios) {
+      if (!e.imagemChave && !e.videoChave) continue;
+      mapa[e.id] = {
+        imagemUrl: e.imagemChave ? (await this.midia.urlDeLeitura(e.imagemChave)).url : null,
+        videoUrl: e.videoChave ? (await this.midia.urlDeLeitura(e.videoChave)).url : null,
+      };
+    }
+    return mapa;
+  }
+
+  /**
    * Lista o que o usuário pode ver: a biblioteca GLOBAL mais os exercícios
    * PRIVADOS que ele mesmo criou. Um personal nunca vê a biblioteca do outro.
    */

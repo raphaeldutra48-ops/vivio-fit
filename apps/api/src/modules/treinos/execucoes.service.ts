@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { ExecucaoResumo, RegistrarExecucaoInput } from '@vivio/contracts';
+import type {
+  ExecucaoResumo,
+  MomentoDaDor,
+  RegistrarExecucaoInput,
+  TipoDeDor,
+} from '@vivio/contracts';
 import type { RecordeBatido } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
@@ -210,6 +215,9 @@ export class ExecucoesService {
             dificuldade: e.feedback.dificuldade,
             teveDor: e.feedback.teveDor,
             localDor: e.feedback.localDor,
+            dorTipo: e.feedback.dorTipo as TipoDeDor | null,
+            dorMomento: e.feedback.dorMomento as MomentoDaDor | null,
+            dorExercicioId: e.feedback.dorExercicioId,
             sensacao: e.feedback.sensacao,
             comentario: e.feedback.comentario,
           }

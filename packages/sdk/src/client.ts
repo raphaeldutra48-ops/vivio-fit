@@ -70,6 +70,7 @@ import type {
   ComparativoDeEvolucao,
   PainelDeFeedback,
   MeusRecordes,
+  MidiaDeExercicios,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -472,6 +473,10 @@ export class VivioClient {
         metodo: 'PATCH',
         corpo: { chave },
       }),
+
+    /** Demonstração de vários de uma vez — pedida no começo do treino. */
+    midia: (ids: string[]): Promise<MidiaDeExercicios> =>
+      this.requisicao<MidiaDeExercicios>('/exercicios/midia', { metodo: 'POST', corpo: { ids } }),
 
     urlDoVideo: (id: string): Promise<UrlAssinada> =>
       this.requisicao<UrlAssinada>(`/exercicios/${id}/video`),

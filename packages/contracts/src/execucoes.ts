@@ -31,12 +31,58 @@ export const serieExecutadaSchema = z.object({
 });
 export type SerieExecutadaInput = z.infer<typeof serieExecutadaSchema>;
 
+/**
+ * Que tipo de dor foi.
+ *
+ * A distinção não é preciosismo clínico: fisgada e dor articular mudam a
+ * conduta do personal na hora, enquanto ardência muscular no dia seguinte é
+ * esperada e não deveria acionar ninguém. Sem separar, tudo vira "sentiu dor"
+ * e o alerta perde o poder de assustar quando precisa.
+ */
+export const TipoDeDor = {
+  FISGADA: 'FISGADA',
+  ARTICULAR: 'ARTICULAR',
+  MUSCULAR: 'MUSCULAR',
+  OUTRA: 'OUTRA',
+} as const;
+export type TipoDeDor = (typeof TipoDeDor)[keyof typeof TipoDeDor];
+
+export const ROTULO_TIPO_DOR: Record<TipoDeDor, { titulo: string; ajuda: string }> = {
+  FISGADA: { titulo: 'Fisgada', ajuda: 'pontada aguda, de repente' },
+  ARTICULAR: { titulo: 'Na articulação', ajuda: 'no joelho, ombro, cotovelo' },
+  MUSCULAR: { titulo: 'No músculo', ajuda: 'ardência ou peso no músculo' },
+  OUTRA: { titulo: 'Outra coisa', ajuda: 'explico abaixo' },
+};
+
+/** Quando doeu — separa o que veio do treino do que já existia. */
+export const MomentoDaDor = {
+  DURANTE: 'DURANTE',
+  DEPOIS: 'DEPOIS',
+  JA_TINHA: 'JA_TINHA',
+} as const;
+export type MomentoDaDor = (typeof MomentoDaDor)[keyof typeof MomentoDaDor];
+
+export const ROTULO_MOMENTO_DOR: Record<MomentoDaDor, string> = {
+  DURANTE: 'Durante o exercício',
+  DEPOIS: 'Depois que terminei',
+  JA_TINHA: 'Já sentia antes de treinar',
+};
+
 export const feedbackTreinoSchema = z.object({
   dificuldade: z.number().int().min(1).max(5),
   teveDor: z.boolean().default(false),
   localDor: z.string().max(80).optional(),
   sensacao: z.string().max(200).optional(),
   comentario: z.string().max(1000).optional(),
+  /*
+    Detalhamento da dor. Todos opcionais de propósito: quem está com dor não
+    deve ser obrigado a classificar nada para conseguir avisar. Registrar "doeu
+    o ombro" e mais nada é melhor do que desistir do formulário.
+  */
+  dorTipo: z.nativeEnum(TipoDeDor).optional(),
+  dorMomento: z.nativeEnum(MomentoDaDor).optional(),
+  /** Em qual exercício. `null` quando a pessoa não soube dizer. */
+  dorExercicioId: z.string().cuid().optional(),
 });
 export type FeedbackTreinoInput = z.infer<typeof feedbackTreinoSchema>;
 
@@ -89,6 +135,9 @@ export interface ExecucaoResumo {
     dificuldade: number;
     teveDor: boolean;
     localDor: string | null;
+    dorTipo: TipoDeDor | null;
+    dorMomento: MomentoDaDor | null;
+    dorExercicioId: string | null;
     sensacao: string | null;
     comentario: string | null;
   } | null;

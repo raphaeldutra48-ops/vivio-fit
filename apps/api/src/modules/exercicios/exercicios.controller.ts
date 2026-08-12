@@ -16,10 +16,13 @@ import {
   atualizarExercicioSchema,
   criarExercicioSchema,
   listarExerciciosSchema,
+  midiaDeExerciciosSchema,
   type AtualizarExercicioInput,
   type CriarExercicioInput,
   type ExercicioResumo,
   type ListarExerciciosQuery,
+  type MidiaDeExercicios,
+  type MidiaDeExerciciosInput,
   type UrlAssinada,
   type UsuarioAutenticado,
 } from '@vivio/contracts';
@@ -97,6 +100,21 @@ export class ExerciciosController {
     @Param('id') id: string,
   ): Promise<UrlAssinada> {
     return this.exercicios.urlDoVideo(usuario, id);
+  }
+
+  /*
+    POST porque a lista de ids vai no corpo: uma sessão pode ter dez
+    exercícios, e id em query string estoura o limite prático da URL antes de
+    dar erro claro. Não muda nada no servidor — é leitura.
+  */
+  @Post('midia')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Links assinados da demonstração de vários exercícios' })
+  midiaDeVarios(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(midiaDeExerciciosSchema)) dados: MidiaDeExerciciosInput,
+  ): Promise<MidiaDeExercicios> {
+    return this.exercicios.midiaDeVarios(usuario, dados.ids);
   }
 
   @Delete(':id')

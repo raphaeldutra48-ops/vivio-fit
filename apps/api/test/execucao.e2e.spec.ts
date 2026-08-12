@@ -289,6 +289,68 @@ describe('Execução de treino (e2e)', () => {
     });
   });
 
+  describe('detalhe da dor', () => {
+    /*
+      "Sentiu dor" sozinho não muda conduta nenhuma. O que faz o personal
+      trocar o exercício, baixar a carga ou mandar procurar um médico é saber
+      ONDE, QUE TIPO e EM QUAL MOVIMENTO — e ele está online, não do lado para
+      perguntar olhando.
+    */
+    it('guarda onde, que tipo, quando e em qual exercício', async () => {
+      const r = await request(app.getHttpServer())
+        .post(url(`/alunos/${idAna}/execucoes`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .send({
+          ...treinoRealizado(randomUUID()),
+          feedback: {
+            dificuldade: 5,
+            teveDor: true,
+            localDor: 'ombro direito',
+            dorTipo: 'FISGADA',
+            dorMomento: 'DURANTE',
+            dorExercicioId: idExercicioSupino,
+            comentario: 'Senti quando estava descendo a barra.',
+          },
+        })
+        .expect(201);
+
+      expect(r.body.feedback.localDor).toBe('ombro direito');
+      expect(r.body.feedback.dorTipo).toBe('FISGADA');
+      expect(r.body.feedback.dorMomento).toBe('DURANTE');
+      expect(r.body.feedback.dorExercicioId).toBe(idExercicioSupino);
+    });
+
+    /*
+      Nada é obrigatório: quem está com dor não pode ser barrado por não saber
+      classificar. "Doeu" e mais nada tem que passar.
+    */
+    it('aceita dor sem nenhum detalhe', async () => {
+      const r = await request(app.getHttpServer())
+        .post(url(`/alunos/${idAna}/execucoes`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .send({
+          ...treinoRealizado(randomUUID()),
+          feedback: { dificuldade: 3, teveDor: true },
+        })
+        .expect(201);
+
+      expect(r.body.feedback.teveDor).toBe(true);
+      expect(r.body.feedback.dorTipo).toBeNull();
+      expect(r.body.feedback.dorExercicioId).toBeNull();
+    });
+
+    it('recusa tipo de dor que não existe', async () => {
+      await request(app.getHttpServer())
+        .post(url(`/alunos/${idAna}/execucoes`))
+        .set('Authorization', `Bearer ${tokenAna}`)
+        .send({
+          ...treinoRealizado(randomUUID()),
+          feedback: { dificuldade: 3, teveDor: true, dorTipo: 'INVENTADA' },
+        })
+        .expect(422);
+    });
+  });
+
   describe('volume e recordes', () => {
     const enviar = (series: Record<string, unknown>[]) =>
       request(app.getHttpServer())
