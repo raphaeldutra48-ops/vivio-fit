@@ -71,6 +71,9 @@ import type {
   PainelDeFeedback,
   MeusRecordes,
   MidiaDeExercicios,
+  CardioResumo,
+  RegistrarCardioInput,
+  ResumoDeCalorias,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -873,6 +876,23 @@ export class VivioClient {
     /** Marcas pessoais do aluno, conquista mais recente primeiro. */
     meus: (alunoId: string): Promise<MeusRecordes> =>
       this.requisicao<MeusRecordes>(`/alunos/${alunoId}/recordes`),
+  };
+
+  readonly cardio = {
+    /** Atividades do período, cada uma com a estimativa de caloria. */
+    listar: (alunoId: string, dias = 30): Promise<CardioResumo[]> =>
+      this.requisicao<CardioResumo[]>(`/alunos/${alunoId}/cardio`, { query: { dias } }),
+
+    /** Musculação e cardio separados; `null` onde faltou peso para estimar. */
+    calorias: (alunoId: string, dias = 30): Promise<ResumoDeCalorias> =>
+      this.requisicao<ResumoDeCalorias>(`/alunos/${alunoId}/cardio/calorias`, { query: { dias } }),
+
+    /** Só o próprio aluno registra a atividade dele. */
+    registrar: (alunoId: string, dados: RegistrarCardioInput): Promise<CardioResumo> =>
+      this.requisicao<CardioResumo>(`/alunos/${alunoId}/cardio`, { metodo: 'POST', corpo: dados }),
+
+    remover: (alunoId: string, id: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/cardio/${id}`, { metodo: 'DELETE' }),
   };
 
   readonly checkins = {

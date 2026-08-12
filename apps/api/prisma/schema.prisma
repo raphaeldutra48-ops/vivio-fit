@@ -59,6 +59,7 @@ model User {
   tokensDeVerificacao TokenVerificacaoEmail[]
   tokensDeRedefinicao TokenRedefinicaoSenha[]
   checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
+  cardios             AtividadeCardio[]      @relation("CardiosDoAluno")
   metas               Meta[]                 @relation("MetasDoAluno")
   metasCriadas        Meta[]                 @relation("MetasCriadas")
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
@@ -427,9 +428,42 @@ model ExecucaoTreino {
 
   series   SerieExecutada[]
   feedback FeedbackTreino?
+  cardios  AtividadeCardio[]
 
   @@index([alunoId, iniciadoEm(sort: Desc)])
   @@index([sessaoId])
+}
+
+/// Atividade cardiovascular do aluno. Escopo de consentimento: TREINO.
+///
+/// Existe solta e não como um tipo de `SerieExecutada` porque cardio não tem
+/// série nem carga: tem tempo, intensidade e às vezes distância. Encaixá-lo na
+/// tabela de séries obrigaria a inventar valores para colunas que não se
+/// aplicam, e todo relatório passaria a filtrar o que é peso e o que não é.
+///
+/// `execucaoId` nulo é o caso da corrida de domingo; preenchido, é a esteira
+/// que a pessoa fez depois do treino de força.
+model AtividadeCardio {
+  id          String    @id @default(cuid())
+  alunoId     String
+  aluno       User      @relation("CardiosDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  execucaoId  String?
+  execucao    ExecucaoTreino? @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  /// CAMINHADA | CORRIDA | ESTEIRA | ... — ver TipoCardio no contrato.
+  tipo        String
+  /// LEVE | MODERADA | INTENSA. Muda o MET mais do que o tipo da atividade.
+  intensidade String
+  duracaoMin  Int
+  distanciaKm Decimal?  @db.Decimal(6, 2)
+  /// Só a data, sem hora: a atividade é do DIA, e o fuso de quem registra não
+  /// pode fazer o mesmo treino cair em dois dias diferentes.
+  data        DateTime  @db.Date
+  observacao  String?
+  criadoEm    DateTime  @default(now())
+  deletadoEm  DateTime?
+
+  @@index([alunoId, data(sort: Desc)])
+  @@index([execucaoId])
 }
 
 enum TipoSerie {

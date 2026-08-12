@@ -19,6 +19,7 @@ export * from './metas';
 export * from './comparativo';
 export * from './feedback';
 export * from './recordes';
+export * from './cardio';
 export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';
