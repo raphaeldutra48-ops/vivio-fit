@@ -18,6 +18,9 @@ import { useSessao } from '../../../../../lib/sessao';
 
 const NOME_DO_ANGULO: Record<string, string> = {
   FRENTE: 'De frente',
+  LADO_DIREITO: 'Lado direito',
+  LADO_ESQUERDO: 'Lado esquerdo',
+  // Herdado das fotos anteriores à separação dos lados; sem como saber qual era.
   LADO: 'De lado',
   COSTAS: 'De costas',
   LIVRE: 'Livre',

@@ -75,7 +75,16 @@ export interface ParDeFotos {
 }
 
 /** Ordem de leitura do corpo, não a ordem em que as fotos foram tiradas. */
-const ORDEM_ANGULO = ['FRENTE', 'LADO', 'COSTAS', 'LIVRE'];
+const ORDEM_ANGULO = [
+  'FRENTE',
+  'LADO_DIREITO',
+  'LADO_ESQUERDO',
+  // `LADO` é herdado das fotos anteriores à separação dos dois lados. Fica
+  // junto deles na ordem, porque é o que ele era.
+  'LADO',
+  'COSTAS',
+  'LIVRE',
+];
 
 /**
  * Emparelha as fotos pelo ângulo.

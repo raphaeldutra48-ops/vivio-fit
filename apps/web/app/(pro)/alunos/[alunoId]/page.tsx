@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
+import { CardioDoAluno } from '../../../../components/CardioDoAluno';
 import { MetasDoAluno } from '../../../../components/MetasDoAluno';
 import { PainelDeProgresso } from '../../../../components/PainelDeProgresso';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
@@ -164,6 +165,13 @@ export default function FichaDoAluno() {
 
       {/* Logo abaixo do painel: a meta e o que da sentido aos numeros dele. */}
       <MetasDoAluno alunoId={alunoId} />
+
+      {/*
+        O esforço que não aparece na ficha de treino: a corrida de domingo e a
+        esteira depois da musculação. Sem isto o aluno registra e ninguém lê —
+        e quem registra sem ser lido para de registrar.
+      */}
+      <CardioDoAluno alunoId={alunoId} />
 
       <section>
         <h2 className="mb-md text-lg font-semibold">Treino</h2>

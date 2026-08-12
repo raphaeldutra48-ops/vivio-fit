@@ -67,11 +67,34 @@ export default function Equipe() {
     if (usuario) void carregar();
   }, [usuario, carregar]);
 
+  /**
+   * Aceitar já libera o treino, e só o treino.
+   *
+   * Era o passo em que todo mundo travava: a pessoa aceitava o convite, e o
+   * profissional continuava sem conseguir montar nada, porque faltava uma
+   * autorização que ninguém sabia que existia. Aceitar sem poder treinar não
+   * é aceitar coisa nenhuma.
+   *
+   * Os outros quatro escopos continuam sendo decisão à parte. A LGPD anula
+   * autorização genérica para dado de saúde (Art. 11 pede finalidade
+   * específica e destacada), e por isso o texto do que está sendo liberado
+   * fica no próprio botão — um toque, mas lido.
+   */
   async function responder(vinculo: VinculoResumo, aceitar: boolean) {
     setOcupado(vinculo.id);
     try {
-      if (aceitar) await sdk.vinculos.aceitar(vinculo.id);
-      else await sdk.vinculos.recusar(vinculo.id);
+      if (!aceitar) {
+        await sdk.vinculos.recusar(vinculo.id);
+      } else {
+        await sdk.vinculos.aceitar(vinculo.id);
+        if (!concedido(EscopoDado.TREINO)) {
+          // Falhar aqui não desfaz o vínculo: o aceite é o que importa, e a
+          // autorização a pessoa consegue dar na própria tela, logo abaixo.
+          await sdk.consentimentos
+            .conceder({ escopo: EscopoDado.TREINO })
+            .catch(() => setErro('Vínculo aceito, mas a autorização de treino falhou. Toque em Treino abaixo.'));
+        }
+      }
       await carregar();
     } catch {
       setErro('Não foi possível responder ao convite. Tente de novo.');
@@ -159,6 +182,17 @@ export default function Equipe() {
                 </Text>
               </View>
 
+              {/*
+                O texto do que vai ser liberado fica ao lado do botão, e não
+                escondido atrás dele. A LGPD exige finalidade específica para
+                dado de saúde — um toque só, mas lido.
+              */}
+              <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                Ao aceitar, você libera <Text style={{ fontWeight: '700' }}>seus treinos</Text>:{' '}
+                {FINALIDADE_POR_ESCOPO[EscopoDado.TREINO].toLowerCase()} As demais autorizações
+                ficam abaixo, uma a uma.
+              </Text>
+
               <View style={{ flexDirection: 'row', gap: espacamento.md }}>
                 <Pressable
                   accessibilityRole="button"
@@ -175,7 +209,9 @@ export default function Equipe() {
                     opacity: ocupado === v.id ? 0.5 : 1,
                   }}
                 >
-                  <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>Aceitar</Text>
+                  <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>
+                    Aceitar e liberar treino
+                  </Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"

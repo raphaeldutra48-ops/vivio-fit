@@ -622,8 +622,14 @@ model Medida {
 
 enum AnguloFoto {
   FRENTE
-  LADO
+  LADO_DIREITO
+  LADO_ESQUERDO
   COSTAS
+  /// Herdado. As fotos tiradas antes de os lados se separarem em dois ângulos
+  /// continuam com este valor: apagá-lo obrigaria a adivinhar de que lado era
+  /// cada uma, e a foto de evolução é justamente o registro que não se refaz.
+  /// Não é oferecido em tela nova.
+  LADO
   LIVRE
 }
 

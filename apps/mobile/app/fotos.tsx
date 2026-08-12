@@ -11,9 +11,22 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } fr
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
+/**
+ * As quatro poses do acompanhamento.
+ *
+ * Os dois lados são separados porque o corpo não é simétrico: escoliose,
+ * diferença de volume entre os braços e desvio de ombro só aparecem quando as
+ * fotos de cada lado ficam comparáveis entre si ao longo do tempo. Com um
+ * "lado" só, metade das fotos era de um perfil e metade do outro, e a
+ * comparação de dois meses não dizia nada.
+ *
+ * `LADO` continua existindo no banco para as fotos antigas, mas não é
+ * oferecido aqui: quem tirou antes não tem como dizer de que lado era.
+ */
 const ANGULOS: { valor: AnguloFoto; rotulo: string }[] = [
   { valor: 'FRENTE', rotulo: 'Frente' },
-  { valor: 'LADO', rotulo: 'Lado' },
+  { valor: 'LADO_DIREITO', rotulo: 'Lado direito' },
+  { valor: 'LADO_ESQUERDO', rotulo: 'Lado esquerdo' },
   { valor: 'COSTAS', rotulo: 'Costas' },
 ];
 

@@ -82,6 +82,9 @@ export interface UrlAssinada {
 
 export const AnguloFoto = {
   FRENTE: 'FRENTE',
+  LADO_DIREITO: 'LADO_DIREITO',
+  LADO_ESQUERDO: 'LADO_ESQUERDO',
+  /** Mantido: fotos antigas foram tiradas antes de os lados se separarem. */
   LADO: 'LADO',
   COSTAS: 'COSTAS',
   LIVRE: 'LIVRE',
