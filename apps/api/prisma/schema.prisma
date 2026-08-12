@@ -60,6 +60,7 @@ model User {
   tokensDeRedefinicao TokenRedefinicaoSenha[]
   checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
   cardios             AtividadeCardio[]      @relation("CardiosDoAluno")
+  demonstracoes       DemonstracaoProfissional[] @relation("DemonstracoesGravadas")
   metas               Meta[]                 @relation("MetasDoAluno")
   metasCriadas        Meta[]                 @relation("MetasCriadas")
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
@@ -332,9 +333,36 @@ model Exercicio {
   seriesExecutadas SerieExecutada[]
   metas            Meta[]
   doresRelatadas   FeedbackTreino[] @relation("DoresNoExercicio")
+  demonstracoes    DemonstracaoProfissional[]
 
   @@index([grupoMuscular])
   @@index([criadoPorId, escopo])
+}
+
+/// A demonstração gravada pelo próprio profissional, para os alunos dele.
+///
+/// Existe porque a biblioteca global é compartilhada: deixar o personal
+/// anexar vídeo direto no exercício GLOBAL faria a gravação dele aparecer
+/// para os alunos de todo mundo. E obrigá-lo a duplicar o exercício numa
+/// versão privada quebraria o histórico de carga, que é indexado por
+/// exercício — o aluno perderia a progressão do supino ao mudar de "supino
+/// global" para "supino do Diego".
+///
+/// Assim o exercício continua um só, e a demonstração é que tem dono.
+model DemonstracaoProfissional {
+  id             String    @id @default(cuid())
+  profissionalId String
+  profissional   User      @relation("DemonstracoesGravadas", fields: [profissionalId], references: [id], onDelete: Cascade)
+  exercicioId    String
+  exercicio      Exercicio @relation(fields: [exercicioId], references: [id], onDelete: Cascade)
+  /// Chave no storage privado; a URL entregue é sempre pré-assinada.
+  videoChave     String
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  /// Uma por profissional por exercício: regravar substitui, não acumula.
+  @@unique([profissionalId, exercicioId])
+  @@index([exercicioId])
 }
 
 enum StatusPlano {

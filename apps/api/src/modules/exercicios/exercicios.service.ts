@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EscopoExercicio, Papel, Prisma } from '@prisma/client';
+import { EscopoExercicio, Papel, Prisma, StatusVinculo } from '@prisma/client';
 import type {
   AtualizarExercicioInput,
   CriarExercicioInput,
@@ -126,15 +126,125 @@ export class ExerciciosService {
       select: { id: true, imagemChave: true, videoChave: true },
     });
 
+    const doProfissional = await this.demonstracoesParaEsteUsuario(usuario, ids);
+
     const mapa: Record<string, { imagemUrl: string | null; videoUrl: string | null }> = {};
     for (const e of exercicios) {
-      if (!e.imagemChave && !e.videoChave) continue;
+      /*
+        A gravação do profissional que acompanha esta pessoa vence a do
+        acervo: ela mostra o aparelho da academia dele, a variação que ele
+        prescreve e a voz que o aluno reconhece. O vídeo genérico é a reserva.
+      */
+      const chaveDeVideo = doProfissional.get(e.id) ?? e.videoChave;
+      if (!e.imagemChave && !chaveDeVideo) continue;
       mapa[e.id] = {
         imagemUrl: e.imagemChave ? (await this.midia.urlDeLeitura(e.imagemChave)).url : null,
-        videoUrl: e.videoChave ? (await this.midia.urlDeLeitura(e.videoChave)).url : null,
+        videoUrl: chaveDeVideo ? (await this.midia.urlDeLeitura(chaveDeVideo)).url : null,
       };
     }
     return mapa;
+  }
+
+  /**
+   * As demonstrações gravadas por quem acompanha esta pessoa.
+   *
+   * Para o ALUNO, são as dos profissionais com vínculo ativo; para o
+   * profissional, as dele mesmo — ele precisa ver a própria gravação para
+   * conferir se ficou boa.
+   *
+   * Com mais de um profissional na equipe, o desempate é pelo mais recente:
+   * quem gravou por último provavelmente gravou sabendo do outro.
+   */
+  private async demonstracoesParaEsteUsuario(
+    usuario: UsuarioAutenticado,
+    exercicioIds: string[],
+  ): Promise<Map<string, string>> {
+    let profissionalIds: string[];
+
+    if (usuario.papel === Papel.ALUNO) {
+      const vinculos = await this.prisma.vinculo.findMany({
+        where: { alunoId: usuario.id, status: StatusVinculo.ATIVO },
+        select: { profissionalId: true },
+      });
+      profissionalIds = vinculos.map((v) => v.profissionalId);
+    } else {
+      profissionalIds = [usuario.id];
+    }
+
+    if (profissionalIds.length === 0) return new Map();
+
+    const demonstracoes = await this.prisma.demonstracaoProfissional.findMany({
+      where: { exercicioId: { in: exercicioIds }, profissionalId: { in: profissionalIds } },
+      orderBy: { atualizadoEm: 'asc' },
+      select: { exercicioId: true, videoChave: true },
+    });
+
+    // `asc` mais sobrescrita: o último a entrar no mapa é o mais recente.
+    const mapa = new Map<string, string>();
+    for (const d of demonstracoes) mapa.set(d.exercicioId, d.videoChave);
+    return mapa;
+  }
+
+  /**
+   * Grava (ou substitui) a demonstração do profissional para um exercício.
+   *
+   * Funciona inclusive nos exercícios GLOBAIS, e é justamente esse o ponto:
+   * o personal quer gravar o supino da academia dele, não criar um "supino do
+   * Diego" que quebraria o histórico de carga do aluno — que é indexado por
+   * exercício e se perderia na troca.
+   */
+  async gravarDemonstracao(
+    usuario: UsuarioAutenticado,
+    exercicioId: string,
+    chave: string,
+  ): Promise<void> {
+    if (usuario.papel === Papel.ALUNO) {
+      throw ErroDominio.papelNaoAutorizado('Só profissionais gravam demonstração.');
+    }
+    if (!chave.startsWith(`exercicios/${usuario.id}/`)) {
+      throw ErroDominio.conflito('Chave de arquivo não pertence a você.');
+    }
+
+    const exercicio = await this.prisma.exercicio.findFirst({
+      where: {
+        id: exercicioId,
+        deletadoEm: null,
+        OR: [{ escopo: EscopoExercicio.GLOBAL }, { criadoPorId: usuario.id }],
+      },
+      select: { id: true },
+    });
+    if (!exercicio) throw ErroDominio.naoEncontrado('Exercício');
+
+    const anterior = await this.prisma.demonstracaoProfissional.findUnique({
+      where: { profissionalId_exercicioId: { profissionalId: usuario.id, exercicioId } },
+      select: { videoChave: true },
+    });
+
+    await this.prisma.demonstracaoProfissional.upsert({
+      where: { profissionalId_exercicioId: { profissionalId: usuario.id, exercicioId } },
+      update: { videoChave: chave },
+      create: { profissionalId: usuario.id, exercicioId, videoChave: chave },
+    });
+
+    // Regravar apaga o arquivo anterior: são até 100 MB cada, e sem isso
+    // regravar algumas vezes enche o disco com arquivos inalcançáveis.
+    // Depois da gravação, para uma falha aqui não deixar o registro apontando
+    // para um arquivo que já não existe.
+    if (anterior && anterior.videoChave !== chave) {
+      await this.midia.remover(anterior.videoChave).catch(() => undefined);
+    }
+  }
+
+  async removerDemonstracao(usuario: UsuarioAutenticado, exercicioId: string): Promise<void> {
+    const existente = await this.prisma.demonstracaoProfissional.findUnique({
+      where: { profissionalId_exercicioId: { profissionalId: usuario.id, exercicioId } },
+    });
+    if (!existente) throw ErroDominio.naoEncontrado('Demonstração');
+
+    await this.prisma.demonstracaoProfissional.delete({
+      where: { profissionalId_exercicioId: { profissionalId: usuario.id, exercicioId } },
+    });
+    await this.midia.remover(existente.videoChave).catch(() => undefined);
   }
 
   /**

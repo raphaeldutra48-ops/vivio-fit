@@ -103,6 +103,34 @@ export class ExerciciosController {
   }
 
   /*
+    Vale para o exercício GLOBAL também, ao contrário de `vincularVideo`: o
+    personal quer gravar o supino da academia dele sem criar um "supino do
+    Diego", que quebraria o histórico de carga do aluno.
+  */
+  @Post(':id/minha-demonstracao')
+  @Papeis(...PROFISSIONAIS)
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Grava a demonstração do profissional — só os alunos dele veem' })
+  async gravarDemonstracao(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(vincularVideoSchema)) dados: VincularVideoInput,
+  ): Promise<void> {
+    await this.exercicios.gravarDemonstracao(usuario, id, dados.chave);
+  }
+
+  @Delete(':id/minha-demonstracao')
+  @Papeis(...PROFISSIONAIS)
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Remove a demonstração gravada pelo profissional' })
+  async removerDemonstracao(
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.exercicios.removerDemonstracao(usuario, id);
+  }
+
+  /*
     POST porque a lista de ids vai no corpo: uma sessão pode ter dez
     exercícios, e id em query string estoura o limite prático da URL antes de
     dar erro claro. Não muda nada no servidor — é leitura.

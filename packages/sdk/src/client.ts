@@ -481,6 +481,13 @@ export class VivioClient {
     midia: (ids: string[]): Promise<MidiaDeExercicios> =>
       this.requisicao<MidiaDeExercicios>('/exercicios/midia', { metodo: 'POST', corpo: { ids } }),
 
+    /** Grava a demonstração do profissional; só os alunos dele veem. */
+    gravarDemonstracao: (id: string, chave: string): Promise<void> =>
+      this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'POST', corpo: { chave } }),
+
+    removerDemonstracao: (id: string): Promise<void> =>
+      this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'DELETE' }),
+
     urlDoVideo: (id: string): Promise<UrlAssinada> =>
       this.requisicao<UrlAssinada>(`/exercicios/${id}/video`),
   };

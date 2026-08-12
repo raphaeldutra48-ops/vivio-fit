@@ -29,6 +29,7 @@ export default function Exercicios() {
   /** Qual exercício está com a ficha aberta — um por vez. */
   const [aberto, setAberto] = useState<string | null>(null);
   const inputArquivo = useRef<HTMLInputElement>(null);
+  const ehExercicioProprio = useRef(false);
   const exercicioAlvo = useRef<string | null>(null);
 
   async function recarregar() {
@@ -67,8 +68,14 @@ export default function Exercicios() {
     }
   }
 
-  function escolherVideo(exercicioId: string) {
+  function escolherVideo(exercicioId: string, ehMeuExercicio: boolean) {
     exercicioAlvo.current = exercicioId;
+    /*
+      Num exercício próprio o vídeo vai para o exercício em si; num global,
+      vira minha demonstração — o mesmo botão, destinos diferentes, porque
+      para quem grava a ação é a mesma e a distinção é do sistema.
+    */
+    ehExercicioProprio.current = ehMeuExercicio;
     inputArquivo.current?.click();
   }
 
@@ -97,8 +104,12 @@ export default function Exercicios() {
         tamanhoBytes: arquivo.size,
       });
       await sdk.midia.enviarArquivo(autorizacao, arquivo);
-      await sdk.exercicios.vincularVideo(exercicioId, autorizacao.chave);
-      setMensagem('Vídeo vinculado. O aluno já vê na tela de execução.');
+      if (ehExercicioProprio.current) {
+        await sdk.exercicios.vincularVideo(exercicioId, autorizacao.chave);
+      } else {
+        await sdk.exercicios.gravarDemonstracao(exercicioId, autorizacao.chave);
+      }
+      setMensagem('Gravação salva. Seus alunos já veem durante o treino.');
       await recarregar();
     } catch {
       setErro('Não foi possível enviar o vídeo.');
@@ -183,19 +194,24 @@ export default function Exercicios() {
                     sem vídeo
                   </span>
                 )}
-                {e.escopo === 'PRIVADO' && (
-                  <Botao
-                    variante="neutra"
-                    disabled={enviandoVideoDe === e.id}
-                    onClick={() => escolherVideo(e.id)}
-                  >
-                    {enviandoVideoDe === e.id
-                      ? 'Enviando…'
-                      : e.temVideo
-                        ? 'Trocar vídeo'
-                        : 'Enviar vídeo'}
-                  </Botao>
-                )}
+                {/*
+                  A gravação própria vale para o exercício GLOBAL também, e é
+                  esse o ponto: o personal quer gravar o supino da academia
+                  dele sem criar um "supino do Diego", que quebraria o
+                  histórico de carga do aluno — indexado por exercício.
+
+                  `capture` faz o celular abrir a câmera direto em vez do
+                  seletor de arquivos. No computador o atributo é ignorado e
+                  vira uma escolha de arquivo comum, que é o comportamento
+                  certo nos dois lugares.
+                */}
+                <Botao
+                  variante="neutra"
+                  disabled={enviandoVideoDe === e.id}
+                  onClick={() => escolherVideo(e.id, e.escopo === 'PRIVADO')}
+                >
+                  {enviandoVideoDe === e.id ? 'Enviando…' : '🎥 Gravar minha demonstração'}
+                </Botao>
               </div>
             </div>
 
@@ -227,6 +243,7 @@ export default function Exercicios() {
         ref={inputArquivo}
         type="file"
         accept="video/mp4,video/quicktime,video/webm"
+        capture="environment"
         onChange={(e) => void enviarVideo(e)}
         className="hidden"
         aria-hidden
