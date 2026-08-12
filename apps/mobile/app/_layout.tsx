@@ -28,6 +28,7 @@ function Navegacao() {
         <Stack.Screen name="recordes" options={{ title: 'Meus recordes' }} />
         <Stack.Screen name="metas" options={{ title: 'Minhas metas' }} />
         <Stack.Screen name="equipe" options={{ title: 'Minha equipe' }} />
+        <Stack.Screen name="cardio" options={{ title: 'Cardio' }} />
       </Stack>
     </>
   );

@@ -1,10 +1,15 @@
 import {
+  ROTULO_INTENSIDADE,
   ROTULO_RECORDE,
+  ROTULO_TIPO_CARDIO,
+  dataLocalDoCheckin,
   SIGLA_TIPO_SERIE,
   TipoSerie,
   formatarSerieAnterior,
   type AnterioresDaSessao,
   type ExercicioResumo,
+  type Intensidade,
+  type TipoCardio,
   type MidiaDeExercicios,
   type PlanoTreinoCompleto,
   type RecordeBatido,
@@ -36,6 +41,9 @@ interface SerieNaTela {
 
 /** Ordem em que o toque no selo alterna o tipo da série. */
 const CICLO_TIPO: TipoSerie[] = ['NORMAL', 'AQUECIMENTO', 'DROP', 'FALHA'];
+
+/** Só os três da escala: no fim do treino ninguém quer ler tabela. */
+const INTENSIDADES_RAPIDAS: Intensidade[] = ['LEVE', 'MODERADA', 'INTENSA'];
 
 function formatarDescanso(segundos: number): string {
   const min = Math.floor(segundos / 60);
@@ -88,6 +96,10 @@ export default function Execucao() {
   /** Segundos desde que o treino começou. Zera só ao sair da tela. */
   const [decorrido, setDecorrido] = useState(0);
   const [dor, setDor] = useState<RespostaDeDor>(DOR_VAZIA);
+  const [fezCardio, setFezCardio] = useState(false);
+  const [cardioTipo, setCardioTipo] = useState<TipoCardio>('ESTEIRA');
+  const [cardioMin, setCardioMin] = useState('');
+  const [cardioIntensidade, setCardioIntensidade] = useState<Intensidade>('MODERADA');
 
   const clienteUuid = useRef(gerarUuid());
   const iniciadoEm = useRef(new Date());
@@ -291,6 +303,31 @@ export default function Execucao() {
           comentario: teveDor && dor.relato.trim() ? dor.relato.trim() : undefined,
         },
       });
+
+      /*
+        O cardio vai depois do treino porque precisa do id da execução para
+        ficar amarrado a ela. Sem rede não dá — e nesse caso a pessoa é avisada
+        de que precisa lançar pela tela de Cardio, em vez de o registro sumir
+        em silêncio.
+      */
+      const minutosDeCardio = Number(cardioMin);
+      if (fezCardio && minutosDeCardio > 0 && usuario) {
+        if (resumo) {
+          try {
+            await sdk.cardio.registrar(usuario.id, {
+              tipo: cardioTipo,
+              intensidade: cardioIntensidade,
+              duracaoMin: minutosDeCardio,
+              data: dataLocalDoCheckin(),
+              execucaoId: resumo.id,
+            });
+          } catch {
+            setErro('O treino foi salvo, mas o cardio não. Registre pela tela de Cardio.');
+          }
+        } else {
+          setErro('Treino salvo no aparelho. O cardio precisa de conexão — lance depois em Cardio.');
+        }
+      }
 
       /*
         A medalha vem antes da navegação, e só quando o servidor respondeu
@@ -820,6 +857,110 @@ export default function Execucao() {
                 aoMudar={setDor}
                 tema={tema}
               />
+            )}
+
+            {/*
+              Cardio feito no mesmo dia da musculação. Fica aqui, no fim do
+              treino, porque é quando a esteira acabou de acontecer — pedir
+              para a pessoa lembrar disso depois, numa tela separada, é pedir
+              para ela não registrar.
+            */}
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: fezCardio }}
+              accessibilityLabel="Fiz cardio neste treino"
+              onPress={() => setFezCardio((v) => !v)}
+              style={{
+                minHeight: alvoToqueMin,
+                borderRadius: raio.md,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: fezCardio ? 2 : 1,
+                borderColor: fezCardio ? tema.acaoFundo : tema.borda,
+              }}
+            >
+              <Text style={{ color: tema.textoPrimario }}>
+                {fezCardio ? '✓ Fiz cardio neste treino' : '🏃 Fiz cardio neste treino'}
+              </Text>
+            </Pressable>
+
+            {fezCardio && (
+              <View style={{ gap: espacamento.sm }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                  O quê?
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.xs }}>
+                  {(['ESTEIRA', 'BICICLETA', 'ELIPTICO', 'CORRIDA', 'CAMINHADA'] as TipoCardio[]).map(
+                    (t) => (
+                      <Pressable
+                        key={t}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: cardioTipo === t }}
+                        accessibilityLabel={ROTULO_TIPO_CARDIO[t]}
+                        onPress={() => setCardioTipo(t)}
+                        style={{
+                          minHeight: alvoToqueMin,
+                          paddingHorizontal: espacamento.md,
+                          justifyContent: 'center',
+                          borderRadius: raio.md,
+                          borderWidth: cardioTipo === t ? 2 : 1,
+                          borderColor: cardioTipo === t ? tema.acaoFundo : tema.borda,
+                        }}
+                      >
+                        <Text style={{ color: tema.textoPrimario }}>{ROTULO_TIPO_CARDIO[t]}</Text>
+                      </Pressable>
+                    ),
+                  )}
+                </View>
+
+                <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                  Quantos minutos?
+                </Text>
+                <TextInput
+                  accessibilityLabel="Minutos de cardio"
+                  placeholder="20"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="number-pad"
+                  value={cardioMin}
+                  onChangeText={setCardioMin}
+                  style={{
+                    minHeight: alvoToqueMin,
+                    borderWidth: 1,
+                    borderColor: tema.borda,
+                    borderRadius: raio.md,
+                    paddingHorizontal: espacamento.md,
+                    color: tema.textoPrimario,
+                    backgroundColor: tema.fundo,
+                    fontSize: tipografia.tamanho.lg,
+                    fontWeight: '700',
+                  }}
+                />
+
+                <View style={{ flexDirection: 'row', gap: espacamento.xs }}>
+                  {INTENSIDADES_RAPIDAS.map((i) => (
+                    <Pressable
+                      key={i}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: cardioIntensidade === i }}
+                      accessibilityLabel={`${ROTULO_INTENSIDADE[i].titulo} — ${ROTULO_INTENSIDADE[i].ajuda}`}
+                      onPress={() => setCardioIntensidade(i)}
+                      style={{
+                        flex: 1,
+                        minHeight: alvoToqueMin,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: raio.md,
+                        borderWidth: cardioIntensidade === i ? 2 : 1,
+                        borderColor: cardioIntensidade === i ? tema.acaoFundo : tema.borda,
+                      }}
+                    >
+                      <Text style={{ color: tema.textoPrimario, fontSize: tipografia.tamanho.sm }}>
+                        {ROTULO_INTENSIDADE[i].titulo}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             )}
           </View>
         )}
