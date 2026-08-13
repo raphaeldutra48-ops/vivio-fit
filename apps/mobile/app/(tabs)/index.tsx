@@ -1,5 +1,5 @@
 import type { CheckinResumo, ExecucaoResumo, PlanoTreinoCompleto } from '@vivio/contracts';
-import { dataLocalDoCheckin } from '@vivio/contracts';
+import { cobrancaDaDieta, dataLocalDoCheckin, type CobrancaDaDieta } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -18,6 +18,7 @@ export default function Inicio() {
   const [naoLidas, setNaoLidas] = useState(0);
   const [convitesAbertos, setConvitesAbertos] = useState(0);
   const [temProfissional, setTemProfissional] = useState(true);
+  const [cobranca, setCobranca] = useState<CobrancaDaDieta | null>(null);
 
   useEffect(() => {
     if (!usuario) return;
@@ -48,6 +49,33 @@ export default function Inicio() {
         setTemProfissional(vs.some((v) => v.status === 'ATIVO'));
       })
       .catch(() => undefined);
+
+    /*
+      A dieta é o único acompanhamento que depende de resposta várias vezes
+      por dia, e por isso é o que mais some sem alguém puxando. Sem plano
+      ativo ou sem autorização, as duas chamadas falham e a cobrança fica
+      calada — que é o certo: não há o que cobrar.
+    */
+    void (async () => {
+      try {
+        const [dieta, registros] = await Promise.all([
+          sdk.dietas.obterAtiva(usuario.id),
+          sdk.dietas.registrosDoDia(usuario.id),
+        ]);
+        setCobranca(
+          cobrancaDaDieta(
+            dieta.refeicoes.map((r) => ({
+              id: r.id,
+              nome: r.nome,
+              horarioSugerido: r.horarioSugerido,
+            })),
+            registros.map((r) => r.refeicaoId),
+          ),
+        );
+      } catch {
+        setCobranca(null);
+      }
+    })();
   }, [usuario, hoje]);
 
   /*
@@ -179,6 +207,34 @@ export default function Inicio() {
             Seu personal ainda não montou ou ativou um plano para você.
           </Text>
         </View>
+      )}
+
+      {/*
+        A dieta só cobra quando o horário da refeição já passou — cobrar de
+        manhã pelo jantar ensina a ignorar o aviso, e aviso ignorado não cobra
+        mais nada depois.
+      */}
+      {cobranca && cobranca.pendentes.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${cobranca.pendentes.length} refeições sem registro hoje`}
+          onPress={() => router.push('/nutricao')}
+          style={{
+            backgroundColor: tema.superficie,
+            borderRadius: raio.lg,
+            borderWidth: cobranca.urgencia === 'ATRASADO' ? 2 : 1,
+            borderColor: cobranca.urgencia === 'ATRASADO' ? tema.alerta : tema.borda,
+            padding: espacamento.lg,
+            gap: espacamento.xs,
+          }}
+        >
+          <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+            🍽️ {cobranca.respondidas} de {cobranca.total} refeições registradas
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            {cobranca.mensagem}
+          </Text>
+        </Pressable>
       )}
 
       {/*

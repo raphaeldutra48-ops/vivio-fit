@@ -1,10 +1,11 @@
 import {
   VOLUMES_RAPIDOS_ML,
+  cobrancaDaDieta,
   type PlanoDietaCompleto,
   type ResumoDeAgua,
 } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
@@ -18,6 +19,25 @@ export default function Nutricao() {
   const [registros, setRegistros] = useState<Record<string, string>>({});
   const [semDieta, setSemDieta] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
+
+  /*
+    Recalculada a cada mudança de registro, e não uma vez ao abrir: marcar uma
+    refeição precisa fazer a cobrança encolher na hora. Se ela só mudasse na
+    próxima abertura, a pessoa registraria e continuaria sendo cobrada — que é
+    o jeito mais rápido de ensinar alguém a ignorar um aviso.
+  */
+  const cobranca = useMemo(
+    () =>
+      cobrancaDaDieta(
+        dieta?.refeicoes.map((r) => ({
+          id: r.id,
+          nome: r.nome,
+          horarioSugerido: r.horarioSugerido,
+        })) ?? [],
+        Object.keys(registros),
+      ),
+    [dieta, registros],
+  );
 
   async function recarregar() {
     if (!usuario) return;
@@ -85,6 +105,44 @@ export default function Nutricao() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
+      {/*
+        A cobrança vem antes da água e do plano, e só quando há o que cobrar.
+        Ela é o motivo de a pessoa abrir esta aba num dia em que já sabe o que
+        vai comer — e no fim da lista ninguém a veria.
+      */}
+      {cobranca.urgencia !== 'NADA' && cobranca.pendentes.length > 0 && (
+        <View
+          style={{
+            ...cartao,
+            borderColor: cobranca.urgencia === 'ATRASADO' ? tema.alerta : tema.borda,
+            borderWidth: cobranca.urgencia === 'ATRASADO' ? 2 : 1,
+            gap: espacamento.xs,
+          }}
+        >
+          <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+            {cobranca.respondidas} de {cobranca.total} refeições registradas hoje
+          </Text>
+          <Text style={{ color: tema.textoSecundario }}>{cobranca.mensagem}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Ir para ${cobranca.pendentes[0]!.nome}`}
+            onPress={() => setExpandida(cobranca.pendentes[0]!.id)}
+            style={{
+              minHeight: alvoToqueMin,
+              marginTop: espacamento.xs,
+              borderRadius: raio.md,
+              backgroundColor: tema.acaoFundo,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>
+              Registrar {cobranca.pendentes[0]!.nome.toLowerCase()}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* --- Água ---------------------------------------------------------- */}
       {agua && (
         <View style={{ ...cartao, gap: espacamento.md }}>
