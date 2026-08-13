@@ -21,6 +21,7 @@ export * from './feedback';
 export * from './recordes';
 export * from './cardio';
 export * from './cobranca-dieta';
+export * from './metabolismo';
 export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';

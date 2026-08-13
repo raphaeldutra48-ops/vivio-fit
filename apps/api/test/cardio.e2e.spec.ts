@@ -171,6 +171,53 @@ describe('Cardio e calorias (e2e)', () => {
     });
   });
 
+  describe('gasto do corpo existindo', () => {
+    /*
+      Sem altura e sexo no perfil, a Mifflin-St Jeor não roda. O peso sozinho
+      serve para a queima do exercício, mas não para a taxa basal — e a tela
+      precisa dizer o que falta em vez de mostrar um número assumido.
+    */
+    it('sem altura e sexo, não estima a taxa basal e diz o que falta', async () => {
+      const r = await calorias().expect(200);
+      expect(r.body.gastoDiario.tmb).toBeNull();
+      expect(r.body.gastoDiario.faltando).toContain('sexo biológico');
+      // A queima do exercício continua: ela não depende desses campos.
+      expect(r.body.cardio.kcal).toBeGreaterThan(0);
+    });
+
+    /*
+      A regra que faz o app não precisar do sexo: havendo massa magra medida,
+      a Katch-McArdle assume — ela usa o tecido que gasta energia em vez de
+      adivinhá-lo pelo sexo.
+    */
+    it('com massa magra medida, usa Katch-McArdle sem precisar de sexo', async () => {
+      await request(servidor)
+        .post(url(`/alunos/${idAluno}/medidas`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .send({ data: new Date().toISOString(), pesoKg: 70, massaMagraKg: 55 })
+        .expect(201);
+
+      const r = await calorias().expect(200);
+      // 370 + 21,6 × 55 = 1558
+      expect(r.body.gastoDiario.tmb).toBe(1558);
+      expect(r.body.gastoDiario.formula).toBe('KATCH_MCARDLE');
+      expect(r.body.gastoDiario.faltando).toEqual([]);
+    });
+
+    /*
+      O total do dia é a TMB × 1,2 mais o exercício registrado. O 1,2 é só a
+      vida cotidiana: a tabela clássica de atividade já embute o treino, e
+      usá-la aqui contaria o exercício duas vezes.
+    */
+    it('soma cotidiano e exercício sem contar o treino duas vezes', async () => {
+      const r = await calorias().expect(200);
+      const g = r.body.gastoDiario;
+
+      expect(g.cotidiano).toBe(Math.round((1558 * 1.2) / 10) * 10);
+      expect(g.totalPorDia).toBe(g.cotidiano + g.exercicioPorDia);
+    });
+  });
+
   describe('quem escreve', () => {
     /*
       Cardio lançado pelo profissional deixaria de dizer o que a pessoa fez e

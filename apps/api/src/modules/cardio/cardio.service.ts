@@ -2,11 +2,15 @@ import { Injectable } from '@nestjs/common';
 import {
   MET_MUSCULACAO,
   estimarCalorias,
+  gastoDiario,
+  idadeEmAnos,
   metDe,
   type CardioResumo,
+  type DadosParaTmb,
   type Intensidade,
   type RegistrarCardioInput,
   type ResumoDeCalorias,
+  type SexoBiologico,
   type TipoCardio,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
@@ -33,6 +37,41 @@ export class CardioService {
       select: { pesoKg: true },
     });
     return medida?.pesoKg ? Number(medida.pesoKg) : null;
+  }
+
+  /**
+   * O que a taxa metabólica precisa, cada peça do lugar onde ela já mora.
+   *
+   * A massa magra vem da medida mais recente que a tenha — e não da mais
+   * recente de todas. Quem se pesou ontem e fez bioimpedância mês passado
+   * ainda tem composição medida; ignorá-la jogaria a conta de volta para a
+   * fórmula que depende de sexo, que é a menos precisa das duas.
+   */
+  private async dadosParaTmb(alunoId: string): Promise<DadosParaTmb> {
+    const [comPeso, comMassaMagra, perfil] = await Promise.all([
+      this.prisma.medida.findFirst({
+        where: { alunoId, deletadoEm: null, pesoKg: { not: null } },
+        orderBy: { data: 'desc' },
+        select: { pesoKg: true },
+      }),
+      this.prisma.medida.findFirst({
+        where: { alunoId, deletadoEm: null, massaMagraKg: { not: null } },
+        orderBy: { data: 'desc' },
+        select: { massaMagraKg: true },
+      }),
+      this.prisma.perfilAluno.findUnique({
+        where: { userId: alunoId },
+        select: { alturaCm: true, dataNascimento: true, sexoBiologico: true },
+      }),
+    ]);
+
+    return {
+      pesoKg: comPeso?.pesoKg ? Number(comPeso.pesoKg) : null,
+      alturaCm: perfil?.alturaCm ?? null,
+      idade: idadeEmAnos(perfil?.dataNascimento ?? null),
+      sexo: (perfil?.sexoBiologico as SexoBiologico | null) ?? null,
+      massaMagraKg: comMassaMagra?.massaMagraKg ? Number(comMassaMagra.massaMagraKg) : null,
+    };
   }
 
   async registrar(alunoId: string, dados: RegistrarCardioInput): Promise<CardioResumo> {
@@ -96,8 +135,8 @@ export class CardioService {
   async resumoDeCalorias(alunoId: string, dias: number): Promise<ResumoDeCalorias> {
     const de = new Date(Date.now() - dias * DIA_EM_MS);
 
-    const [peso, execucoes, cardios] = await Promise.all([
-      this.pesoAtual(alunoId),
+    const [dadosDoCorpo, execucoes, cardios] = await Promise.all([
+      this.dadosParaTmb(alunoId),
       this.prisma.execucaoTreino.findMany({
         where: { alunoId, iniciadoEm: { gte: de } },
         select: { duracaoSeg: true, feedback: { select: { dificuldade: true } } },
@@ -107,6 +146,8 @@ export class CardioService {
         select: { tipo: true, intensidade: true, duracaoMin: true },
       }),
     ]);
+
+    const peso = dadosDoCorpo.pesoKg;
 
     /*
       A dificuldade relatada vira a intensidade da musculação: quem terminou
@@ -164,17 +205,20 @@ export class CardioService {
       kcal: temAlgumaKcalDeCardio ? kcalCardio : null,
     };
 
+    // `null` quando nada pôde ser estimado — somar nulos como zero diria
+    // "você não gastou nada", que é diferente de "não deu para calcular".
+    const totalKcal =
+      musculacao.kcal === null && cardio.kcal === null
+        ? null
+        : (musculacao.kcal ?? 0) + (cardio.kcal ?? 0);
+
     return {
       dias,
       pesoUsadoKg: peso,
       musculacao,
       cardio,
-      // `null` quando nada pôde ser estimado — somar nulos como zero diria
-      // "você não gastou nada", que é diferente de "não deu para calcular".
-      totalKcal:
-        musculacao.kcal === null && cardio.kcal === null
-          ? null
-          : (musculacao.kcal ?? 0) + (cardio.kcal ?? 0),
+      totalKcal,
+      gastoDiario: gastoDiario(dadosDoCorpo, totalKcal, dias),
     };
   }
 

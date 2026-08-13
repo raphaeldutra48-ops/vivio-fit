@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GastoDiario } from './metabolismo';
 
 /**
  * Atividade cardiovascular e estimativa de gasto calórico.
@@ -162,4 +163,14 @@ export interface ResumoDeCalorias {
   musculacao: { sessoes: number; minutos: number; kcal: number | null };
   cardio: { sessoes: number; minutos: number; kcal: number | null };
   totalKcal: number | null;
+  /**
+   * O gasto do corpo existindo, somado ao exercício registrado.
+   *
+   * Vem junto porque as duas leituras só fazem sentido lado a lado: 3.250 kcal
+   * de treino no mês parece muito até aparecer ao lado das 48.000 que o corpo
+   * gastou só vivendo. Sem essa comparação, o aluno superestima o efeito do
+   * treino sozinho sobre o peso — que é a origem da frustração de quem treina
+   * e não emagrece.
+   */
+  gastoDiario: GastoDiario;
 }

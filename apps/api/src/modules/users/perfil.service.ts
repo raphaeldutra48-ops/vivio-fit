@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AtualizarPerfilInput, MeuPerfil } from '@vivio/contracts';
+import type { AtualizarPerfilInput, MeuPerfil, SexoBiologico } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 
-const INCLUDE = { perfilProfissional: true } as const;
+const INCLUDE = { perfilProfissional: true, perfilAluno: true } as const;
 type LinhaUsuario = Prisma.UserGetPayload<{ include: typeof INCLUDE }>;
 
 @Injectable()
@@ -29,6 +29,13 @@ export class PerfilService {
             verificadoEm: u.perfilProfissional.verificadoEm?.toISOString() ?? null,
             recusadoEm: u.perfilProfissional.recusadoEm?.toISOString() ?? null,
             motivoRecusa: u.perfilProfissional.motivoRecusa,
+          }
+        : null,
+      aluno: u.perfilAluno
+        ? {
+            alturaCm: u.perfilAluno.alturaCm,
+            sexoBiologico: (u.perfilAluno.sexoBiologico as SexoBiologico | null) ?? null,
+            dataNascimento: u.perfilAluno.dataNascimento.toISOString().slice(0, 10),
           }
         : null,
     };
@@ -91,6 +98,23 @@ export class PerfilService {
       },
       include: INCLUDE,
     });
+
+    /*
+      Altura e sexo vivem no perfil do aluno e sao gravados a parte: sao os
+      dois campos que a taxa metabolica precisa e que ninguem perguntava.
+      Sem perfil de aluno (profissional editando o proprio cadastro) nao ha o
+      que atualizar.
+    */
+    if (atual.perfilAluno && (dados.alturaCm !== undefined || dados.sexoBiologico !== undefined)) {
+      await this.prisma.perfilAluno.update({
+        where: { userId: usuarioId },
+        data: {
+          ...(dados.alturaCm !== undefined ? { alturaCm: dados.alturaCm } : {}),
+          ...(dados.sexoBiologico !== undefined ? { sexoBiologico: dados.sexoBiologico } : {}),
+        },
+      });
+      return this.obter(usuarioId);
+    }
 
     return this.paraResumo(atualizado);
   }
