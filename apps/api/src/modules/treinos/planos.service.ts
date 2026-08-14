@@ -270,6 +270,8 @@ export class PlanosService {
             quando precisa mostrar.
           */
           imagemUrl: null,
+          /* Pelo mesmo motivo: não perguntamos, então não afirmamos. */
+          temDemonstracao: null,
           imagemCredito: i.exercicio.imagemCredito,
           videoCredito: i.exercicio.videoCredito,
         } satisfies ExercicioResumo,

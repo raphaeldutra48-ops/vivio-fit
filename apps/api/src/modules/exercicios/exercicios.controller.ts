@@ -19,6 +19,7 @@ import {
   midiaDeExerciciosSchema,
   type AtualizarExercicioInput,
   type CriarExercicioInput,
+  type ExercicioAGravar,
   type ExercicioResumo,
   type ListarExerciciosQuery,
   type MidiaDeExercicios,
@@ -52,6 +53,18 @@ export class ExerciciosController {
     @Query(new ZodValidationPipe(listarExerciciosSchema)) consulta: ListarExerciciosQuery,
   ): Promise<ExercicioResumo[]> {
     return this.exercicios.listar(usuario, consulta);
+  }
+
+  /*
+    Declarada ANTES de `:id`, e não junto das outras rotas do profissional: o
+    Nest casa na ordem, e depois de `:id` esta URL chegaria em `obter` com o
+    id "plano-de-gravacao" e voltaria 404.
+  */
+  @Get('plano-de-gravacao')
+  @Papeis(...PROFISSIONAIS)
+  @ApiOperation({ summary: 'O que ainda falta gravar, do mais prescrito para o menos' })
+  planoDeGravacao(@UsuarioAtual() usuario: UsuarioAutenticado): Promise<ExercicioAGravar[]> {
+    return this.exercicios.planoDeGravacao(usuario);
   }
 
   @Get(':id')

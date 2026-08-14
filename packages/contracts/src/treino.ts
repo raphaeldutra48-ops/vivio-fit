@@ -42,7 +42,23 @@ export interface ExercicioResumo {
   equipamento: string | null;
   instrucoes: string | null;
   escopo: 'GLOBAL' | 'PRIVADO';
+  /** Vídeo do próprio exercício — o do acervo, igual para todo mundo. */
   temVideo: boolean;
+  /**
+   * Há gravação de quem acompanha esta pessoa: a do próprio profissional
+   * quando é ele olhando, a da equipe quando é o aluno.
+   *
+   * Separado de `temVideo` porque as duas respondem perguntas diferentes. Para
+   * quem está gravando o acervo, "o catálogo tem um vídeo genérico" e "eu já
+   * gravei este" são estados distintos — juntar os dois num booleano só faz o
+   * profissional regravar o que já gravou, e são 159 exercícios.
+   *
+   * `null` quer dizer **não consultado**, e não "não tem": o plano de treino
+   * devolve exercícios sem ir atrás das demonstrações, pela mesma razão que
+   * devolve `imagemUrl: null`. Um `false` ali afirmaria algo que ninguém
+   * verificou, e a tela mostraria "sem gravação" sobre um vídeo existente.
+   */
+  temDemonstracao: boolean | null;
   criadoPorId: string | null;
   /**
    * Passo a passo de execução. Vazio é normal: nem todo exercício tem, e a
@@ -64,6 +80,30 @@ export interface ExercicioResumo {
    */
   imagemCredito: string | null;
   videoCredito: string | null;
+}
+
+/**
+ * Um item da fila de gravação do profissional.
+ *
+ * Não reaproveita `ExercicioResumo` de propósito: aqui não há link assinado de
+ * imagem, e assinar 159 URLs para uma tela que é uma lista de trabalho seria
+ * pagar caro por nada.
+ */
+export interface ExercicioAGravar {
+  id: string;
+  nome: string;
+  grupoMuscular: GrupoMuscular;
+  equipamento: string | null;
+  /**
+   * Decide o destino do vídeo: no exercício próprio ele vai para o exercício;
+   * no global, vira demonstração — criar um "supino do Diego" quebraria o
+   * histórico de carga do aluno, que é indexado por exercício.
+   */
+  escopo: 'GLOBAL' | 'PRIVADO';
+  /** Quantas vezes ele já prescreveu isto. Zero é comum e não é erro. */
+  vezesPrescrito: number;
+  /** Há imagem ou vídeo do acervo — o aluno não está totalmente às cegas. */
+  temAlgumaReferencia: boolean;
 }
 
 // --- Plano de treino --------------------------------------------------------

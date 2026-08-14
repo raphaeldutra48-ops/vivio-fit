@@ -52,6 +52,7 @@ function exercicio(id: string, nome: string): ExercicioResumo {
     instrucoes: null,
     escopo: 'GLOBAL',
     temVideo: false,
+    temDemonstracao: false,
     criadoPorId: null,
     passos: [],
     imagemUrl: null,

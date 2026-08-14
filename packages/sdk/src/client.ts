@@ -12,6 +12,7 @@ import type {
   CriarExercicioInput,
   CriarPlanoTreinoInput,
   ExecucaoResumo,
+  ExercicioAGravar,
   ExercicioResumo,
   ListarExerciciosQuery,
   PlanoTreinoCompleto,
@@ -489,6 +490,10 @@ export class VivioClient {
 
     removerDemonstracao: (id: string): Promise<void> =>
       this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'DELETE' }),
+
+    /** A fila de gravação: o que falta, do mais prescrito para o menos. */
+    planoDeGravacao: (): Promise<ExercicioAGravar[]> =>
+      this.requisicao<ExercicioAGravar[]>('/exercicios/plano-de-gravacao'),
 
     urlDoVideo: (id: string): Promise<UrlAssinada> =>
       this.requisicao<UrlAssinada>(`/exercicios/${id}/video`),

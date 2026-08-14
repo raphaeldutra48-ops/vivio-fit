@@ -9,6 +9,7 @@ import {
 } from '@vivio/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { FichaDeExercicio } from '../../../components/FichaDeExercicio';
+import { FilaDeGravacao } from '../../../components/FilaDeGravacao';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
 
@@ -25,6 +26,8 @@ export default function Exercicios() {
   const [criando, setCriando] = useState(false);
 
   const [enviandoVideoDe, setEnviandoVideoDe] = useState<string | null>(null);
+  /** Incrementa a cada gravação salva, para a fila se refazer. */
+  const [filaVersao, setFilaVersao] = useState(0);
   const [videoAberto, setVideoAberto] = useState<{ id: string; url: string } | null>(null);
   /** Qual exercício está com a ficha aberta — um por vez. */
   const [aberto, setAberto] = useState<string | null>(null);
@@ -110,6 +113,8 @@ export default function Exercicios() {
         await sdk.exercicios.gravarDemonstracao(exercicioId, autorizacao.chave);
       }
       setMensagem('Gravação salva. Seus alunos já veem durante o treino.');
+      // Encurta a fila junto com a lista: o item recém-gravado sai de cena.
+      setFilaVersao((v) => v + 1);
       await recarregar();
     } catch {
       setErro('Não foi possível enviar o vídeo.');
@@ -182,9 +187,22 @@ export default function Exercicios() {
                 </div>
               </div>
               <div className="flex items-center gap-md">
-                {e.temVideo ? (
+                {/*
+                  Três estados, não dois. "Já gravei este" e "o acervo tem um
+                  vídeo genérico" são coisas diferentes para quem está passando
+                  por 159 exercícios — juntar as duas num "com vídeo" só faz
+                  regravar o que já foi gravado.
+                */}
+                {e.temDemonstracao ? (
                   <>
-                    <Etiqueta texto="com vídeo" cor="var(--vv-sucesso)" />
+                    <Etiqueta texto="✓ gravei este" cor="var(--vv-sucesso)" />
+                    <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
+                      Rever
+                    </Botao>
+                  </>
+                ) : e.temVideo ? (
+                  <>
+                    <Etiqueta texto="vídeo do acervo" cor="var(--vv-texto-secundario)" />
                     <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
                       Ver
                     </Botao>
@@ -210,7 +228,11 @@ export default function Exercicios() {
                   disabled={enviandoVideoDe === e.id}
                   onClick={() => escolherVideo(e.id, e.escopo === 'PRIVADO')}
                 >
-                  {enviandoVideoDe === e.id ? 'Enviando…' : '🎥 Gravar minha demonstração'}
+                  {enviandoVideoDe === e.id
+                    ? 'Enviando…'
+                    : e.temDemonstracao
+                      ? '🎥 Regravar'
+                      : '🎥 Gravar minha demonstração'}
                 </Botao>
               </div>
             </div>
@@ -304,6 +326,12 @@ export default function Exercicios() {
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {mensagem && <Aviso tipo="info">{mensagem}</Aviso>}
+
+      <FilaDeGravacao
+        aoGravar={escolherVideo}
+        gravandoId={enviandoVideoDe}
+        recarregarEm={filaVersao}
+      />
 
       <Lista itens={meus} titulo="Meus exercícios" />
       <Lista itens={globais} titulo="Biblioteca global" />

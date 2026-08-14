@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { ExercicioAGravar, ExercicioResumo } from '@vivio/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -204,6 +205,132 @@ describe('Demonstração do profissional (e2e)', () => {
 
       const r = await midia(tokenAluno).expect(200);
       expect(r.body[idSupino]?.videoUrl ?? null).toBeNull();
+    });
+  });
+
+  /*
+    Este bloco fica por último de propósito: ele grava a própria demonstração,
+    e rodando antes estragaria as asserções de ausência dos blocos acima.
+  */
+  describe('gravar o acervo sem se perder', () => {
+    const achar = (corpo: ExercicioResumo[]) => corpo.find((e) => e.id === idSupino);
+
+    it('antes de gravar, o supino global não tem vídeo nem demonstração', async () => {
+      const r = await request(servidor)
+        .get(url('/exercicios?q=Supino reto com barra'))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      const supino = achar(r.body);
+      expect(supino?.temVideo).toBe(false);
+      expect(supino?.temDemonstracao).toBe(false);
+    });
+
+    /*
+      O defeito que isto tranca: `temVideo` só olhava `Exercicio.videoChave`,
+      então gravar em cima de um global não mudava nada na lista. Quem grava
+      159 exercícios não tem como lembrar o que já fez — regravaria por cima
+      do próprio trabalho.
+    */
+    it('depois de gravar, a lista mostra a demonstração — sem inventar vídeo de acervo', async () => {
+      await request(servidor)
+        .post(url(`/exercicios/${idSupino}/minha-demonstracao`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ chave: `exercicios/${idPersonal}/supino-acervo.mp4` })
+        .expect(204);
+
+      const r = await request(servidor)
+        .get(url('/exercicios?q=Supino reto com barra'))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      const supino = achar(r.body);
+      expect(supino?.temDemonstracao).toBe(true);
+      // Continua sendo falso: o acervo não ganhou vídeo, quem tem sou eu.
+      expect(supino?.temVideo).toBe(false);
+    });
+
+    /*
+      O segundo defeito: sem `videoChave` no exercício, o link morria em 404 e
+      o profissional não conseguia rever o que acabara de enviar — justamente
+      quando ele quer conferir o enquadramento para regravar na hora.
+    */
+    it('e dá para rever a própria gravação num exercício global', async () => {
+      const r = await request(servidor)
+        .get(url(`/exercicios/${idSupino}/video`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      expect(r.body.url).toBeTruthy();
+    });
+
+    it('aluno de fora continua sem alcançar esse vídeo', async () => {
+      const estranho = await criarAlunoVerificado(servidor, {
+        nome: 'Estranho Video',
+        email: `estranho-video.${sufixo}@exemplo.com`,
+        senha,
+        dataNascimento: '1991-03-03',
+      });
+
+      await request(servidor)
+        .get(url(`/exercicios/${idSupino}/video`))
+        .set('Authorization', `Bearer ${estranho.accessToken}`)
+        .expect(404);
+
+      const u = await prisma.user.findUnique({
+        where: { email: `estranho-video.${sufixo}@exemplo.com` },
+      });
+      if (u) {
+        await prisma.logAuditoria.deleteMany({
+          where: { OR: [{ alunoId: u.id }, { atorId: u.id }] },
+        });
+        await prisma.sessaoRefresh.deleteMany({ where: { userId: u.id } });
+        await prisma.perfilAluno.deleteMany({ where: { userId: u.id } });
+        await prisma.user.delete({ where: { id: u.id } });
+      }
+    });
+
+    describe('a fila de gravação', () => {
+      it('não lista o que já foi gravado — é fila de pendência', async () => {
+        const r = await request(servidor)
+          .get(url('/exercicios/plano-de-gravacao'))
+          .set('Authorization', `Bearer ${tokenPersonal}`)
+          .expect(200);
+
+        expect(r.body.some((e: ExercicioAGravar) => e.id === idSupino)).toBe(false);
+      });
+
+      /* Se a ordem não for por prescrição, a fila não ajuda a decidir nada. */
+      it('vem do mais prescrito para o menos', async () => {
+        const r = await request(servidor)
+          .get(url('/exercicios/plano-de-gravacao'))
+          .set('Authorization', `Bearer ${tokenPersonal}`)
+          .expect(200);
+
+        const vezes = (r.body as ExercicioAGravar[]).map((e) => e.vezesPrescrito);
+        expect(vezes).toEqual([...vezes].sort((a, b) => b - a));
+      });
+
+      it('aluno não tem fila de gravação', async () => {
+        await request(servidor)
+          .get(url('/exercicios/plano-de-gravacao'))
+          .set('Authorization', `Bearer ${tokenAluno}`)
+          .expect(403);
+      });
+
+      /*
+        A rota é literal e vem antes de `:id` no controller. Se alguém a mover
+        para depois, ela cai em `obter` com o id "plano-de-gravacao" e volta
+        404 — este teste é o que avisa.
+      */
+      it('a rota não é engolida pelo :id', async () => {
+        const r = await request(servidor)
+          .get(url('/exercicios/plano-de-gravacao'))
+          .set('Authorization', `Bearer ${tokenPersonal}`)
+          .expect(200);
+
+        expect(Array.isArray(r.body)).toBe(true);
+      });
     });
   });
 });

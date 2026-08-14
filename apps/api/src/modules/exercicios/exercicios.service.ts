@@ -3,6 +3,7 @@ import { EscopoExercicio, Papel, Prisma, StatusVinculo } from '@prisma/client';
 import type {
   AtualizarExercicioInput,
   CriarExercicioInput,
+  ExercicioAGravar,
   ExercicioResumo,
   GrupoMuscular,
   ListarExerciciosQuery,
@@ -28,7 +29,17 @@ interface LinhaExercicio {
   videoCredito?: string | null;
 }
 
-function paraResumo(e: LinhaExercicio, imagemUrl: string | null = null): ExercicioResumo {
+/**
+ * `temDemonstracao` chega de fora porque exige uma consulta que nem toda
+ * chamada faz. O padrão é `null` — "não perguntei" —, e não `false`: quem
+ * acabou de renomear um exercício não consultou demonstração nenhuma, e
+ * afirmar que não existe seria inventar resposta.
+ */
+function paraResumo(
+  e: LinhaExercicio,
+  imagemUrl: string | null = null,
+  temDemonstracao: boolean | null = null,
+): ExercicioResumo {
   return {
     id: e.id,
     nome: e.nome,
@@ -38,6 +49,7 @@ function paraResumo(e: LinhaExercicio, imagemUrl: string | null = null): Exercic
     passos: e.passos ?? [],
     escopo: e.escopo,
     temVideo: e.videoChave !== null,
+    temDemonstracao,
     criadoPorId: e.criadoPorId,
     imagemUrl,
     imagemCredito: e.imagemCredito ?? null,
@@ -53,10 +65,13 @@ export class ExerciciosService {
   ) {}
 
   /** Resumo com o link assinado da imagem, quando houver. */
-  private async comImagem(e: LinhaExercicio): Promise<ExercicioResumo> {
-    if (!e.imagemChave) return paraResumo(e);
+  private async comImagem(
+    e: LinhaExercicio,
+    temDemonstracao: boolean | null = null,
+  ): Promise<ExercicioResumo> {
+    if (!e.imagemChave) return paraResumo(e, null, temDemonstracao);
     const { url } = await this.midia.urlDeLeitura(e.imagemChave);
-    return paraResumo(e, url);
+    return paraResumo(e, url, temDemonstracao);
   }
 
   /** Vincula ao exercício o vídeo já enviado ao storage. */
@@ -87,16 +102,27 @@ export class ExerciciosService {
     return paraResumo(atualizado);
   }
 
-  /** Vídeo nunca é servido por URL pública — só por link assinado curto. */
+  /**
+   * Vídeo nunca é servido por URL pública — só por link assinado curto.
+   *
+   * A gravação de quem acompanha a pessoa vence a do acervo, a mesma regra de
+   * `midiaDeVarios`. Sem isso o profissional não conseguia rever a própria
+   * demonstração num exercício GLOBAL: o exercício não tem `videoChave` e o
+   * pedido morria em 404 logo depois do envio — justo quando ele quer conferir
+   * se o enquadramento ficou bom para regravar na hora.
+   */
   async urlDoVideo(usuario: UsuarioAutenticado, id: string): Promise<UrlAssinada> {
     const exercicio = await this.prisma.exercicio.findUnique({ where: { id } });
     if (!exercicio || exercicio.deletadoEm) throw ErroDominio.naoEncontrado('Exercício');
     if (exercicio.escopo === EscopoExercicio.PRIVADO && exercicio.criadoPorId !== usuario.id) {
       throw ErroDominio.naoEncontrado('Exercício');
     }
-    if (!exercicio.videoChave) throw ErroDominio.naoEncontrado('Vídeo do exercício');
 
-    return this.midia.urlDeLeitura(exercicio.videoChave);
+    const doProfissional = await this.demonstracoesParaEsteUsuario(usuario, [id]);
+    const chave = doProfissional.get(id) ?? exercicio.videoChave;
+    if (!chave) throw ErroDominio.naoEncontrado('Vídeo do exercício');
+
+    return this.midia.urlDeLeitura(chave);
   }
 
   /**
@@ -270,12 +296,20 @@ export class ExerciciosService {
       take: consulta.limit,
     });
     /*
+      Uma consulta só para a página inteira, e não uma por exercício: gravar o
+      acervo é passar por uma lista de 100 itens, e N+1 aqui seria sentido.
+    */
+    const demonstracoes = await this.demonstracoesParaEsteUsuario(
+      usuario,
+      exercicios.map((e) => e.id),
+    );
+    /*
       A imagem é assinada AQUI, na listagem, e não só no exercício individual —
       diferente do laudo de exame, onde a decisão foi a oposta. O motivo é o
       uso: a biblioteca é navegada olhando, e uma lista de nomes sem figura não
       serve para escolher exercício. Assinar é um HMAC por item, barato.
     */
-    return Promise.all(exercicios.map((e) => this.comImagem(e)));
+    return Promise.all(exercicios.map((e) => this.comImagem(e, demonstracoes.has(e.id))));
   }
 
   async obter(usuario: UsuarioAutenticado, id: string): Promise<ExercicioResumo> {
@@ -284,7 +318,92 @@ export class ExerciciosService {
     if (exercicio.escopo === EscopoExercicio.PRIVADO && exercicio.criadoPorId !== usuario.id) {
       throw ErroDominio.naoEncontrado('Exercício');
     }
-    return this.comImagem(exercicio);
+    const demonstracoes = await this.demonstracoesParaEsteUsuario(usuario, [id]);
+    return this.comImagem(exercicio, demonstracoes.has(id));
+  }
+
+  /**
+   * O que gravar primeiro.
+   *
+   * Gravar 159 demonstrações é um projeto que ninguém termina; gravar as 15
+   * que aparecem em todos os planos é uma tarde. A ordem é pelo número de
+   * prescrições do próprio profissional, porque o exercício que ele mais
+   * receita é o que mais aluno executa sem ninguém olhando — e é onde a falta
+   * de referência visual vira risco de lesão.
+   *
+   * Só entra o que ainda não tem demonstração dele: a lista é de trabalho
+   * pendente, e item já feito sumindo dela é o que faz a fila encurtar.
+   */
+  async planoDeGravacao(usuario: UsuarioAutenticado): Promise<ExercicioAGravar[]> {
+    if (usuario.papel === Papel.ALUNO) {
+      throw ErroDominio.papelNaoAutorizado('Só profissionais gravam demonstração.');
+    }
+
+    /*
+      Conta prescrições nos planos DELE. Um exercício que ele nunca receitou
+      não é urgente por mais popular que seja no acervo — quem grava é ele, e o
+      tempo dele é o recurso escasso aqui.
+    */
+    const prescricoes = await this.prisma.itemTreino.groupBy({
+      by: ['exercicioId'],
+      where: { sessao: { plano: { personalId: usuario.id } } },
+      _count: { exercicioId: true },
+    });
+    const vezes = new Map(prescricoes.map((p) => [p.exercicioId, p._count.exercicioId]));
+
+    const jaGravados = await this.prisma.demonstracaoProfissional.findMany({
+      where: { profissionalId: usuario.id },
+      select: { exercicioId: true },
+    });
+    const gravados = new Set(jaGravados.map((d) => d.exercicioId));
+
+    const exercicios = await this.prisma.exercicio.findMany({
+      where: {
+        deletadoEm: null,
+        OR: [{ escopo: EscopoExercicio.GLOBAL }, { criadoPorId: usuario.id }],
+      },
+      select: {
+        id: true,
+        nome: true,
+        grupoMuscular: true,
+        equipamento: true,
+        escopo: true,
+        videoChave: true,
+        imagemChave: true,
+      },
+    });
+
+    return exercicios
+      .filter((e) => {
+        if (gravados.has(e.id)) return false;
+        /*
+          No exercício PRIVADO o vídeo vai para o exercício em si, não para a
+          tabela de demonstrações. Sem esta linha ele nunca sairia da fila —
+          o profissional gravaria, veria o item continuar lá e gravaria de novo.
+        */
+        if (e.escopo === EscopoExercicio.PRIVADO && e.videoChave !== null) return false;
+        return true;
+      })
+      .map((e) => ({
+        id: e.id,
+        nome: e.nome,
+        grupoMuscular: e.grupoMuscular as GrupoMuscular,
+        equipamento: e.equipamento,
+        escopo: e.escopo,
+        vezesPrescrito: vezes.get(e.id) ?? 0,
+        /*
+          Ter figura ou vídeo do acervo não dispensa gravar, mas muda a
+          urgência: o aluno pelo menos vê o movimento. Sem nada, ele executa
+          por adivinhação — e foi por isso que a gravação virou prioridade.
+        */
+        temAlgumaReferencia: e.videoChave !== null || e.imagemChave !== null,
+      }))
+      .sort(
+        (a, b) =>
+          b.vezesPrescrito - a.vezesPrescrito ||
+          Number(a.temAlgumaReferencia) - Number(b.temAlgumaReferencia) ||
+          a.nome.localeCompare(b.nome, 'pt-BR'),
+      );
   }
 
   /** Só o admin cria exercício GLOBAL. Profissional cria para a própria biblioteca. */
