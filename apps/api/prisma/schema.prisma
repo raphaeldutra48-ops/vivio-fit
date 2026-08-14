@@ -61,6 +61,8 @@ model User {
   checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
   cardios             AtividadeCardio[]      @relation("CardiosDoAluno")
   demonstracoes       DemonstracaoProfissional[] @relation("DemonstracoesGravadas")
+  calorimetrias       CalorimetriaIndireta[] @relation("CalorimetriasDoAluno")
+  calorimetriasFeitas CalorimetriaIndireta[] @relation("CalorimetriasRegistradas")
   metas               Meta[]                 @relation("MetasDoAluno")
   metasCriadas        Meta[]                 @relation("MetasCriadas")
   profissionaisVerificados PerfilProfissional[] @relation("ProfissionaisVerificados")
@@ -1131,6 +1133,41 @@ model ResultadoMarcador {
   classificacao String
 
   @@unique([exameId, marcador])
+}
+
+/// Calorimetria indireta — a taxa metabólica MEDIDA, não estimada.
+///
+/// Tabela própria, e não um campo em `Medida`, porque não é medida corporal:
+/// é resultado de exame, com equipamento, data e quem conduziu. Guardá-la
+/// junto de peso e cintura misturaria o que a pessoa mede em casa com o que
+/// custou uma consulta.
+///
+/// **Vale por tempo limitado**, e é isso que a torna diferente de um dado
+/// cadastral: a taxa metabólica muda com peso, com massa magra e sobretudo com
+/// dieta longa — a adaptação metabólica derruba o gasto em 10% a 15%. Uma
+/// calorimetria de dois anos atrás, com quinze quilos a menos, é pior do que
+/// uma estimativa de hoje.
+model CalorimetriaIndireta {
+  id             String    @id @default(cuid())
+  alunoId        String
+  aluno          User      @relation("CalorimetriasDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  /// Quem lançou: o aluno com o laudo na mão, ou o profissional que pediu.
+  registradoPorId String
+  registradoPor   User     @relation("CalorimetriasRegistradas", fields: [registradoPorId], references: [id])
+  data           DateTime  @db.Date
+  /// Gasto energético de repouso medido, em kcal/dia.
+  tmbMedidaKcal  Int
+  /// Peso do dia do exame. É a régua para saber se o resultado ainda vale:
+  /// mudança grande de peso invalida a medição antes do prazo.
+  pesoNoExameKg  Decimal?  @db.Decimal(5, 2)
+  /// Onde foi feito, ou com qual equipamento. Texto livre — cada laboratório
+  /// escreve de um jeito e padronizar isso não ajudaria ninguém.
+  equipamento    String?
+  observacao     String?
+  criadoEm       DateTime  @default(now())
+  deletadoEm     DateTime?
+
+  @@index([alunoId, data(sort: Desc)])
 }
 
 model AvaliacaoFisica {

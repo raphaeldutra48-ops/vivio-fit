@@ -54,12 +54,20 @@ export class CardioController {
   @ApiOperation({ summary: 'Atividades de cardio do período (padrão: 30 dias)' })
   listar(
     @Param('alunoId') alunoId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
     @Query(new ZodValidationPipe(consultaCardioSchema)) consulta: ConsultaCardio,
   ): Promise<CardioResumo[]> {
-    return this.cardio.listar(alunoId, consulta.dias);
+    return this.cardio.listar(alunoId, usuario, consulta.dias);
   }
 
+  /*
+    EVOLUCAO, e não TREINO como o resto deste controlador: a resposta carrega
+    peso, massa magra e taxa metabólica — dados do corpo, não do treino. Quem
+    autorizou "ver meus treinos" não autorizou "ver quanto eu peso", e a
+    estimativa calórica é justamente a ponte entre as duas coisas.
+  */
   @Get('calorias')
+  @ExigeConsentimento(EscopoDado.EVOLUCAO)
   @ApiOperation({ summary: 'Estimativa de gasto calórico — musculação e cardio separados' })
   calorias(
     @Param('alunoId') alunoId: string,

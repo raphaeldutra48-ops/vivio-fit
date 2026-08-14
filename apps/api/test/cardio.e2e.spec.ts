@@ -85,6 +85,7 @@ describe('Cardio e calorias (e2e)', () => {
     if (u) {
       await prisma.logAuditoria.deleteMany({ where: { OR: [{ alunoId: u.id }, { atorId: u.id }] } });
       await prisma.atividadeCardio.deleteMany({ where: { alunoId: u.id } });
+      await prisma.calorimetriaIndireta.deleteMany({ where: { OR: [{ alunoId: u.id }, { registradoPorId: u.id }] } });
       await prisma.medida.deleteMany({ where: { alunoId: u.id } });
       await prisma.consentimento.deleteMany({ where: { alunoId: u.id } });
       await prisma.vinculo.deleteMany({ where: { alunoId: u.id } });
@@ -171,6 +172,53 @@ describe('Cardio e calorias (e2e)', () => {
     });
   });
 
+  /*
+    A separação de escopos deste módulo, verificada antes de qualquer número.
+    O aluno autorizou só TREINO até aqui — e caloria é dado do corpo.
+  */
+  describe('o que o escopo de treino não abre', () => {
+    it('sem EVOLUCAO, o profissional não vê o resumo calórico', async () => {
+      await calorias(tokenPersonal).expect(403);
+    });
+
+    /*
+      A caloria por atividade se inverte para peso com uma divisão — o tipo, a
+      intensidade e a duração vêm na mesma resposta. Entregá-la a quem só
+      autorizou treino seria entregar o peso por caminho indireto.
+    */
+    it('sem EVOLUCAO, a lista vem sem a caloria de cada atividade', async () => {
+      await request(servidor)
+        .post(url(`/alunos/${idAluno}/medidas`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .send({ data: new Date().toISOString(), pesoKg: 70 })
+        .expect(201);
+      await registrar({ tipo: 'CORRIDA', duracaoMin: 30, data: hoje() }).expect(201);
+
+      const doProfissional = await request(servidor)
+        .get(url(`/alunos/${idAluno}/cardio?dias=30`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+      expect(doProfissional.body[0].caloriasEstimadas).toBeNull();
+      // A atividade em si continua visível: ela é treino.
+      expect(doProfissional.body[0].duracaoMin).toBe(30);
+
+      // O próprio aluno vê tudo do próprio corpo, sempre.
+      const doAluno = await request(servidor)
+        .get(url(`/alunos/${idAluno}/cardio?dias=30`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .expect(200);
+      expect(doAluno.body[0].caloriasEstimadas).toBeGreaterThan(0);
+
+      // A partir daqui os demais testes precisam do escopo de evolução.
+      await request(servidor)
+        .post(url('/consentimentos'))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .send({ escopo: 'EVOLUCAO' })
+        .expect(201);
+    });
+  });
+
+
   describe('gasto do corpo existindo', () => {
     /*
       Sem altura e sexo no perfil, a Mifflin-St Jeor não roda. O peso sozinho
@@ -215,6 +263,59 @@ describe('Cardio e calorias (e2e)', () => {
 
       expect(g.cotidiano).toBe(Math.round((1558 * 1.2) / 10) * 10);
       expect(g.totalPorDia).toBe(g.cotidiano + g.exercicioPorDia);
+    });
+  });
+
+  describe('calorimetria indireta', () => {
+    const hojeMenos = (meses: number) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - meses);
+      return d.toISOString().slice(0, 10);
+    };
+
+    /*
+      Medição vence cálculo. A esta altura o aluno tem massa magra medida — e
+      mesmo assim a calorimetria assume, porque ela é a referência contra a
+      qual a Katch-McArdle foi validada.
+    */
+    it('vence a Katch-McArdle quando existe e vale', async () => {
+      await request(servidor)
+        .post(url(`/alunos/${idAluno}/calorimetrias`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .send({ data: hojeMenos(1), tmbMedidaKcal: 1720, pesoNoExameKg: 70 })
+        .expect(201);
+
+      const r = await calorias().expect(200);
+      expect(r.body.gastoDiario.tmb).toBe(1720);
+      expect(r.body.gastoDiario.formula).toBe('CALORIMETRIA');
+    });
+
+    it('o profissional também lança o exame', async () => {
+      await request(servidor)
+        .post(url(`/alunos/${idAluno}/calorimetrias`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({ data: hojeMenos(0), tmbMedidaKcal: 1700, equipamento: 'Laboratório X' })
+        .expect(201);
+    });
+
+    it('a listagem traz a validade calculada', async () => {
+      const r = await request(servidor)
+        .get(url(`/alunos/${idAluno}/calorimetrias`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        .expect(200);
+
+      expect(r.body.length).toBeGreaterThanOrEqual(2);
+      expect(r.body[0].validade.valida).toBe(true);
+      expect(r.body[0].registradoPor.nome).toBeTruthy();
+    });
+
+    it('recusa valor fora da faixa fisiológica', async () => {
+      await request(servidor)
+        .post(url(`/alunos/${idAluno}/calorimetrias`))
+        .set('Authorization', `Bearer ${tokenAluno}`)
+        // Um zero a mais aqui contaminaria todo o planejamento alimentar.
+        .send({ data: hojeMenos(0), tmbMedidaKcal: 17000 })
+        .expect(422);
     });
   });
 

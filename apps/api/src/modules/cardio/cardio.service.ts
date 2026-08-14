@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EscopoDado } from '@prisma/client';
 import {
   MET_MUSCULACAO,
   estimarCalorias,
@@ -12,7 +13,9 @@ import {
   type ResumoDeCalorias,
   type SexoBiologico,
   type TipoCardio,
+  type UsuarioAutenticado,
 } from '@vivio/contracts';
+import { consentimentoVigentePara } from '../../common/consentimento/regra';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 
@@ -48,7 +51,7 @@ export class CardioService {
    * fórmula que depende de sexo, que é a menos precisa das duas.
    */
   private async dadosParaTmb(alunoId: string): Promise<DadosParaTmb> {
-    const [comPeso, comMassaMagra, perfil] = await Promise.all([
+    const [comPeso, comMassaMagra, perfil, calorimetria] = await Promise.all([
       this.prisma.medida.findFirst({
         where: { alunoId, deletadoEm: null, pesoKg: { not: null } },
         orderBy: { data: 'desc' },
@@ -63,6 +66,17 @@ export class CardioService {
         where: { userId: alunoId },
         select: { alturaCm: true, dataNascimento: true, sexoBiologico: true },
       }),
+      /*
+        A calorimetria mais recente. Quem tiver duas, a nova manda — e se ela
+        já não valer, `taxaMetabolicaBasal` cai sozinha para a fórmula e diz
+        o motivo. Buscar a "mais recente que ainda vale" aqui esconderia da
+        tela a informação de que houve uma e ela expirou.
+      */
+      this.prisma.calorimetriaIndireta.findFirst({
+        where: { alunoId, deletadoEm: null },
+        orderBy: { data: 'desc' },
+        select: { tmbMedidaKcal: true, data: true, pesoNoExameKg: true },
+      }),
     ]);
 
     return {
@@ -71,6 +85,14 @@ export class CardioService {
       idade: idadeEmAnos(perfil?.dataNascimento ?? null),
       sexo: (perfil?.sexoBiologico as SexoBiologico | null) ?? null,
       massaMagraKg: comMassaMagra?.massaMagraKg ? Number(comMassaMagra.massaMagraKg) : null,
+      calorimetria: calorimetria
+        ? {
+            tmbMedidaKcal: calorimetria.tmbMedidaKcal,
+            data: calorimetria.data.toISOString().slice(0, 10),
+            pesoNoExameKg:
+              calorimetria.pesoNoExameKg === null ? null : Number(calorimetria.pesoNoExameKg),
+          }
+        : null,
     };
   }
 
@@ -101,16 +123,44 @@ export class CardioService {
     return this.paraResumo(criada, await this.pesoAtual(alunoId));
   }
 
-  async listar(alunoId: string, dias: number): Promise<CardioResumo[]> {
+  /**
+   * Atividades do período.
+   *
+   * A caloria de cada uma só vai para quem pode ver o corpo. Não é preciosismo:
+   * `kcal = MET × 3,5 × peso / 200 × min` se inverte com uma divisão, e o
+   * tipo, a intensidade e a duração estão na mesma resposta. Entregar a
+   * caloria a quem só autorizou treino seria entregar o peso por caminho
+   * indireto — e o aluno teria autorizado uma coisa e revelado outra.
+   */
+  async listar(alunoId: string, quemPede: UsuarioAutenticado, dias: number): Promise<CardioResumo[]> {
     const de = new Date(Date.now() - dias * DIA_EM_MS);
-    const [atividades, peso] = await Promise.all([
+    const [atividades, peso, podeVerOCorpo] = await Promise.all([
       this.prisma.atividadeCardio.findMany({
         where: { alunoId, deletadoEm: null, data: { gte: de } },
         orderBy: { data: 'desc' },
       }),
       this.pesoAtual(alunoId),
+      this.autorizadoAVerEvolucao(alunoId, quemPede),
     ]);
-    return atividades.map((a) => this.paraResumo(a, peso));
+    return atividades.map((a) => this.paraResumo(a, podeVerOCorpo ? peso : null));
+  }
+
+  /** O aluno sempre vê o próprio corpo; o profissional, só com EVOLUCAO. */
+  private async autorizadoAVerEvolucao(
+    alunoId: string,
+    quemPede: UsuarioAutenticado,
+  ): Promise<boolean> {
+    if (quemPede.id === alunoId) return true;
+
+    const consentimento = await this.prisma.consentimento.findFirst({
+      where: {
+        alunoId,
+        escopo: EscopoDado.EVOLUCAO,
+        ...consentimentoVigentePara(quemPede.id),
+      },
+      select: { id: true },
+    });
+    return consentimento !== null;
   }
 
   async remover(alunoId: string, id: string): Promise<void> {

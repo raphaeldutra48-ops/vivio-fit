@@ -74,6 +74,8 @@ import type {
   CardioResumo,
   RegistrarCardioInput,
   ResumoDeCalorias,
+  CalorimetriaResumo,
+  RegistrarCalorimetriaInput,
   CriarMetaInput,
   MetaResumo,
   MedidaResumo,
@@ -883,6 +885,17 @@ export class VivioClient {
     /** Marcas pessoais do aluno, conquista mais recente primeiro. */
     meus: (alunoId: string): Promise<MeusRecordes> =>
       this.requisicao<MeusRecordes>(`/alunos/${alunoId}/recordes`),
+  };
+
+  readonly calorimetrias = {
+    listar: (alunoId: string): Promise<CalorimetriaResumo[]> =>
+      this.requisicao<CalorimetriaResumo[]>(`/alunos/${alunoId}/calorimetrias`),
+
+    registrar: (alunoId: string, dados: RegistrarCalorimetriaInput): Promise<CalorimetriaResumo> =>
+      this.requisicao<CalorimetriaResumo>(`/alunos/${alunoId}/calorimetrias`, { metodo: 'POST', corpo: dados }),
+
+    remover: (alunoId: string, id: string): Promise<void> =>
+      this.requisicao<void>(`/alunos/${alunoId}/calorimetrias/${id}`, { metodo: 'DELETE' }),
   };
 
   readonly cardio = {

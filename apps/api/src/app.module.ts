@@ -21,6 +21,7 @@ import { ExerciciosModule } from './modules/exercicios/exercicios.module';
 import { FotosModule } from './modules/fotos/fotos.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
 import { ComparativoModule } from './modules/comparativo/comparativo.module';
+import { CalorimetriaModule } from './modules/calorimetria/calorimetria.module';
 import { CardioModule } from './modules/cardio/cardio.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { MetasModule } from './modules/metas/metas.module';
@@ -58,6 +59,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     ComparativoModule,
     FeedbackModule,
     CardioModule,
+    CalorimetriaModule,
     ExerciciosModule,
     TreinosModule,
     FotosModule,

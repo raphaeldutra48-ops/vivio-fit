@@ -141,3 +141,79 @@ describe('idadeEmAnos', () => {
     expect(idadeEmAnos(null)).toBeNull();
   });
 });
+
+describe('calorimetria indireta', () => {
+  const emMeses = (atras: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - atras);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-15`;
+  };
+
+  const exame = { tmbMedidaKcal: 1620, data: emMeses(1), pesoNoExameKg: 63 };
+
+  /*
+    Medição vence cálculo, sempre. A calorimetria é a referência contra a qual
+    as fórmulas foram validadas — usá-las tendo o exame na mão seria trocar o
+    original pela cópia.
+  */
+  it('vence a Katch-McArdle, mesmo tendo massa magra medida', () => {
+    const r = taxaMetabolicaBasal({ ...completo, massaMagraKg: 48, calorimetria: exame });
+    expect(r.tmb).toBe(1620);
+    expect(r.formula).toBe('CALORIMETRIA');
+  });
+
+  it('vence a Mifflin-St Jeor', () => {
+    const r = taxaMetabolicaBasal({ ...completo, calorimetria: exame });
+    expect(r.formula).toBe('CALORIMETRIA');
+  });
+
+  /*
+    A pergunta não é "quando foi feita" e sim "o corpo ainda é o mesmo". Quem
+    perdeu quinze quilos tem uma medição mais velha, na prática, do que quem
+    manteve o peso por um ano.
+  */
+  it('expira quando o peso mudou mais de 5%', () => {
+    const r = taxaMetabolicaBasal({
+      ...completo,
+      pesoKg: 55, // eram 63 no exame: 12,7% de diferença
+      massaMagraKg: 48,
+      calorimetria: exame,
+    });
+    expect(r.formula).toBe('KATCH_MCARDLE');
+    expect(r.calorimetriaExpirada?.motivo).toBe('MUDANCA_DE_PESO');
+  });
+
+  it('mudança pequena de peso não invalida', () => {
+    const r = taxaMetabolicaBasal({ ...completo, pesoKg: 64.5, calorimetria: exame });
+    expect(r.formula).toBe('CALORIMETRIA');
+  });
+
+  /* Passado o prazo vira "medido um dia", e isso não tem a mesma autoridade. */
+  it('expira depois de seis meses', () => {
+    const r = taxaMetabolicaBasal({
+      ...completo,
+      massaMagraKg: 48,
+      calorimetria: { ...exame, data: emMeses(8) },
+    });
+    expect(r.formula).toBe('KATCH_MCARDLE');
+    expect(r.calorimetriaExpirada?.motivo).toBe('PRAZO');
+  });
+
+  /*
+    Sem o motivo, o número mudaria sozinho de um mês para o outro e a pessoa
+    acharia que o app se confundiu.
+  */
+  it('o motivo da expiração chega até o gasto diário', () => {
+    const r = gastoDiario(
+      { ...completo, massaMagraKg: 48, calorimetria: { ...exame, data: emMeses(8) } },
+      2100,
+      7,
+    );
+    expect(r.formula).toBe('KATCH_MCARDLE');
+    expect(r.calorimetriaExpirada?.motivo).toBe('PRAZO');
+  });
+
+  it('sem calorimetria, nada expira', () => {
+    expect(taxaMetabolicaBasal(completo).calorimetriaExpirada).toBeNull();
+  });
+});
