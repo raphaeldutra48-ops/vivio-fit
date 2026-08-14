@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  NOME_DA_FORMULA,
   ROTULO_INTENSIDADE,
   ROTULO_TIPO_CARDIO,
   type CardioResumo,
@@ -141,6 +142,86 @@ export function CardioDoAluno({ alunoId }: { alunoId: string }) {
             {resumo.pesoUsadoKg.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg. A
             variação real entre pessoas chega a 30% — use como tendência, não como medida.
           </p>
+        )}
+      </Cartao>
+
+      {/*
+        O gasto do corpo ao lado do gasto do treino. Sem essa comparação, o
+        aluno superestima o efeito do exercício sobre o peso — e é o
+        profissional quem recebe a frustração de "treino e não emagreço".
+      */}
+      <Cartao>
+        <p className="mb-md font-semibold">Gasto energético por dia</p>
+
+        {resumo.gastoDiario.tmb === null ? (
+          <Aviso tipo="info">
+            Não dá para estimar o metabolismo ainda — falta {resumo.gastoDiario.faltando.join(', ')}.
+            O aluno preenche altura e sexo no próprio aplicativo, em Meus dados. Uma bioimpedância
+            também resolve, e com mais precisão.
+          </Aviso>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-lg">
+              <div>
+                <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  Corpo em repouso
+                </p>
+                <p className="text-xl font-bold tabular-nums">
+                  {resumo.gastoDiario.cotidiano?.toLocaleString('pt-BR')}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  kcal · TMB {resumo.gastoDiario.tmb.toLocaleString('pt-BR')} × 1,2
+                </p>
+              </div>
+              <div>
+                <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  Exercício (média)
+                </p>
+                <p className="text-xl font-bold tabular-nums">
+                  {resumo.gastoDiario.exercicioPorDia === null
+                    ? '—'
+                    : resumo.gastoDiario.exercicioPorDia.toLocaleString('pt-BR')}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  kcal por dia no período
+                </p>
+              </div>
+              <div>
+                <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  Total estimado
+                </p>
+                <p className="text-xl font-bold tabular-nums">
+                  {resumo.gastoDiario.totalPorDia?.toLocaleString('pt-BR')}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  kcal por dia
+                </p>
+              </div>
+            </div>
+
+            {/*
+              Dizer a fonte é o que separa medição de estimativa — e é o que
+              permite ao profissional saber se vale pedir uma bioimpedância.
+            */}
+            <p className="mt-md text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+              Base: <strong>{NOME_DA_FORMULA[resumo.gastoDiario.formula!]}</strong>
+              {resumo.gastoDiario.formula === 'CALORIMETRIA'
+                ? ' — medido, não estimado.'
+                : resumo.gastoDiario.formula === 'KATCH_MCARDLE'
+                  ? ' — usa a massa magra medida na avaliação física.'
+                  : ' — estimativa por altura, idade e sexo. Uma bioimpedância troca o palpite por medida.'}
+              {' '}O fator 1,2 cobre só a vida cotidiana: o exercício entra pelo que foi registrado,
+              e não por tabela de atividade — somar os dois contaria o treino duas vezes.
+            </p>
+          </>
+        )}
+
+        {resumo.gastoDiario.calorimetriaExpirada && (
+          <Aviso tipo="info">
+            {resumo.gastoDiario.calorimetriaExpirada.motivo === 'MUDANCA_DE_PESO'
+              ? 'Há uma calorimetria registrada, mas o peso mudou mais de 5% desde o exame — voltou a estimar. Vale refazer.'
+              : `Há uma calorimetria registrada, feita há ${resumo.gastoDiario.calorimetriaExpirada.mesesDesde} meses. Passou da validade e o cálculo voltou a estimar.`}
+          </Aviso>
         )}
       </Cartao>
 

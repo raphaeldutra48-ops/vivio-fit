@@ -357,6 +357,7 @@ export default function Inicio() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.md }}>
         {[
           { rotulo: '🏃 Cardio', destino: '/cardio', descricao: 'Registrar corrida, bike, caminhada' },
+          { rotulo: '⚙️ Meus dados', destino: '/perfil', descricao: 'Altura e dados do metabolismo' },
           { rotulo: '👥 Minha equipe', destino: '/equipe', descricao: 'Equipe e autorizacoes' },
           { rotulo: '💬 Conversas', destino: '/chat', descricao: 'Conversas com a equipe' },
           { rotulo: '⏰ Lembretes', destino: '/lembretes', descricao: 'Configurar lembretes' },

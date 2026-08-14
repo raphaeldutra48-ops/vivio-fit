@@ -1,5 +1,6 @@
 import {
   Intensidade,
+  NOME_DA_FORMULA,
   ROTULO_INTENSIDADE,
   ROTULO_TIPO_CARDIO,
   TipoCardio,
@@ -8,6 +9,7 @@ import {
   type ResumoDeCalorias,
 } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -54,6 +56,7 @@ function porExtenso(iso: string): string {
  */
 export default function Cardio() {
   const { usuario, tema } = useSessao();
+  const router = useRouter();
 
   const [lista, setLista] = useState<CardioResumo[] | null>(null);
   const [resumo, setResumo] = useState<ResumoDeCalorias | null>(null);
@@ -244,6 +247,115 @@ export default function Cardio() {
                 média — a variação real entre pessoas chega a 30%.
               </Text>
             )}
+          </Cartao>
+        )}
+
+        {/*
+          O gasto do corpo existindo, ao lado do exercício. As duas leituras só
+          fazem sentido juntas: 300 kcal de treino parece muito até aparecer ao
+          lado das 1.800 que o corpo gasta sem sair do lugar. É essa comparação
+          que evita a frustração de quem treina e não emagrece.
+        */}
+        {resumo && (
+          <Cartao>
+            <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>Seu gasto por dia</Text>
+
+            {resumo.gastoDiario.tmb === null ? (
+              <>
+                <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+                  Ainda não dá para calcular. Falta:{' '}
+                  {resumo.gastoDiario.faltando.join(', ')}.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Preencher meus dados"
+                  onPress={() => router.push('/perfil')}
+                  style={{
+                    minHeight: alvoToqueMin,
+                    borderRadius: raio.md,
+                    borderWidth: 1,
+                    borderColor: tema.acaoFundo,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: espacamento.xs,
+                  }}
+                >
+                  <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+                    Preencher meus dados
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={{ flexDirection: 'row', gap: espacamento.lg }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                      Corpo em repouso
+                    </Text>
+                    <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+                      {resumo.gastoDiario.cotidiano?.toLocaleString('pt-BR')} kcal
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                      Exercício (média)
+                    </Text>
+                    <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
+                      {resumo.gastoDiario.exercicioPorDia === null
+                        ? '—'
+                        : `${resumo.gastoDiario.exercicioPorDia.toLocaleString('pt-BR')} kcal`}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                      Total
+                    </Text>
+                    <Text
+                      style={{
+                        color: tema.acaoFundo,
+                        fontWeight: '700',
+                        fontSize: tipografia.tamanho.lg,
+                      }}
+                    >
+                      {resumo.gastoDiario.totalPorDia?.toLocaleString('pt-BR')} kcal
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Dizer qual fórmula é o que separa "medido" de "estimado". */}
+                <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+                  Base: {NOME_DA_FORMULA[resumo.gastoDiario.formula!]}
+                  {resumo.gastoDiario.formula === 'CALORIMETRIA'
+                    ? ' — seu número medido, não estimado.'
+                    : resumo.gastoDiario.formula === 'KATCH_MCARDLE'
+                      ? ' — calculado com sua massa magra medida.'
+                      : ' — estimativa por altura, idade e sexo. Uma bioimpedância deixa mais preciso.'}
+                </Text>
+              </>
+            )}
+
+            {/*
+              Quando a calorimetria expira, o número muda sozinho. Dizer o
+              motivo evita a leitura de que o app se confundiu.
+            */}
+            {resumo.gastoDiario.calorimetriaExpirada && (
+              <Text style={{ color: tema.alerta, fontSize: tipografia.tamanho.xs }}>
+                {resumo.gastoDiario.calorimetriaExpirada.motivo === 'MUDANCA_DE_PESO'
+                  ? 'Sua calorimetria não vale mais: seu peso mudou bastante desde o exame.'
+                  : 'Sua calorimetria passou da validade e o app voltou a estimar.'}
+              </Text>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Registrar exame de calorimetria"
+              onPress={() => router.push('/calorimetria')}
+              style={{ minHeight: alvoToqueMin, justifyContent: 'center' }}
+            >
+              <Text style={{ color: tema.acaoFundo, fontSize: tipografia.tamanho.sm }}>
+                Fez exame de calorimetria? Registre para o cálculo ficar exato →
+              </Text>
+            </Pressable>
           </Cartao>
         )}
 

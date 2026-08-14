@@ -48,6 +48,11 @@ export default function Checkin() {
   const [jaRespondido, setJaRespondido] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [peso, setPeso] = useState('');
+  const [diasSemPesar, setDiasSemPesar] = useState<number | null>(null);
+
+  /** Sete dias: é onde a mudança real começa a aparecer acima do ruído. */
+  const pedirPeso = diasSemPesar === null || diasSemPesar >= 7;
 
   /*
     Traz o check-in de hoje, se existir. Registrar de novo no mesmo dia corrige
@@ -71,6 +76,25 @@ export default function Checkin() {
         setObservacao(deHoje.observacao ?? '');
       })
       .catch(() => undefined);
+
+    // Há quanto tempo a pessoa não se pesa — decide se o campo aparece.
+    sdk.medidas
+      .listar(usuario.id)
+      .then((medidas) => {
+        if (!ativo) return;
+        const comPeso = medidas.filter((m) => m.pesoKg !== null);
+        const ultima = comPeso[0];
+        if (!ultima) {
+          setDiasSemPesar(null);
+          return;
+        }
+        const dias = Math.floor(
+          (Date.now() - new Date(ultima.data).getTime()) / (24 * 60 * 60 * 1000),
+        );
+        setDiasSemPesar(dias);
+      })
+      .catch(() => undefined);
+
     return () => {
       ativo = false;
     };
@@ -93,6 +117,25 @@ export default function Checkin() {
         localDor: teveDor && localDor.trim() ? localDor.trim() : undefined,
         observacao: observacao.trim() || undefined,
       });
+
+      /*
+        O peso vai como medida, e não como campo do check-in: é lá que o
+        gráfico de evolução, o comparativo e a conta de caloria leem. Guardá-lo
+        no check-in criaria um segundo lugar com o mesmo dado, e os dois
+        divergiriam na primeira vez que alguém corrigisse um só.
+
+        Falhar aqui não desfaz o check-in — o que a pessoa respondeu sobre o
+        dia dela vale mesmo sem o peso.
+      */
+      const emKg = Number(peso.replace(',', '.'));
+      if (pedirPeso && emKg > 0) {
+        await sdk.medidas
+          // MANUAL: a pessoa subiu na balança e digitou. A bioimpedância tem
+          // fonte própria porque mede coisas que a balança de casa não mede.
+          .registrar(usuario.id, { data: new Date(), pesoKg: emKg, fonte: 'MANUAL' })
+          .catch(() => setErro('Check-in salvo, mas o peso não. Registre em Evolução.'));
+      }
+
       router.back();
     } catch {
       setErro('Não foi possível salvar o check-in. Tente de novo.');
@@ -290,6 +333,48 @@ export default function Checkin() {
             </View>
           )}
         </Cartao>
+
+        {/*
+          O peso aparece uma vez por semana, não todo dia. Pesagem diária mede
+          água, não gordura: a variação de um dia para o outro é ruído, e
+          quem se pesa todo dia acaba desanimando com um número que não
+          significa nada. Uma vez por semana é o intervalo em que a mudança
+          real começa a aparecer.
+
+          E é aqui, e não numa tela separada, porque é o momento em que a
+          pessoa já parou para responder sobre o corpo.
+        */}
+        {pedirPeso && (
+          <Cartao>
+            <Pergunta>Quanto você está pesando?</Pergunta>
+            <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+              Faz {diasSemPesar === null ? 'um tempo' : `${diasSemPesar} dias`} que você não
+              registra. Uma vez por semana basta — pesar todo dia mede água, não progresso.
+            </Text>
+            <TextInput
+              accessibilityLabel="Peso em quilos"
+              placeholder="—"
+              placeholderTextColor={tema.textoSecundario}
+              keyboardType="decimal-pad"
+              value={peso}
+              onChangeText={setPeso}
+              style={{
+                minHeight: 60,
+                borderWidth: 1,
+                borderColor: peso ? tema.acaoFundo : tema.borda,
+                borderRadius: raio.md,
+                paddingHorizontal: espacamento.md,
+                color: tema.textoPrimario,
+                backgroundColor: tema.fundo,
+                fontSize: tipografia.tamanho['2xl'],
+                fontWeight: '700',
+              }}
+            />
+            <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+              Pode pular. Mas é esse número que faz o app calcular quanto você gasta de caloria.
+            </Text>
+          </Cartao>
+        )}
 
         <Cartao>
           <Pergunta>Quer contar mais alguma coisa?</Pergunta>
