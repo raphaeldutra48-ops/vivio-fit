@@ -59,7 +59,25 @@ export function FilaDeGravacao({
   */
   const usados = fila.filter((e) => e.vezesPrescrito > 0);
   const resto = fila.filter((e) => e.vezesPrescrito === 0);
-  const visiveis = mostrarTodos ? [...usados, ...resto] : usados;
+
+  /*
+    Quem ainda não montou treino nenhum não tem histórico de prescrição — e é
+    o caso de TODO profissional no primeiro dia. Mostrar uma fila vazia ali
+    esconde o botão de gravar atrás de um link discreto, e a tela passa a
+    impressão de que a gravação não existe.
+
+    Sem prescrição, o critério que sobra é a falta de referência: o serviço já
+    ordena assim, então os primeiros são exatamente aqueles em que o aluno não
+    tem nem imagem para olhar. Um punhado deles é uma tarefa; os 159 seriam a
+    mesma lista da biblioteca logo abaixo.
+  */
+  const semHistorico = usados.length === 0;
+  const PRIMEIROS_SEM_HISTORICO = 12;
+  const visiveis = mostrarTodos
+    ? [...usados, ...resto]
+    : semHistorico
+      ? resto.slice(0, PRIMEIROS_SEM_HISTORICO)
+      : usados;
 
   if (fila.length === 0) {
     return (
@@ -77,23 +95,17 @@ export function FilaDeGravacao({
       <div className="flex flex-wrap items-baseline justify-between gap-md">
         <p className="font-semibold">O que gravar primeiro</p>
         <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-          {usados.length === 0
-            ? `${fila.length} exercícios no acervo`
+          {semHistorico
+            ? `${fila.length} exercícios sem gravação sua`
             : `${usados.length} que você prescreve · ${resto.length} no resto do acervo`}
         </p>
       </div>
 
-      {usados.length === 0 ? (
-        <Aviso tipo="info">
-          Você ainda não montou treinos, então não dá para dizer o que é mais urgente. Monte um
-          plano e volte: a fila passa a seguir o que você mais prescreve.
-        </Aviso>
-      ) : (
-        <p className="mt-sm text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-          Em ordem de quanto você prescreve. Os primeiros são os que mais aluno executa sem ninguém
-          olhando — e é onde faltar referência vira risco de lesão.
-        </p>
-      )}
+      <p className="mt-sm text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+        {semHistorico
+          ? 'Você ainda não montou treinos, então a ordem começa pelos que não têm imagem nem vídeo nenhum — onde o aluno executa sem nada para olhar. Depois que você prescrever, a fila passa a seguir o que você mais usa.'
+          : 'Em ordem de quanto você prescreve. Os primeiros são os que mais aluno executa sem ninguém olhando — e é onde faltar referência vira risco de lesão.'}
+      </p>
 
       <ul className="mt-lg flex flex-col gap-sm">
         {visiveis.map((e) => (
@@ -132,17 +144,19 @@ export function FilaDeGravacao({
         ))}
       </ul>
 
-      {resto.length > 0 && (
+      {fila.length > visiveis.length || mostrarTodos ? (
         <button
           onClick={() => setMostrarTodos((v) => !v)}
           className="mt-lg min-h-toque text-sm underline"
           style={{ color: 'var(--vv-texto-secundario)' }}
         >
           {mostrarTodos
-            ? 'Mostrar só o que eu prescrevo'
-            : `Ver os outros ${resto.length} do acervo`}
+            ? semHistorico
+              ? 'Mostrar só os primeiros'
+              : 'Mostrar só o que eu prescrevo'
+            : `Ver os outros ${fila.length - visiveis.length} do acervo`}
         </button>
-      )}
+      ) : null}
     </Cartao>
   );
 }
