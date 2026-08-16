@@ -2,16 +2,16 @@
 
 import { Papel, type PlanoTreinoResumo, type ResumoAluno } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
-import { areaTemaClaro } from '@vivio/ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
+import { HistoricoDeTreinos } from '../../../../components/HistoricoDeTreinos';
 import { CardioDoAluno } from '../../../../components/CardioDoAluno';
 import { MetasDoAluno } from '../../../../components/MetasDoAluno';
 import { PainelDeProgresso } from '../../../../components/PainelDeProgresso';
-import { Aviso, Botao, Cartao, Etiqueta } from '../../../../components/ui';
+import { Aviso, Botao, Cartao } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
 import { useSessao } from '../../../../lib/sessao';
 
@@ -27,6 +27,21 @@ export default function FichaDoAluno() {
   const [versaoClinica, setVersaoClinica] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
 
+  /* Nomeada porque ativar um plano arquiva os outros — a lista inteira muda. */
+  const recarregarPlanos = useCallback(() => {
+    // O 403 por consentimento não é falha: é informação para a tela mostrar.
+    void (async () => {
+      try {
+        setPlanos(await sdk.treinos.listar(alunoId));
+        setSemConsentimento(false);
+      } catch (e) {
+        if (e instanceof ErroApi && e.codigo === 'CONSENTIMENTO_AUSENTE') {
+          setSemConsentimento(true);
+        }
+      }
+    })();
+  }, [alunoId]);
+
   useEffect(() => {
     sdk.alunos
       .resumo(alunoId)
@@ -38,22 +53,11 @@ export default function FichaDoAluno() {
       .catch(() => undefined)
       .then(() => undefined);
 
-    // O 403 por consentimento não é falha: é informação para a tela mostrar.
-    void (async () => {
-      try {
-        setPlanos(await sdk.treinos.listar(alunoId));
-      } catch (e) {
-        if (e instanceof ErroApi && e.codigo === 'CONSENTIMENTO_AUSENTE') {
-          setSemConsentimento(true);
-        }
-      }
-    })();
-  }, [alunoId]);
+    recarregarPlanos();
+  }, [alunoId, recarregarPlanos]);
 
   if (erro) return <Aviso tipo="erro">{erro}</Aviso>;
   if (!aluno) return <Aviso tipo="info">Carregando…</Aviso>;
-
-  const ativo = planos.find((p) => p.status === 'ATIVO');
 
   return (
     <div className="flex flex-col gap-xl">
@@ -195,37 +199,8 @@ export default function FichaDoAluno() {
               <strong>Treino</strong>. A decisão é dele e pode ser desfeita quando quiser.
             </p>
           </Cartao>
-        ) : planos.length === 0 ? (
-          <Aviso tipo="info">Nenhum plano montado ainda.</Aviso>
         ) : (
-          <div className="flex flex-col gap-md">
-            {planos.map((p) => (
-              <Cartao key={p.id}>
-                <div className="flex flex-wrap items-center justify-between gap-md">
-                  <div>
-                    <p className="font-semibold">{p.nome}</p>
-                    <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                      versão {p.versao} · {p.totalSessoes}{' '}
-                      {p.totalSessoes === 1 ? 'sessão' : 'sessões'} · por {p.personal.nome}
-                    </p>
-                  </div>
-                  <Etiqueta
-                    texto={p.status === 'ATIVO' ? 'Ativo' : p.status === 'RASCUNHO' ? 'Rascunho' : 'Arquivado'}
-                    cor={
-                      p.status === 'ATIVO'
-                        ? areaTemaClaro.treino.texto
-                        : 'var(--vv-texto-secundario)'
-                    }
-                  />
-                </div>
-              </Cartao>
-            ))}
-            {ativo && (
-              <Aviso tipo="info">
-                Ajustar o plano ativo cria uma versão nova — a anterior fica no histórico.
-              </Aviso>
-            )}
-          </div>
+          <HistoricoDeTreinos alunoId={alunoId} planos={planos} aoMudar={recarregarPlanos} />
         )}
       </section>
     </div>

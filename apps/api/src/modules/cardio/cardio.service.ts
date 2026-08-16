@@ -244,23 +244,42 @@ export class CardioService {
       }
     }
 
+    /*
+      Duas ausências diferentes, e por muito tempo elas foram a mesma aqui.
+
+      Não houve sessão nenhuma na janela: a resposta é ZERO. "Você não queimou
+      nada esta semana" é um fato, e é justamente o que o contador precisa
+      dizer para servir de cobrança. Devolver `null` fazia a tela mostrar um
+      travessão, que se lê como "não carregou" — e o aluno que passou a semana
+      parado via o app quebrado em vez de ver a própria semana parada.
+
+      Houve sessão mas não deu para estimar (falta o peso): aí sim é `null`.
+      Somar como zero afirmaria que ela treinou de graça.
+    */
+    const kcalOuZero = (sessoes: number, temAlguma: boolean, soma: number): number | null => {
+      if (sessoes === 0) return 0;
+      return temAlguma ? soma : null;
+    };
+
     const musculacao = {
       sessoes: execucoes.length,
       minutos: minutosMusculacao,
-      kcal: temAlgumaKcalDeMusculacao ? kcalMusculacao : null,
+      kcal: kcalOuZero(execucoes.length, temAlgumaKcalDeMusculacao, kcalMusculacao),
     };
     const cardio = {
       sessoes: cardios.length,
       minutos: minutosCardio,
-      kcal: temAlgumaKcalDeCardio ? kcalCardio : null,
+      kcal: kcalOuZero(cardios.length, temAlgumaKcalDeCardio, kcalCardio),
     };
 
-    // `null` quando nada pôde ser estimado — somar nulos como zero diria
-    // "você não gastou nada", que é diferente de "não deu para calcular".
+    /*
+      Basta UMA parte desconhecida para o total ser desconhecido: somar o que
+      se sabe com o que não se sabe e chamar de total dá um número menor que o
+      real, com cara de exato. Antes a condição era `&&`, e o total virava a
+      soma parcial sempre que só uma das duas pudesse ser estimada.
+    */
     const totalKcal =
-      musculacao.kcal === null && cardio.kcal === null
-        ? null
-        : (musculacao.kcal ?? 0) + (cardio.kcal ?? 0);
+      musculacao.kcal === null || cardio.kcal === null ? null : musculacao.kcal + cardio.kcal;
 
     return {
       dias,

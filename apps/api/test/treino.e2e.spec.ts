@@ -75,6 +75,8 @@ describe('Exercícios e planos de treino (e2e)', () => {
     await prisma.planoTreino.deleteMany({
       where: { OR: [{ id: idPlano }, { raizId: idPlano }] },
     });
+    // O rascunho do bloco de histórico nasce fora dessa raiz e ficaria para trás.
+    await prisma.planoTreino.deleteMany({ where: { alunoId: idAna, nome: 'Rascunho de teste' } });
     await prisma.exercicio.deleteMany({ where: { nome: { contains: sufixo } } });
     await app.close();
   });
@@ -317,6 +319,65 @@ describe('Exercícios e planos de treino (e2e)', () => {
         where: { alunoId: idAna, status: 'ATIVO' },
       });
       expect(ativos).toBe(1);
+    });
+  });
+
+  /*
+    A lista é lida como histórico pelo profissional. Vem depois do
+    versionamento porque depende do que ele criou: um ATIVO e um ARQUIVADO.
+  */
+  describe('a lista como histórico', () => {
+    it('o plano em uso vem primeiro, o arquivado depois', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/planos-treino`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      /*
+        A ordenação antiga era `status: 'asc'`, que seguia a ordem de
+        declaração do enum — RASCUNHO, ATIVO, ARQUIVADO — e punha rascunho
+        acima do plano que o aluno treina hoje.
+      */
+      expect(r.body[0].status).toBe('ATIVO');
+      expect(r.body.at(-1).status).toBe('ARQUIVADO');
+    });
+
+    it('um rascunho fica abaixo do ativo, e não no topo', async () => {
+      await request(app.getHttpServer())
+        .post(url(`/alunos/${idAna}/planos-treino`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .send({
+          nome: 'Rascunho de teste',
+          objetivo: 'HIPERTROFIA',
+          ativar: false,
+          sessoes: [
+            {
+              nome: 'A',
+              itens: [{ exercicioId: idSupino, series: 3, repsAlvo: '10' }],
+            },
+          ],
+        })
+        .expect(201);
+
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/planos-treino`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      expect(r.body[0].status).toBe('ATIVO');
+      expect(r.body.some((p: { status: string }) => p.status === 'RASCUNHO')).toBe(true);
+    });
+
+    /* Rascunho nunca ativado não tem `inicioEm`: sem isto ficaria sem data. */
+    it('todo plano traz a data em que foi montado', async () => {
+      const r = await request(app.getHttpServer())
+        .get(url(`/alunos/${idAna}/planos-treino`))
+        .set('Authorization', `Bearer ${tokenPersonal}`)
+        .expect(200);
+
+      for (const p of r.body) {
+        expect(Number.isNaN(Date.parse(p.criadoEm))).toBe(false);
+      }
     });
   });
 });

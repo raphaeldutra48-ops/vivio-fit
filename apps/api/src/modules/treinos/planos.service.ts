@@ -31,6 +31,17 @@ const INCLUDE_COMPLETO = {
   },
 } as const;
 
+/**
+ * O que está valendo primeiro, o que ainda não vale depois, o que já passou por
+ * último. `Array.prototype.sort` é estável, então dentro de cada grupo a ordem
+ * por data mais recente vinda do banco se mantém.
+ */
+const PESO_DO_STATUS: Record<StatusPlano, number> = {
+  [StatusPlano.ATIVO]: 0,
+  [StatusPlano.RASCUNHO]: 1,
+  [StatusPlano.ARQUIVADO]: 2,
+};
+
 @Injectable()
 export class PlanosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -39,20 +50,29 @@ export class PlanosService {
     const planos = await this.prisma.planoTreino.findMany({
       where: { alunoId },
       include: { personal: { select: { id: true, nome: true } }, _count: { select: { sessoes: true } } },
-      orderBy: [{ status: 'asc' }, { criadoEm: 'desc' }],
+      orderBy: { criadoEm: 'desc' },
     });
 
-    return planos.map((p) => ({
-      id: p.id,
-      nome: p.nome,
-      objetivo: p.objetivo,
-      versao: p.versao,
-      status: p.status,
-      inicioEm: p.inicioEm?.toISOString() ?? null,
-      fimEm: p.fimEm?.toISOString() ?? null,
-      totalSessoes: p._count.sessoes,
-      personal: p.personal,
-    }));
+    return planos
+      .map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        objetivo: p.objetivo,
+        versao: p.versao,
+        status: p.status,
+        criadoEm: p.criadoEm.toISOString(),
+        inicioEm: p.inicioEm?.toISOString() ?? null,
+        fimEm: p.fimEm?.toISOString() ?? null,
+        totalSessoes: p._count.sessoes,
+        personal: p.personal,
+      }))
+      /*
+        Ordem explícita, e não `status: 'asc'`: aquilo seguia a ordem em que o
+        enum foi declarado no schema — RASCUNHO, ATIVO, ARQUIVADO — e punha
+        rascunhos acima do plano que o aluno está treinando hoje. Numa lista
+        que se lê de cima para baixo, o topo tem de ser o que está valendo.
+      */
+      .sort((a, b) => PESO_DO_STATUS[a.status] - PESO_DO_STATUS[b.status]);
   }
 
   /** Payload que o mobile guarda para funcionar sem rede na academia. */
@@ -284,6 +304,7 @@ export class PlanosService {
       objetivo: plano.objetivo,
       versao: plano.versao,
       status: plano.status,
+      criadoEm: plano.criadoEm.toISOString(),
       inicioEm: plano.inicioEm?.toISOString() ?? null,
       fimEm: plano.fimEm?.toISOString() ?? null,
       totalSessoes: sessoes.length,

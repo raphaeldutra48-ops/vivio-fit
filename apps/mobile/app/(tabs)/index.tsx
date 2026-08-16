@@ -4,6 +4,7 @@ import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ContadorDeCalorias } from '../../src/componentes/ContadorDeCalorias';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -353,6 +354,12 @@ export default function Inicio() {
           ))
         )}
       </View>
+
+      {/*
+        Antes dos atalhos: o contador é informação, os atalhos são navegação.
+        Enterrá-lo entre botões faria dele mais um botão.
+      */}
+      <ContadorDeCalorias />
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.md }}>
         {[

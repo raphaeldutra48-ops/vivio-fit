@@ -164,6 +164,14 @@ export interface PlanoTreinoResumo {
   objetivo: string | null;
   versao: number;
   status: 'RASCUNHO' | 'ATIVO' | 'ARQUIVADO';
+  /**
+   * Quando o plano foi montado.
+   *
+   * `inicioEm` só existe depois de ativado, e um rascunho nunca ativado ficaria
+   * sem data nenhuma — numa lista que se lê como histórico, é o item que
+   * ninguém consegue situar no tempo.
+   */
+  criadoEm: string;
   inicioEm: string | null;
   fimEm: string | null;
   totalSessoes: number;

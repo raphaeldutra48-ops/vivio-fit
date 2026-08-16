@@ -375,4 +375,49 @@ describe('Cardio e calorias (e2e)', () => {
       }).expect(404);
     });
   });
+
+  /**
+   * Semana parada é resposta, não falta de dado.
+   *
+   * O contador da tela inicial mostra 24 h ao lado de 7 dias. Com `null` numa
+   * janela sem atividade, ele exibia um travessão — e quem passou a semana
+   * parado lia "não carregou" em vez de ler a própria semana parada. O número
+   * que cobra é o zero.
+   */
+  describe('janela sem atividade nenhuma', () => {
+    /* 0 dias para trás é uma janela que não alcança nem o cardio de hoje. */
+    const janelaVazia = () =>
+      request(servidor)
+        .get(url(`/alunos/${idAluno}/cardio/calorias?dias=1`))
+        .set('Authorization', `Bearer ${tokenAluno}`);
+
+    it('sem sessões, o total é zero — e não travessão', async () => {
+      await prisma.atividadeCardio.deleteMany({ where: { alunoId: idAluno } });
+      await prisma.execucaoTreino.deleteMany({ where: { alunoId: idAluno } });
+
+      const r = await janelaVazia().expect(200);
+
+      expect(r.body.musculacao.sessoes).toBe(0);
+      expect(r.body.cardio.sessoes).toBe(0);
+      expect(r.body.musculacao.kcal).toBe(0);
+      expect(r.body.cardio.kcal).toBe(0);
+      expect(r.body.totalKcal).toBe(0);
+    });
+
+    /*
+      A distinção que se protege: houve treino e não deu para estimar continua
+      sendo `null`. Somar como zero afirmaria que a pessoa treinou de graça.
+    */
+    it('mas com sessão e sem peso continua null', async () => {
+      await prisma.medida.deleteMany({ where: { alunoId: idAluno } });
+      await registrar({ tipo: 'CORRIDA', duracaoMin: 30, data: hoje() }).expect(201);
+
+      const r = await janelaVazia().expect(200);
+
+      expect(r.body.pesoUsadoKg).toBeNull();
+      expect(r.body.cardio.sessoes).toBe(1);
+      expect(r.body.cardio.kcal).toBeNull();
+      expect(r.body.totalKcal).toBeNull();
+    });
+  });
 });
