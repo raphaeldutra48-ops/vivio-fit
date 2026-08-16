@@ -2,6 +2,7 @@
 
 import type { PlanoTreinoCompleto, PlanoTreinoResumo } from '@vivio/contracts';
 import { areaTemaClaro } from '@vivio/ui';
+import Link from 'next/link';
 import { useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { Aviso, Botao, Cartao, Etiqueta } from './ui';
@@ -123,6 +124,14 @@ export function HistoricoDeTreinos({
                 Sem este botão, salvar sem ativar era um beco: o plano ficava
                 gravado e não havia caminho na tela para colocá-lo em uso.
               */}
+              {/*
+                Imprimir vale para qualquer plano, inclusive arquivado: o
+                profissional às vezes quer o papel de um ciclo que já passou
+                para comparar com o de agora.
+              */}
+              <Link href={`/alunos/${alunoId}/treino/${p.id}/imprimir`}>
+                <Botao variante="neutra">🖨️ Imprimir / PDF</Botao>
+              </Link>
               {p.status !== 'ATIVO' && (
                 <Botao
                   variante="neutra"
