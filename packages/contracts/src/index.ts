@@ -44,3 +44,4 @@ export * from './financeiro';
 export * from './site';
 export * from './perfil';
 export * from './pix';
+export * from './importacao-dieta';
