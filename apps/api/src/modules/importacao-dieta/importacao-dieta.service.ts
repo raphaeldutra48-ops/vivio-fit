@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EscopoDado, Papel, Prisma, StatusVinculo } from '@prisma/client';
 import {
   MAXIMO_DE_CANDIDATOS,
-  PONTUACAO_MINIMA_PARA_SUGERIR,
+  deveSugerir,
   palavrasSignificativas,
   pontuarCandidato,
   type AlimentoCandidato,
@@ -116,8 +116,7 @@ export class ImportacaoDietaService {
         const candidatos = this.melhoresCandidatos(i.nomeLido, catalogo);
         if (candidatos.length === 0) semCandidato += 1;
 
-        const melhor = candidatos[0];
-        const pontuacaoDoMelhor = melhor ? pontuarCandidato(i.nomeLido, melhor.nome) : 0;
+        const pontuacoes = candidatos.map((c) => pontuarCandidato(i.nomeLido, c.nome));
 
         return {
           textoOriginal: i.textoOriginal,
@@ -126,8 +125,7 @@ export class ImportacaoDietaService {
           medidaCaseiraLida: i.medidaCaseiraLida,
           observacao: i.observacao,
           candidatos,
-          alimentoIdSugerido:
-            melhor && pontuacaoDoMelhor >= PONTUACAO_MINIMA_PARA_SUGERIR ? melhor.id : null,
+          alimentoIdSugerido: deveSugerir(pontuacoes) ? candidatos[0]!.id : null,
         };
       }),
     }));

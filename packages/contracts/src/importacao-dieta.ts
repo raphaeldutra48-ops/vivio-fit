@@ -117,7 +117,7 @@ export const dietaExtraidaSchema = z.object({
 export type DietaExtraida = z.infer<typeof dietaExtraidaSchema>;
 
 /**
- * Normaliza para comparar: sem acento, sem caixa, sem plural bobo.
+ * Normaliza para comparar: sem acento, sem caixa, sem pontuação.
  *
  * "Arroz Branco Cozido" e "arroz branco, cozido" têm de casar. Sem isto, o
  * casamento erra em quase toda linha — o documento é escrito por gente, o
@@ -140,10 +140,29 @@ export function normalizarParaBusca(texto: string): string {
 /** Palavras que não distinguem alimento nenhum e só atrapalham a pontuação. */
 const PALAVRAS_VAZIAS = new Set(['de', 'da', 'do', 'com', 'e', 'ou', 'a', 'o', 'em', 'no', 'na']);
 
+/**
+ * Tira o plural, grosseiramente.
+ *
+ * A dieta escreve "2 ovos inteiros"; a tabela cataloga "Ovo, de galinha,
+ * inteiro". Sem isto, nenhuma das duas palavras casa e a linha inteira erra —
+ * com o catálogo cheio, "ovos inteiros mexidos" apontava para "Macarrão com
+ * ovos", que foi o único item que por acaso escrevia no plural.
+ *
+ * É um corte de "s" final, não um lematizador: cobre o plural regular, que é a
+ * quase totalidade dos nomes de alimento. O limite de 3 letras evita comer
+ * palavras curtas terminadas em s, e o falso positivo que sobra ("arroz" não
+ * termina em s, "cuscuz" também não) é inofensivo — os dois lados da comparação
+ * passam pela mesma função, então erro igual dos dois lados ainda casa.
+ */
+function semPlural(palavra: string): string {
+  return palavra.length > 3 && palavra.endsWith('s') ? palavra.slice(0, -1) : palavra;
+}
+
 export function palavrasSignificativas(texto: string): string[] {
   return normalizarParaBusca(texto)
     .split(' ')
-    .filter((p) => p.length > 2 && !PALAVRAS_VAZIAS.has(p));
+    .filter((p) => p.length > 2 && !PALAVRAS_VAZIAS.has(p))
+    .map(semPlural);
 }
 
 /**
@@ -177,6 +196,24 @@ export function pontuarCandidato(nomeLido: string, nomeCatalogo: string): number
  * olhar, e o erro entra na dieta com a aparência de ter sido conferido.
  */
 export const PONTUACAO_MINIMA_PARA_SUGERIR = 0.6;
+
+/**
+ * Decide se há sugestão automática, dadas as pontuações já ordenadas.
+ *
+ * Duas razões para não sugerir, e a segunda só apareceu com o catálogo cheio:
+ *
+ * **Fraca demais** — abaixo do corte, o campo fica vazio e exige escolha.
+ *
+ * **Empatada** — "azeite" casa igual com "Azeite de oliva" e "Azeite de dendê",
+ * e o desempate era alfabético, então o dendê vinha pré-selecionado. São
+ * gorduras completamente diferentes. Quando o topo empata, a informação que
+ * falta é do documento, não do catálogo: quem escreveu é que sabe qual era.
+ */
+export function deveSugerir(pontuacoesOrdenadas: number[]): boolean {
+  const [primeira, segunda] = pontuacoesOrdenadas;
+  if (primeira === undefined || primeira < PONTUACAO_MINIMA_PARA_SUGERIR) return false;
+  return segunda === undefined || segunda < primeira;
+}
 
 /** Quantos candidatos mostrar. Mais que isso vira lista para rolar, não escolha. */
 export const MAXIMO_DE_CANDIDATOS = 5;

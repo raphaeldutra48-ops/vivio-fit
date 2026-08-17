@@ -19,7 +19,8 @@
     "semear-catalogo": "tsx prisma/semear-catalogo.ts",
     "preparar-teste": "tsx prisma/preparar-teste.ts",
     "email-teste": "tsx src/ferramentas/enviar-email-teste.ts",
-    "importar-wger": "tsx prisma/importar-wger.ts"
+    "importar-wger": "tsx prisma/importar-wger.ts",
+    "importar-taco": "tsx prisma/importar-taco.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PONTUACAO_MINIMA_PARA_SUGERIR,
+  deveSugerir,
   normalizarParaBusca,
   palavrasSignificativas,
   pontuarCandidato,
@@ -78,6 +79,18 @@ describe('pontuarCandidato', () => {
     expect(pontuarCandidato('arroz', 'Feijão carioca cozido')).toBe(0);
   });
 
+  /*
+    A dieta escreve no plural, a tabela cataloga no singular. Com o catálogo
+    completo isto apontava "ovos inteiros mexidos" para "Macarrão com ovos" —
+    o único item que por acaso escrevia no plural.
+  */
+  it('plural da dieta casa com singular do catálogo', () => {
+    expect(pontuarCandidato('ovos inteiros', 'Ovo de galinha inteiro cozido')).toBeGreaterThanOrEqual(
+      PONTUACAO_MINIMA_PARA_SUGERIR,
+    );
+    expect(pontuarCandidato('folhas', 'Alface crespa folha crua')).toBeGreaterThan(0);
+  });
+
   it('texto sem palavra significativa não pontua', () => {
     expect(pontuarCandidato('de', 'Arroz branco')).toBe(0);
     expect(pontuarCandidato('', 'Arroz branco')).toBe(0);
@@ -88,5 +101,37 @@ describe('pontuarCandidato', () => {
     const integral = pontuarCandidato('arroz integral', 'Arroz integral cozido');
     const branco = pontuarCandidato('arroz integral', 'Arroz branco cozido');
     expect(integral).toBeGreaterThan(branco);
+  });
+});
+
+/**
+ * Quando NÃO sugerir.
+ *
+ * As duas razões vêm de erros diferentes: sugerir algo fraco e sugerir um
+ * entre iguais. A segunda só apareceu com o catálogo completo — e é a pior das
+ * duas, porque a sugestão chega com pontuação alta e cara de conferida.
+ */
+describe('deveSugerir', () => {
+  it('sugere o campeão isolado acima do corte', () => {
+    expect(deveSugerir([0.95, 0.5])).toBe(true);
+    expect(deveSugerir([1])).toBe(true);
+  });
+
+  it('não sugere abaixo do corte', () => {
+    expect(deveSugerir([0.5, 0.33])).toBe(false);
+  });
+
+  /*
+    "azeite" casa igual com "Azeite de oliva" e "Azeite de dendê" — gorduras
+    completamente diferentes. O desempate era alfabético, então o dendê vinha
+    pré-selecionado. Quem sabe qual era é quem escreveu o documento.
+  */
+  it('não sugere quando o topo empata', () => {
+    expect(deveSugerir([0.95, 0.95])).toBe(false);
+    expect(deveSugerir([1, 1, 0.5])).toBe(false);
+  });
+
+  it('sem candidato não sugere', () => {
+    expect(deveSugerir([])).toBe(false);
   });
 });

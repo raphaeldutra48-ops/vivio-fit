@@ -96,6 +96,15 @@ fi
 # Baixa as imagens do wger para o volume. Roda aqui, e não da máquina de quem
 # desenvolve, porque o disco de destino só existe dentro do contêiner.
 # Idempotente: exercício que já tem imagem é pulado.
+# A pasta prisma/ e o tsx vao inteiros para a imagem (ver Dockerfile), entao
+# roda pelo script do package.json como as outras tarefas de instalacao.
+# Idempotente: alimento ja existente e pulado, nao duplicado.
+if [ "$IMPORTAR_TACO" = "true" ]; then
+  echo "→ IMPORTAR_TACO=true: importando a tabela TACO para o catalogo"
+  como_node npm run --silent importar-taco
+  echo "→ pronto. Pode remover IMPORTAR_TACO."
+fi
+
 if [ "$IMPORTAR_WGER" = "true" ]; then
   echo "→ IMPORTAR_WGER=true: baixando imagens dos exercícios"
   como_node npm run --silent importar-wger
