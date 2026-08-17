@@ -83,6 +83,16 @@ export class ArmazenamentoR2 implements Armazenamento {
     return { url, expiraEm: new Date(Date.now() + validadeSeg * 1000) };
   }
 
+  async ler(chave: string): Promise<Buffer> {
+    const resposta = await this.cliente.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: chave }),
+    );
+    if (!resposta.Body) throw new Error(`Objeto sem corpo: ${chave}`);
+    // `transformToByteArray` vem do SDK da AWS e já drena o stream inteiro;
+    // montar os pedaços à mão aqui só criaria uma chance de esquecer um.
+    return Buffer.from(await resposta.Body.transformToByteArray());
+  }
+
   async remover(chave: string): Promise<void> {
     await this.cliente.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: chave }));
   }

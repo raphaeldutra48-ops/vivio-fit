@@ -13,6 +13,7 @@ import type {
   CriarPlanoTreinoInput,
   ExecucaoResumo,
   ExercicioAGravar,
+  LeituraDeDieta,
   ExercicioResumo,
   ListarExerciciosQuery,
   PlanoTreinoCompleto,
@@ -490,6 +491,17 @@ export class VivioClient {
 
     removerDemonstracao: (id: string): Promise<void> =>
       this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'DELETE' }),
+
+    /**
+     * Transcreve um plano alimentar em PDF ou foto. Devolve RASCUNHO — nada é
+     * salvo até o profissional conferir e mandar salvar pelo caminho normal.
+     */
+    importarDieta: (dados: {
+      chave: string;
+      mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
+      alunoId?: string | null;
+    }): Promise<LeituraDeDieta> =>
+      this.requisicao<LeituraDeDieta>('/importacao-dieta', { metodo: 'POST', corpo: dados }),
 
     /** A fila de gravação: o que falta, do mais prescrito para o menos. */
     planoDeGravacao: (): Promise<ExercicioAGravar[]> =>

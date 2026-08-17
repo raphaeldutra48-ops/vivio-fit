@@ -38,4 +38,11 @@ export const FINALIDADE_POR_ESCOPO: Record<EscopoDado, string> = {
     'Compartilhar meu peso, medidas corporais e fotos de evolução com os profissionais que me acompanham.',
   MENSAGENS:
     'Permitir que os profissionais que me acompanham troquem mensagens entre si sobre o meu acompanhamento.',
+  /*
+    Diz o que acontece de fato, e não "usar inteligência artificial": o que o
+    aluno precisa entender para decidir é que um arquivo dele sai do app e vai
+    para outra empresa, fora do país. É esse o fato que muda a decisão.
+  */
+  LEITURA_AUTOMATICA:
+    'Permitir que o plano alimentar que eu ou meu profissional enviarmos em PDF ou foto seja enviado a um serviço de leitura automática fora do Brasil, para ser transcrito. O documento é usado apenas para essa transcrição, o resultado é conferido pelo profissional antes de virar prescrição, e posso revogar esta autorização quando quiser.',
 };

@@ -22,10 +22,20 @@ const ROTULO_ESCOPO: Record<EscopoDado, string> = {
   CLINICO: 'Saúde',
   EVOLUCAO: 'Peso, medidas e fotos',
   MENSAGENS: 'Conversa entre profissionais',
+  LEITURA_AUTOMATICA: 'Leitura automática de documentos',
 };
 
 /** A ordem em que fazem sentido decididos, não a do enum. */
-const ESCOPOS: EscopoDado[] = ['TREINO', 'EVOLUCAO', 'NUTRICAO', 'CLINICO', 'MENSAGENS'];
+const ESCOPOS: EscopoDado[] = [
+  'TREINO',
+  'EVOLUCAO',
+  'NUTRICAO',
+  'CLINICO',
+  'MENSAGENS',
+  // Por último de propósito: é a única que manda dado para FORA do app, e vem
+  // depois das que só decidem quem, aqui dentro, vê o quê.
+  'LEITURA_AUTOMATICA',
+];
 
 /**
  * Equipe de cuidado e autorizações.

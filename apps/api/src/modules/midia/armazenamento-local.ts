@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, resolve, sep } from 'node:path';
 import type { Armazenamento } from './armazenamento';
 
@@ -83,6 +83,11 @@ export class ArmazenamentoLocal implements Armazenamento {
     await mkdir(dirname(destino), { recursive: true });
     await writeFile(destino, conteudo);
     this.logger.debug(`mídia gravada: ${chave} (${conteudo.byteLength} bytes)`);
+  }
+
+  /** `caminhoDe` já barra travessia de diretório — a chave vem de fora. */
+  async ler(chave: string): Promise<Buffer> {
+    return readFile(this.caminhoDe(chave));
   }
 
   async remover(chave: string): Promise<void> {

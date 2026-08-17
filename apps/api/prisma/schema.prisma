@@ -217,6 +217,12 @@ enum EscopoDado {
   CLINICO
   EVOLUCAO
   MENSAGENS
+  /// Autoriza enviar documento de saude do aluno para leitura automatica por
+  /// servico de terceiro, fora do pais. E separado de NUTRICAO de proposito:
+  /// autorizar o profissional a VER a dieta nao autoriza uma empresa
+  /// estrangeira a PROCESSAR o documento. A LGPD pede consentimento especifico
+  /// e destacado por finalidade quando o dado e sensivel.
+  LEITURA_AUTOMATICA
 }
 
 /// Consentimento explícito do aluno para compartilhar um escopo de dado.

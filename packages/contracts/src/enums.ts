@@ -47,6 +47,17 @@ export const EscopoDado = {
   CLINICO: 'CLINICO',
   EVOLUCAO: 'EVOLUCAO',
   MENSAGENS: 'MENSAGENS',
+  /**
+   * Enviar documento de saúde do aluno para leitura automática por serviço de
+   * terceiro, fora do país.
+   *
+   * Separado de `NUTRICAO` de propósito: autorizar o profissional a **ver** a
+   * dieta não autoriza uma empresa estrangeira a **processar** o documento.
+   * São finalidades diferentes, e para dado sensível a LGPD pede consentimento
+   * específico e destacado por finalidade — reaproveitar o de nutrição aqui
+   * seria usar um "sim" dado para outra pergunta.
+   */
+  LEITURA_AUTOMATICA: 'LEITURA_AUTOMATICA',
 } as const;
 export type EscopoDado = (typeof EscopoDado)[keyof typeof EscopoDado];
 export const escopoDadoSchema = z.nativeEnum(EscopoDado);

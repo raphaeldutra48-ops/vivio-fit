@@ -17,6 +17,16 @@ export interface Armazenamento {
   /** Link temporário de leitura. */
   urlDeLeitura(chave: string, validadeSeg: number): Promise<{ url: string; expiraEm: Date }>;
 
+  /**
+   * Os bytes do arquivo, para o servidor processar.
+   *
+   * Existe por causa da leitura de dieta: o documento precisa chegar ao modelo,
+   * e mandá-lo buscar o link assinado seria dar a volta pela rede para pegar um
+   * arquivo que já está do nosso lado. Continua sem abrir nada para fora — este
+   * caminho é servidor a servidor, e o cliente segue recebendo só link assinado.
+   */
+  ler(chave: string): Promise<Buffer>;
+
   remover(chave: string): Promise<void>;
 }
 
