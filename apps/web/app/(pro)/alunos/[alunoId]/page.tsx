@@ -118,6 +118,14 @@ export default function FichaDoAluno() {
               </Link>
             </>
           )}
+          {/*
+            Ao lado de "Montar dieta", não escondido num menu: importar é o
+            caminho de quem já tem a dieta escrita, que é a maioria de quem
+            chega com nutricionista de fora.
+          */}
+          <Link href={`/alunos/${alunoId}/dieta/importar`}>
+            <Botao variante="neutra">📄 Importar dieta</Botao>
+          </Link>
           <Link href={`/alunos/${alunoId}/dieta`}>
             <Botao>Montar dieta</Botao>
           </Link>
