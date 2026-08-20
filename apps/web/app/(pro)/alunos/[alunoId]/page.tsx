@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertasClinicos } from '../../../../components/AlertasClinicos';
 import { CondicoesDeSaude } from '../../../../components/CondicoesDeSaude';
 import { HistoricoDeTreinos } from '../../../../components/HistoricoDeTreinos';
+import { PainelDeGraficos } from '../../../../components/graficos/PainelDeGraficos';
 import { CardioDoAluno } from '../../../../components/CardioDoAluno';
 import { MetasDoAluno } from '../../../../components/MetasDoAluno';
 import { PainelDeProgresso } from '../../../../components/PainelDeProgresso';
@@ -174,6 +175,13 @@ export default function FichaDoAluno() {
         O próprio painel trata a falta de autorização.
       */}
       <PainelDeProgresso alunoId={alunoId} nomeDoAluno={aluno.nome} />
+
+      {/*
+        Logo abaixo dos numeros, nao numa aba separada: o grafico responde a
+        pergunta que o numero levanta. "Subiu 7%" nao distingue quem subiu de
+        pouco em pouco de quem subiu tudo numa semana e estacionou.
+      */}
+      <PainelDeGraficos alunoId={alunoId} dias={90} />
 
       {/* Logo abaixo do painel: a meta e o que da sentido aos numeros dele. */}
       <MetasDoAluno alunoId={alunoId} />

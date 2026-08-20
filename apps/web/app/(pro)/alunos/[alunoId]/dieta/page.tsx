@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../../components/ui';
+import { GraficoDeBarras } from '../../../../../components/graficos/GraficoDeBarras';
+import { macrosComparaveis } from '../../../../../lib/graficos';
 import {
   corDaMeta,
   corpoDoPlano,
@@ -273,6 +275,42 @@ export default function MontarDieta() {
                 </div>
               ))}
             </dl>
+
+            {/*
+              O mesmo dado da tabela acima, em comprimento.
+              A tabela responde "quanto"; a barra responde "quanto FALTA", que e
+              a pergunta de quem esta montando o plano. Sem a barra, comparar
+              proteina e carboidrato exige aritmetica de cabeca a cada ajuste.
+
+              So macro com meta prescrita vira barra: sem alvo, o comprimento
+              nao significa nada e comparar proteina com carboidrato seria
+              comparacao sem sentido.
+            */}
+            {(() => {
+              const comMeta = macrosComparaveis([
+                { rotulo: 'Proteína', gramas: total.proteinaG, meta: metaEmNumero(proteinaAlvo) ?? null },
+                { rotulo: 'Carboidrato', gramas: total.carboidratoG, meta: metaEmNumero(carboAlvo) ?? null },
+                { rotulo: 'Gordura', gramas: total.gorduraG, meta: metaEmNumero(gorduraAlvo) ?? null },
+              ]);
+              if (comMeta.length === 0) return null;
+              return (
+                <div className="mt-lg">
+                  <GraficoDeBarras
+                    descricao="Macros do plano comparados com as metas prescritas"
+                    barras={comMeta.map((m) => ({
+                      rotulo: m.rotulo,
+                      valor: Math.round(m.gramas),
+                      meta: m.meta ?? undefined,
+                      detalhe: `${Math.round(m.gramas)} g de ${m.meta} g`,
+                      cor: 'var(--vv-area-nutricao)',
+                    }))}
+                  />
+                  <p className="mt-sm text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                    O traço marca a meta. Barra além dele passou do prescrito.
+                  </p>
+                </div>
+              );
+            })()}
 
             {kcalDaMeta !== null && kcalDaMeta > 0 && Math.abs(total.kcal - kcalDaMeta) / kcalDaMeta > 0.05 && (
               <p className="mt-md text-sm" style={{ color: 'var(--vv-alerta)' }}>
