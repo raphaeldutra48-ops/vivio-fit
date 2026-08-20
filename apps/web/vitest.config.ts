@@ -18,6 +18,17 @@ export default defineConfig({
     // 152,5. As implementações não são tocadas; quem define `mockResolvedValue`
     // num `beforeEach` continua valendo.
     clearMocks: true,
+    /*
+      20 s, e não os 5 s padrão.
+
+      Quatro testes que digitam com `userEvent.type` estouravam o padrão em
+      máquina lenta — um deles chegou a asseverar "oHfiipaertrofia", que são as
+      letras de "Hipertrofia" intercaladas fora de ordem pela corrida entre o
+      teclado simulado e o re-render. Nenhum era defeito de produto, mas a suíte
+      ficava vermelha e, vermelha por ruído, deixa de servir como portão: quem
+      vê falha que "sempre falha" para de olhar.
+    */
+    testTimeout: 20_000,
     setupFiles: ['./teste/preparo.ts'],
   },
 });

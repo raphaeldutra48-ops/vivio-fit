@@ -135,7 +135,7 @@ export default function MeuPerfilPagina() {
                   ? 'var(--vv-sucesso)'
                   : perfil.profissional.recusadoEm
                     ? 'var(--vv-erro)'
-                    : 'var(--vv-atencao)'
+                    : 'var(--vv-alerta)'
               }
             />
           </div>

@@ -21,7 +21,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 const corDoStatus: Record<string, string> = {
   ATIVA: 'var(--vv-sucesso)',
-  SUSPENSA: 'var(--vv-atencao)',
+  SUSPENSA: 'var(--vv-alerta)',
   ENCERRADA: 'var(--vv-texto-secundario)',
   SUBSTITUIDA: 'var(--vv-texto-secundario)',
 };

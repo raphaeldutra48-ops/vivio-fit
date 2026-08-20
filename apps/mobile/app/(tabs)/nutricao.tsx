@@ -4,16 +4,21 @@ import {
   type PlanoDietaCompleto,
   type ResumoDeAgua,
 } from '@vivio/contracts';
-import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
+import { alvoToqueMin, espacamento, obterAreaTema, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
-const AZUL_NUTRICAO = '#3AA8C1';
 
 export default function Nutricao() {
-  const { usuario, tema } = useSessao();
+  const { usuario, tema, nomeDoTema } = useSessao();
+  /*
+    A cor da area vem do tema, nao de um hexadecimal na tela. O valor fixo
+    daqui (#3AA8C1) dava 2,78:1 como texto sobre fundo claro — reprovado — e
+    era diferente do que a web usava para a MESMA area.
+  */
+  const areaTema = obterAreaTema(nomeDoTema).nutricao;
   const [dieta, setDieta] = useState<PlanoDietaCompleto | null>(null);
   const [agua, setAgua] = useState<ResumoDeAgua | null>(null);
   const [registros, setRegistros] = useState<Record<string, string>>({});
@@ -166,7 +171,7 @@ export default function Nutricao() {
                 </Text>
               </Text>
             </View>
-            <Text style={{ color: AZUL_NUTRICAO, fontWeight: '700', fontSize: tipografia.tamanho.xl }}>
+            <Text style={{ color: areaTema.texto, fontWeight: '700', fontSize: tipografia.tamanho.xl }}>
               {agua.percentual}%
             </Text>
           </View>
@@ -181,7 +186,7 @@ export default function Nutricao() {
               style={{
                 width: `${agua.percentual}%`,
                 height: '100%',
-                backgroundColor: AZUL_NUTRICAO,
+                backgroundColor: areaTema.cor,
                 borderRadius: raio.pill,
               }}
             />
@@ -201,10 +206,10 @@ export default function Nutricao() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: 1,
-                  borderColor: AZUL_NUTRICAO,
+                  borderColor: areaTema.cor,
                 }}
               >
-                <Text style={{ color: AZUL_NUTRICAO, fontWeight: '700' }}>+{ml}</Text>
+                <Text style={{ color: areaTema.texto, fontWeight: '700' }}>+{ml}</Text>
               </Pressable>
             ))}
           </View>

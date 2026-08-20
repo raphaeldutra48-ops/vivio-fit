@@ -540,7 +540,17 @@ export default function Execucao() {
 
       {offline && (
         <View style={{ backgroundColor: tema.alerta, paddingVertical: espacamento.xs }}>
-          <Text style={{ color: '#1A1D21', textAlign: 'center', fontSize: tipografia.tamanho.sm }}>
+          <Text
+            style={{
+              // `alertaTexto` e não uma cor fixa: `alerta` é marrom escuro no
+              // tema claro e âmbar no escuro, então o texto tem de inverter
+              // junto. Fixo aqui deixava a faixa ilegível no tema claro — e ela
+              // só aparece quando a rede cai no meio do treino.
+              color: tema.alertaTexto,
+              textAlign: 'center',
+              fontSize: tipografia.tamanho.sm,
+            }}
+          >
             Sem conexão — treinando com a cópia salva. Enviamos quando a rede voltar.
           </Text>
         </View>

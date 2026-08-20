@@ -65,8 +65,8 @@ export function FichaDeExercicio({
               onClick={() => setAba(valor)}
               className="min-h-toque px-lg font-semibold"
               style={{
-                color: aba === valor ? 'var(--vv-primaria)' : 'var(--vv-texto-secundario)',
-                borderBottom: aba === valor ? '2px solid var(--vv-primaria)' : '2px solid transparent',
+                color: aba === valor ? 'var(--vv-primaria-fundo)' : 'var(--vv-texto-secundario)',
+                borderBottom: aba === valor ? '2px solid var(--vv-primaria-fundo)' : '2px solid transparent',
               }}
             >
               {rotulo}
@@ -150,7 +150,7 @@ export function FichaDeExercicio({
             <li key={passo} className="flex gap-md">
               <span
                 className="font-semibold tabular-nums"
-                style={{ color: 'var(--vv-primaria)', minWidth: '1.5rem' }}
+                style={{ color: 'var(--vv-primaria-fundo)', minWidth: '1.5rem' }}
               >
                 {i + 1}.
               </span>

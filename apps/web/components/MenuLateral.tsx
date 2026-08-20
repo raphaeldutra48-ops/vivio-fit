@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { menuPara, type SecaoRecolhivel } from '../lib/menu';
+import { EscolhaDeTema } from './EscolhaDeTema';
 
 /** Marca discreta para o que ainda não foi construído — evita link que parece quebrado. */
 function Selo() {
@@ -132,7 +133,16 @@ export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: ()
         </div>
       ))}
 
-      <p className="px-md pt-lg text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+      {/*
+        No rodapé do menu e não numa tela de configurações: quem procura o tema
+        procura onde já está navegando, e uma preferência visual escondida atrás
+        de dois cliques não é encontrada.
+      */}
+      <div className="px-md pt-lg">
+        <EscolhaDeTema />
+      </div>
+
+      <p className="px-md pt-md text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
         Vívio Fit · versão 0.1.0
       </p>
     </nav>

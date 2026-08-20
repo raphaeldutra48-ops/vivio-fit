@@ -21,7 +21,6 @@ import {
 } from '../../../../../lib/dieta';
 import { sdk } from '../../../../../lib/sdk';
 
-const AZUL_NUTRICAO = '#2A8CA3';
 
 export default function MontarDieta() {
   const { alunoId } = useParams<{ alunoId: string }>();
@@ -150,9 +149,15 @@ export default function MontarDieta() {
             onClick={() => setAtiva(i)}
             className="min-h-toque rounded-md border px-lg font-semibold"
             style={{
-              background: i === ativa ? AZUL_NUTRICAO : 'transparent',
-              color: i === ativa ? '#FFFFFF' : 'var(--vv-texto-primario)',
-              borderColor: i === ativa ? AZUL_NUTRICAO : 'var(--vv-borda)',
+              /*
+                Token de area em vez de hexadecimal: era branco sobre #2A8CA3,
+                que da 3,90:1 e reprova em AA. A regra do design system e
+                "cor viva recebe texto escuro" — assim da 4,90:1, e a cor passa
+                a seguir o tema em vez de ficar presa ao claro.
+              */
+              background: i === ativa ? 'var(--vv-area-nutricao)' : 'transparent',
+              color: i === ativa ? 'var(--vv-acao-texto)' : 'var(--vv-texto-primario)',
+              borderColor: i === ativa ? 'var(--vv-area-nutricao)' : 'var(--vv-borda)',
             }}
           >
             {r.nome} · {Math.round(macrosPorRefeicao[i]!.kcal)} kcal

@@ -75,7 +75,7 @@ export function estiloDeArraste(
 ): React.CSSProperties {
   if (arrastando === indice) return { opacity: 0.4 };
   if (alvo === indice && arrastando !== null) {
-    return { outline: '2px solid var(--vv-acao)', outlineOffset: '2px' };
+    return { outline: '2px solid var(--vv-acao-fundo)', outlineOffset: '2px' };
   }
   return {};
 }

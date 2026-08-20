@@ -12,7 +12,7 @@ import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../../components/ui
 import { sdk } from '../../../../lib/sdk';
 
 const corDoStatus: Record<StatusVerificacao, string> = {
-  PENDENTE: 'var(--vv-atencao)',
+  PENDENTE: 'var(--vv-alerta)',
   VERIFICADO: 'var(--vv-sucesso)',
   RECUSADO: 'var(--vv-erro)',
 };
@@ -143,7 +143,7 @@ export default function VerificarProfissionais() {
                 <div className="flex flex-col items-end gap-sm">
                   <Etiqueta texto={ROTULO_STATUS_VERIFICACAO[p.status]} cor={corDoStatus[p.status]} />
                   {!p.emailVerificado && (
-                    <Etiqueta texto="E-mail não confirmado" cor="var(--vv-atencao)" />
+                    <Etiqueta texto="E-mail não confirmado" cor="var(--vv-alerta)" />
                   )}
                 </div>
               </div>

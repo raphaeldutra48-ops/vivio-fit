@@ -45,7 +45,7 @@ function Barra({ progresso }: { progresso: number | null }) {
           className="h-full rounded-full"
           style={{
             width: `${progresso}%`,
-            background: progresso >= 100 ? 'var(--vv-sucesso)' : 'var(--vv-primaria)',
+            background: progresso >= 100 ? 'var(--vv-sucesso)' : 'var(--vv-primaria-fundo)',
           }}
         />
       </div>

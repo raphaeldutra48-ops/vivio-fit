@@ -35,7 +35,32 @@ export interface Tema {
 
   sucesso: string;
   alerta: string;
+  /**
+   * Texto sobre `alerta` quando ele é FUNDO — a faixa de "sem conexão".
+   *
+   * Existe porque `alerta` inverte entre os temas: no claro é marrom escuro
+   * (#8A5A00), no escuro é âmbar claro (#F5A524). Um texto fixo serve num e
+   * some no outro — a faixa de offline trazia quase-preto, ilegível no tema
+   * claro, e ela aparece justamente quando a rede cai no meio do treino.
+   *
+   * Mesmo desenho de `acaoTexto` e `primariaTexto`, que já existiam por esta
+   * razão: cor de fundo e cor do texto dela andam juntas.
+   */
+  alertaTexto: string;
   erro: string;
+  /**
+   * Informação neutra — o que não é bom, ruim nem perigoso.
+   *
+   * A cor crua já existia em `cores.feedback.info` e nunca tinha sido promovida
+   * a semântica, então as telas escreviam `var(--vv-info)`, que não existia:
+   * a etiqueta "Comentou" saía sem cor e sem borda. Um irmão de `sucesso`,
+   * `alerta` e `erro` que faltava.
+   *
+   * Não reaproveita o azul de `clinicoFundo` de propósito: ali azul significa
+   * contexto médico, e usar o mesmo tom para um comentário de treino gastaria
+   * um significado que o app já tem.
+   */
+  info: string;
 }
 
 export const temaClaro: Tema = {
@@ -60,7 +85,10 @@ export const temaClaro: Tema = {
 
   sucesso: cores.feedback.sucesso,
   alerta: cores.feedback.alerta,
+  // O alerta claro e marrom escuro: recebe texto claro.
+  alertaTexto: cores.neutro[0],
   erro: cores.feedback.erro,
+  info: cores.feedback.info,
 };
 
 export const temaEscuro: Tema = {
@@ -83,7 +111,12 @@ export const temaEscuro: Tema = {
 
   sucesso: cores.primaria[500],
   alerta: '#F5A524',
+  // O alerta escuro e ambar vivo: recebe texto escuro, como manda a regra
+  // do topo deste arquivo.
+  alertaTexto: cores.neutro[900],
   erro: '#FF6B70',
+  // O azul do claro (#173B5E) e escuro demais para fundo escuro: some.
+  info: cores.secundaria[300],
 };
 
 /**
@@ -142,6 +175,32 @@ export const paresDeContraste: Array<{
   { nome: 'escuro: área nutrição', frente: areaTemaEscuro.nutricao.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
   { nome: 'escuro: área clínico', frente: areaTemaEscuro.clinico.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
   { nome: 'escuro: área consultoria', frente: areaTemaEscuro.consultoria.texto, fundo: temaEscuro.fundo, minimo: 4.5 },
+
+  /*
+    Pares que faltavam e por isso deixaram passar quatro variáveis CSS
+    inexistentes: `Etiqueta` pinta texto E borda com a cor recebida, sobre
+    `superficieElevada`. Sem estes, um badge podia sair ilegível sem ninguém
+    medir — foi o caso de "Comentou", que saía sem cor nenhuma.
+  */
+  { nome: 'claro: faixa de alerta', frente: temaClaro.alertaTexto, fundo: temaClaro.alerta, minimo: 4.5 },
+  { nome: 'escuro: faixa de alerta', frente: temaEscuro.alertaTexto, fundo: temaEscuro.alerta, minimo: 4.5 },
+
+  { nome: 'claro: etiqueta de info', frente: temaClaro.info, fundo: temaClaro.superficieElevada, minimo: 4.5 },
+  { nome: 'escuro: etiqueta de info', frente: temaEscuro.info, fundo: temaEscuro.superficieElevada, minimo: 4.5 },
+  { nome: 'claro: etiqueta de alerta', frente: temaClaro.alerta, fundo: temaClaro.superficieElevada, minimo: 4.5 },
+  { nome: 'escuro: etiqueta de alerta', frente: temaEscuro.alerta, fundo: temaEscuro.superficieElevada, minimo: 4.5 },
+  { nome: 'claro: etiqueta de erro', frente: temaClaro.erro, fundo: temaClaro.superficieElevada, minimo: 4.5 },
+  { nome: 'escuro: etiqueta de erro', frente: temaEscuro.erro, fundo: temaEscuro.superficieElevada, minimo: 4.5 },
+  { nome: 'claro: etiqueta de sucesso', frente: temaClaro.sucesso, fundo: temaClaro.superficieElevada, minimo: 4.5 },
+  { nome: 'escuro: etiqueta de sucesso', frente: temaEscuro.sucesso, fundo: temaEscuro.superficieElevada, minimo: 4.5 },
+
+  /*
+    A aba ativa da ficha de exercício usa a cor primária como TEXTO sobre a
+    superfície, não como fundo de botão. É um uso diferente do par
+    "botão primário" acima, e precisa da própria medição.
+  */
+  { nome: 'claro: primária como texto', frente: temaClaro.primariaFundo, fundo: temaClaro.superficie, minimo: 4.5 },
+  { nome: 'escuro: primária como texto', frente: temaEscuro.primariaFundo, fundo: temaEscuro.superficie, minimo: 4.5 },
 
   // O lettering aparece como texto de verdade no cabeçalho e nas telas de
   // entrada, então segue a régua de texto. As cores puras da logo reprovam aqui
