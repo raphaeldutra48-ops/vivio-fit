@@ -54,6 +54,82 @@ function Barra({ progresso }: { progresso: number | null }) {
   );
 }
 
+/**
+ * Um cartão de meta.
+ *
+ * No escopo do módulo, e não dentro de `MetasDoAluno`: definido lá dentro, ele
+ * era uma função nova a cada renderização, e o React desmontava e remontava a
+ * lista inteira sempre que qualquer campo do formulário de nova meta mudava —
+ * ou seja, a cada tecla digitada no título.
+ *
+ * A única coisa que ele tomava emprestado do render era `acao`; agora ela
+ * chega por prop.
+ */
+/* `Promise<void>` e não `void`: quem chama dispara sem esperar (`void acao(…)`),
+   e declarar como síncrona esconderia do TypeScript que há promessa solta. */
+type AcaoNaMeta = (
+  meta: MetaResumo,
+  qual: 'concluir' | 'reabrir' | 'remover',
+) => Promise<void>;
+
+function Item({ meta, acao }: { meta: MetaResumo; acao: AcaoNaMeta }) {
+  const unidade = UNIDADE_TIPO_META[meta.tipo];
+  return (
+    <Cartao>
+      <div className="flex flex-wrap items-start justify-between gap-md">
+        <div className="flex-1">
+          <p className="font-semibold">{meta.titulo}</p>
+          <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+            {ROTULO_TIPO_META[meta.tipo]}
+            {meta.exercicioNome && ` · ${meta.exercicioNome}`}
+            {meta.alvo !== null && ` · alvo ${meta.alvo} ${unidade}`}
+            {meta.prazo && ` · até ${new Date(`${meta.prazo}T12:00:00`).toLocaleDateString('pt-BR')}`}
+          </p>
+        </div>
+        <div className="flex gap-xs">
+          {meta.atingida ? (
+            <Botao variante="neutra" onClick={() => void acao(meta, 'reabrir')}>
+              Reabrir
+            </Botao>
+          ) : (
+            <Botao variante="neutra" onClick={() => void acao(meta, 'concluir')}>
+              Concluir
+            </Botao>
+          )}
+          <Botao variante="neutra" onClick={() => void acao(meta, 'remover')}>
+            Remover
+          </Botao>
+        </div>
+      </div>
+
+      <div className="mt-md">
+        {meta.atingida ? (
+          <p className="font-semibold" style={{ color: 'var(--vv-sucesso)' }}>
+            Cumprida
+            {meta.concluidaEm ? ' — marcada pelo profissional' : ' — aferida pelo sistema'}
+          </p>
+        ) : (
+          <Barra progresso={meta.progresso} />
+        )}
+      </div>
+
+      {(meta.valorInicial !== null || meta.valorAtual !== null) && !meta.atingida && (
+        <p className="mt-xs text-xs tabular-nums" style={{ color: 'var(--vv-texto-secundario)' }}>
+          {meta.valorInicial !== null && `começou em ${meta.valorInicial} ${unidade}`}
+          {meta.valorInicial !== null && meta.valorAtual !== null && ' · '}
+          {meta.valorAtual !== null && `agora ${meta.valorAtual} ${unidade}`}
+        </p>
+      )}
+
+      {meta.atrasada && (
+        <p className="mt-xs text-sm font-semibold" style={{ color: 'var(--vv-alerta)' }}>
+          Prazo vencido
+        </p>
+      )}
+    </Cartao>
+  );
+}
+
 export function MetasDoAluno({ alunoId }: { alunoId: string }) {
   const [metas, setMetas] = useState<MetaResumo[]>([]);
   const [exercicios, setExercicios] = useState<ExercicioResumo[]>([]);
@@ -136,63 +212,6 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
   const abertas = metas.filter((m) => !m.atingida);
   const cumpridas = metas.filter((m) => m.atingida);
 
-  function Item({ meta }: { meta: MetaResumo }) {
-    const unidade = UNIDADE_TIPO_META[meta.tipo];
-    return (
-      <Cartao>
-        <div className="flex flex-wrap items-start justify-between gap-md">
-          <div className="flex-1">
-            <p className="font-semibold">{meta.titulo}</p>
-            <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-              {ROTULO_TIPO_META[meta.tipo]}
-              {meta.exercicioNome && ` · ${meta.exercicioNome}`}
-              {meta.alvo !== null && ` · alvo ${meta.alvo} ${unidade}`}
-              {meta.prazo && ` · até ${new Date(`${meta.prazo}T12:00:00`).toLocaleDateString('pt-BR')}`}
-            </p>
-          </div>
-          <div className="flex gap-xs">
-            {meta.atingida ? (
-              <Botao variante="neutra" onClick={() => void acao(meta, 'reabrir')}>
-                Reabrir
-              </Botao>
-            ) : (
-              <Botao variante="neutra" onClick={() => void acao(meta, 'concluir')}>
-                Concluir
-              </Botao>
-            )}
-            <Botao variante="neutra" onClick={() => void acao(meta, 'remover')}>
-              Remover
-            </Botao>
-          </div>
-        </div>
-
-        <div className="mt-md">
-          {meta.atingida ? (
-            <p className="font-semibold" style={{ color: 'var(--vv-sucesso)' }}>
-              Cumprida
-              {meta.concluidaEm ? ' — marcada pelo profissional' : ' — aferida pelo sistema'}
-            </p>
-          ) : (
-            <Barra progresso={meta.progresso} />
-          )}
-        </div>
-
-        {(meta.valorInicial !== null || meta.valorAtual !== null) && !meta.atingida && (
-          <p className="mt-xs text-xs tabular-nums" style={{ color: 'var(--vv-texto-secundario)' }}>
-            {meta.valorInicial !== null && `começou em ${meta.valorInicial} ${unidade}`}
-            {meta.valorInicial !== null && meta.valorAtual !== null && ' · '}
-            {meta.valorAtual !== null && `agora ${meta.valorAtual} ${unidade}`}
-          </p>
-        )}
-
-        {meta.atrasada && (
-          <p className="mt-xs text-sm font-semibold" style={{ color: 'var(--vv-alerta)' }}>
-            Prazo vencido
-          </p>
-        )}
-      </Cartao>
-    );
-  }
 
   async function acao(meta: MetaResumo, qual: 'concluir' | 'reabrir' | 'remover') {
     try {
@@ -328,7 +347,7 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
       )}
 
       {abertas.map((m) => (
-        <Item key={m.id} meta={m} />
+        <Item key={m.id} meta={m} acao={acao} />
       ))}
 
       {cumpridas.length > 0 && (
@@ -337,7 +356,7 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
             Cumpridas
           </p>
           {cumpridas.map((m) => (
-            <Item key={m.id} meta={m} />
+            <Item key={m.id} meta={m} acao={acao} />
           ))}
         </>
       )}

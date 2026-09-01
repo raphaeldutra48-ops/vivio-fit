@@ -45,3 +45,5 @@ export * from './site';
 export * from './perfil';
 export * from './pix';
 export * from './importacao-dieta';
+export * from './resumo';
+export * from './rascunho-treino';

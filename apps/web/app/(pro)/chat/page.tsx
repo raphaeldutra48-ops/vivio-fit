@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Aviso, Botao, Cartao } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
+import { useSondagem } from '../../../lib/sondagem';
 
 function uuid(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -37,11 +38,18 @@ export default function Chat() {
 
   useEffect(() => {
     void carregarConversas();
-    // Enquanto o WebSocket não está ligado nesta tela, uma sondagem leve mantém
-    // a lista viva. Trocar por socket é o próximo passo.
-    const intervalo = setInterval(() => void carregarConversas(), 15_000);
-    return () => clearInterval(intervalo);
   }, [carregarConversas]);
+
+  /*
+    Enquanto o WebSocket não está ligado nesta tela, uma sondagem leve mantém a
+    lista viva. Trocar por socket é o próximo passo.
+
+    Pelo gancho, e não por `setInterval` solto: o painel costuma ficar aberto o
+    dia inteiro numa aba de fundo, e o navegador estrangula o temporizador sem
+    desligá-lo — continuaria pedindo a lista de conversas cerca de uma vez por
+    minuto para ninguém.
+  */
+  useSondagem(() => void carregarConversas(), 15_000);
 
   const abrir = useCallback(async (conversa: ConversaResumo) => {
     setAtiva(conversa);

@@ -58,6 +58,8 @@ export const MAPA: Readonly<Record<string, number>> = {
   'Rosca direta com barra': 91,
   'Rosca martelo': 272,
   'Rosca 21': 91, // é rosca com barra; o 21 é o esquema de repetição
+  // "Flexão de Punho com Barra | Barbell Wrist Curl" — nome e implemento batem.
+  'Flexão de punho': 51,
   // --- tríceps -------------------------------------------------------------
   'Tríceps na polia com corda': 1185, // "en polea con cuerda"
   'Tríceps testa': 50, // "Barbell Triceps Extension"
@@ -67,6 +69,9 @@ export const MAPA: Readonly<Record<string, number>> = {
   'Hack machine': 375, // "Hackenschmidtmaschine" é exatamente o hack
   'Levantamento terra sumô': 630,
   'Agachamento pistol': 456,
+  // "Levantamento terra em rack | Rack Deadlift" — rack pull e meio terra são o
+  // mesmo movimento, e o nome deles diz exatamente isso.
+  'Rack pull (meio terra)': 484,
   // --- glúteo --------------------------------------------------------------
   'Elevação pélvica': 294, // "Beckenheben | Hip Thrust" — só vídeo
   // --- panturrilha ---------------------------------------------------------
@@ -115,6 +120,49 @@ export const MAPA: Readonly<Record<string, number>> = {
 
   Os 123 restantes ficam sem mídia do wger e são candidatos naturais à
   gravação própria — começando pelos mais usados.
+
+  ---
+
+  ## Segunda passagem, 24/08/2026 — depois dos 58 exercícios novos
+
+  O catálogo foi de 156 para 214 e o mapeador rodou de novo contra os 285 do
+  wger que têm mídia. Rendimento: **duas linhas**. Ficam registradas as
+  recusas, e uma delas é a mais perigosa do arquivo inteiro:
+
+  - "Extensão de punho" casava com id=51, que é **Barbell Wrist Curl — a
+    FLEXÃO**. O movimento oposto, no mesmo músculo. Uma foto de flexão num
+    exercício de extensão não parece errada para quem não sabe: a pessoa
+    aprenderia a fazer justamente o contrário do que foi prescrito, e é
+    exatamente esse alongamento dos extensores que falta em quem tem
+    epicondilite.
+
+  **Variação de pegada, foto genérica** — a pegada É o exercício aqui:
+  - "Remada baixa pegada aberta" e "pegada supinada" (0.50) casavam com a
+    remada baixa genérica, id=394, que já é a nossa "Remada baixa"
+  - "Flexão de punho na polia" (0.67) casava com a versão de BARRA
+
+  **Unilateral casando com bilateral:**
+  - "Leg press unilateral" (0.67) e "Leg press com pés afastados" (0.50)
+    casavam ambos com o leg press comum, id=371
+
+  **Movimento diferente:**
+  - "Stiff sumô" casava com "Sumo Deadlift" — terra, não stiff
+  - "Paralelas na máquina", "Pullover na máquina" e "Tríceps na máquina"
+    casaram com qualquer coisa que tivesse "máquina" no nome, incluindo
+    abdução de quadril
+
+  ### A conclusão desta passagem
+
+  **O wger está esgotado como fonte.** Ele tem 285 itens com mídia, quase todos
+  movimentos básicos que já mapeamos; o que entrou no catálogo agora é
+  variação brasileira de academia — articulada, cavalinho, pegada supinada no
+  pulley — que não existe lá. Cada exercício novo que acrescentarmos tende a
+  render zero.
+
+  Restam dois caminhos para demonstração, e nenhum passa por acervo aberto:
+  gravação própria (a fila já prioriza pelos planos ativos) ou pacote
+  licenciado. Copiar de concorrente não é caminho — carrega a licença junto e
+  reprova na loja.
 */
 
 /** Licenças do wger, pelo id que a API devolve. */

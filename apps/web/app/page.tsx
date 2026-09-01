@@ -13,7 +13,7 @@ export default function Inicio() {
     if (carregando) return;
     if (!usuario) router.replace('/login');
     else if (usuario.papel === Papel.ALUNO) router.replace('/login?apenasProfissional=1');
-    else router.replace('/alunos');
+    else router.replace('/resumo');
   }, [usuario, carregando, router]);
 
   return (

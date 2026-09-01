@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { sdk } from '../src/sdk';
+import { useSondagem } from '../src/sondagem';
 import { useSessao } from '../src/sessao';
 import { gerarUuid } from '../src/uuid';
 
@@ -39,7 +40,7 @@ function hora(iso: string): string {
  * atenda por ali — melhor esperar o primeiro contato vir de quem cobra por ele.
  */
 export default function Chat() {
-  const { usuario, tema } = useSessao();
+  const { tema } = useSessao();
 
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [ativa, setAtiva] = useState<ConversaResumo | null>(null);
@@ -84,17 +85,26 @@ export default function Chat() {
     })();
   }, [carregarConversas, abrir]);
 
-  /* Sondagem leve enquanto o WebSocket não está ligado nesta tela. */
-  useEffect(() => {
-    if (!ativa) return;
-    const intervalo = setInterval(() => {
+  /*
+    Sondagem leve enquanto o WebSocket não está ligado nesta tela.
+
+    Pelo gancho, e não por `setInterval` solto: antes ela continuava batendo na
+    API a cada 15 s com o app em segundo plano e a conversa aberta — quatro
+    requisições por minuto de quem já tinha guardado o celular. Ao voltar para
+    a frente, o gancho busca na hora, que é quando a pessoa quer ver o que
+    chegou.
+  */
+  useSondagem(
+    () => {
+      if (!ativa) return;
       void sdk.chat
         .mensagens(ativa.id)
         .then((h) => setMensagens([...h.dados].reverse()))
         .catch(() => undefined);
-    }, 15_000);
-    return () => clearInterval(intervalo);
-  }, [ativa]);
+    },
+    15_000,
+    ativa !== null,
+  );
 
   async function enviar() {
     const corpo = texto.trim();

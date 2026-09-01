@@ -69,6 +69,7 @@ import type {
   LoginInput,
   CheckinResumo,
   PainelDeProgresso,
+  ResumoDoProfissional,
   ComparativoDeEvolucao,
   PainelDeFeedback,
   MeusRecordes,
@@ -890,6 +891,18 @@ export class VivioClient {
 
     remover: (alunoId: string, metaId: string): Promise<void> =>
       this.requisicao<void>(`/alunos/${alunoId}/metas/${metaId}`, { metodo: 'DELETE' }),
+  };
+
+  readonly resumo = {
+    /**
+     * A tela inicial do profissional, numa chamada so.
+     *
+     * Uma chamada e o ponto: a alternativa era o navegador pedir os alunos e
+     * depois perguntar por cada um, que e o N+1 do lado do cliente — pior que o
+     * do servidor, porque cada volta paga a latencia da rede inteira.
+     */
+    doProfissional: (): Promise<ResumoDoProfissional> =>
+      this.requisicao<ResumoDoProfissional>('/resumo'),
   };
 
   readonly progresso = {

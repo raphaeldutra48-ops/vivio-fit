@@ -46,6 +46,10 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Supino na máquina', 'PEITO', 'Máquina', 'Ajuste o banco para a pegada ficar na linha do peito, não do ombro.'],
   ['Pullover', 'PEITO', 'Haltere', 'Só o ombro se move. Desça até sentir alongar, sem forçar a lombar.'],
   ['Supino fechado', 'PEITO', 'Barra', 'Pegada na largura dos ombros. Divide trabalho entre peito interno e tríceps.'],
+  ['Crossover na polia média', 'PEITO', 'Polia', 'Puxe na altura do esterno. É a variação que pega o meio do peitoral — a alta pega a porção inferior, a baixa a superior.'],
+  ['Crucifixo declinado', 'PEITO', 'Halteres', 'Prenda os pés antes de deitar. Cotovelo levemente flexionado e FIXO, como em qualquer crucifixo.'],
+  ['Supino no chão', 'PEITO', 'Barra', 'O cotovelo para no chão, e é esse o ponto: limita a amplitude e poupa o ombro de quem sente dor no fundo do supino.'],
+  ['Paralelas na máquina', 'PEITO', 'Máquina assistida', 'Ajuste o apoio para conseguir 8 a 12 repetições. Tronco inclinado à frente joga o esforço para o peito; ereto, para o tríceps.'],
 
   // --- COSTAS --------------------------------------------------------------
   ['Barra fixa pronada', 'COSTAS', 'Barra fixa', 'Puxe com os cotovelos para baixo e para trás. Queixo passa a barra.'],
@@ -68,6 +72,18 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Hiperextensão lombar', 'COSTAS', 'Banco romano', 'Suba até a linha do corpo, não além. Hiperestender não traz ganho.'],
   ['Good morning', 'COSTAS', 'Barra', 'Carga leve. Quadril para trás com a coluna travada em neutro.'],
   ['Pull-up assistida', 'COSTAS', 'Máquina', 'Para quem ainda não faz barra livre. Mesma técnica, com contrapeso.'],
+  ['Puxada pegada neutra', 'COSTAS', 'Polia alta', 'Pegada neutra é a que menos incomoda o ombro. Se a puxada pronada dói na frente do ombro, troque por esta.'],
+  ['Puxada unilateral na polia', 'COSTAS', 'Polia alta', 'Um lado por vez expõe a diferença de força entre os lados. Não gire o tronco para socorrer o lado fraco.'],
+  ['Puxada por trás', 'COSTAS', 'Polia alta', 'Exige mobilidade de ombro que a maioria não tem. Na dúvida use a puxada frontal: o ganho é o mesmo e o risco não.'],
+  ['High row na máquina', 'COSTAS', 'Máquina articulada', 'Puxe os cotovelos para baixo e para trás, não para os lados. O nome lembra remada alta de ombro, mas aqui o alvo é o dorsal.'],
+  ['Remada articulada', 'COSTAS', 'Máquina articulada', 'O peito fica apoiado: sem balanço, as costas não têm como delegar o esforço para a lombar.'],
+  ['Remada articulada unilateral', 'COSTAS', 'Máquina articulada', 'Um lado por vez ganha amplitude no fim do movimento. Não deixe o tronco girar junto.'],
+  ['Remada baixa pegada aberta', 'COSTAS', 'Polia baixa', 'Pegada aberta e cotovelo afastado do corpo levam o trabalho para a parte alta das costas.'],
+  ['Remada baixa pegada supinada', 'COSTAS', 'Polia baixa', 'Palmas para cima aproximam os cotovelos do corpo e trazem o dorsal baixo. O bíceps ajuda mais, então a carga costuma subir.'],
+  ['Remada Meadows', 'COSTAS', 'Barra em landmine', 'Uma ponta da barra presa no canto, você de lado. O ângulo alcança o dorsal por um caminho que a remada comum não faz.'],
+  ['Remada cavalinho pronada', 'COSTAS', 'Barra e apoio', 'Palmas para baixo abrem o cotovelo e sobem o trabalho para o meio das costas. Peito colado no apoio o tempo todo.'],
+  ['Pullover na máquina', 'COSTAS', 'Máquina', 'Empurre com os cotovelos, não com as mãos. Se os braços dobram, virou puxada.'],
+  ['Remada com halteres no banco inclinado', 'COSTAS', 'Halteres', 'Peito apoiado no banco a 30-45 graus. Sem balanço nenhum — é isso que separa esta da remada curvada.'],
 
   // --- OMBRO ---------------------------------------------------------------
   ['Desenvolvimento militar', 'OMBRO', 'Barra', 'Glúteo e abdômen contraídos. Não jogue a lombar para trás.'],
@@ -86,6 +102,12 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Elevação lateral inclinada', 'OMBRO', 'Haltere', 'Deitado de lado no banco. Isola bem o deltoide médio.'],
   ['Rotação externa', 'OMBRO', 'Polia', 'Cotovelo colado ao tronco. Carga leve — é manguito rotador.'],
   ['Landmine press', 'OMBRO', 'Barra', 'Barra na quina. Ângulo mais amigável para quem tem dor no ombro.'],
+  ['Desenvolvimento no Smith', 'OMBRO', 'Smith', 'A barra guiada tira o equilíbrio da conta e deixa carregar mais. Ajuste o banco para a barra descer na linha do queixo.'],
+  ['Elevação Y', 'OMBRO', 'Halteres', 'Suba em diagonal, formando um Y com o tronco. Pega o trapézio inferior, que costuma faltar em quem passa o dia curvado.'],
+  ['Elevação frontal na polia', 'OMBRO', 'Polia baixa', 'A polia mantém tensão no começo do movimento, onde o halter praticamente não pesa.'],
+  ['Crucifixo inverso na polia', 'OMBRO', 'Cabo cruzado', 'Cruze os cabos e abra até a linha dos ombros. Não estufe o peito no fim — aí quem trabalha é o meio das costas.'],
+  ['Rotação interna de ombro na polia', 'OMBRO', 'Polia', 'Cotovelo colado no corpo, a 90 graus. Carga baixa: é trabalho de manguito, não de força.'],
+  ['Elevação lateral sentado', 'OMBRO', 'Halteres', 'Sentado não dá para usar impulso de perna. A carga cai — e é para cair.'],
 
   // --- BÍCEPS --------------------------------------------------------------
   ['Rosca direta com barra', 'BICEPS', 'Barra', 'Cotovelos junto ao tronco e parados. Se o cotovelo vai à frente, virou ombro.'],
@@ -100,6 +122,12 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Rosca no banco inclinado', 'BICEPS', 'Halteres', 'Braços atrás do tronco alongam mais a cabeça longa.'],
   ['Rosca corda na polia', 'BICEPS', 'Polia baixa', 'Pegada neutra com abertura no fim.'],
   ['Rosca spider', 'BICEPS', 'Barra W', 'Peito apoiado no banco inclinado, braços na vertical.'],
+  ['Rosca na polia alta', 'BICEPS', 'Polia alta', 'Braços abertos na altura dos ombros. O pico de tensão vem no fim do movimento, ao contrário da rosca comum.'],
+  ['Rosca Superman', 'BICEPS', 'Polia baixa', 'Deitado de bruços no banco, braços à frente. Isola sem deixar o ombro entrar no movimento.'],
+  ['Rosca scott unilateral', 'BICEPS', 'Halter', 'Um braço por vez mostra qual está atrasado. Desça até esticar: meia amplitude no scott não serve para nada.'],
+  ['Flexão de punho', 'BICEPS', 'Barra', 'Antebraços apoiados no banco, só o punho se move. Amplitude pequena e carga leve.'],
+  ['Extensão de punho', 'BICEPS', 'Barra', 'O oposto da flexão, e o mais esquecido. Quem sente dor de epicondilite costuma estar fraco justamente aqui.'],
+  ['Flexão de punho na polia', 'BICEPS', 'Polia baixa', 'A polia mantém tensão constante, o que o halter não faz na parte de baixo do movimento.'],
 
   // --- TRÍCEPS -------------------------------------------------------------
   ['Tríceps na polia com barra', 'TRICEPS', 'Polia alta', 'Cotovelos colados ao corpo e imóveis. Só o antebraço se move.'],
@@ -114,6 +142,8 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Tríceps na polia invertida', 'TRICEPS', 'Polia alta', 'Pegada supinada foca a cabeça medial.'],
   ['Extensão overhead na polia', 'TRICEPS', 'Polia', 'De costas para a polia. Alonga a cabeça longa do tríceps.'],
   ['Flexão fechada', 'TRICEPS', 'Peso corporal', 'Mãos na largura do peito, cotovelos para trás.'],
+  ['Tríceps na máquina', 'TRICEPS', 'Máquina', 'Ombro apoiado, movimento só de cotovelo. Quem sente dor no punho com a barra costuma tolerar bem esta.'],
+  ['Tríceps testa pegada pronada', 'TRICEPS', 'Barra', 'Palmas para baixo. Sobrecarrega mais o punho: se doer, volte para a pegada normal.'],
 
   // --- PERNA ---------------------------------------------------------------
   ['Agachamento livre', 'PERNA', 'Barra', 'Joelhos acompanham a ponta dos pés. Não deixe o joelho cair para dentro.'],
@@ -138,6 +168,19 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Agachamento goblet', 'PERNA', 'Haltere', 'Halter junto ao peito. Ótimo para aprender a descer com o tronco ereto.'],
   ['Passada no step', 'PERNA', 'Step', 'Suba empurrando com o calcanhar da perna de cima, não com a de baixo.'],
   ['Agachamento pistol', 'PERNA', 'Peso corporal', 'Uma perna só. Comece apoiado até dominar o equilíbrio.'],
+  ['Afundo com halteres', 'PERNA', 'Halteres', 'Halteres ao lado do corpo, sem apoiar no ombro. O joelho da frente não passa da ponta do pé.'],
+  ['Búlgaro com barra nas costas', 'PERNA', 'Barra e banco', 'Pé de trás no banco. Com a barra o equilíbrio fica mais difícil: comece leve mesmo sendo forte no agachamento.'],
+  ['Leg press unilateral', 'PERNA', 'Leg press', 'Uma perna por vez. Metade da carga total é o ponto de partida, não a mesma carga.'],
+  ['Leg press com pés afastados', 'PERNA', 'Leg press', 'Pés altos e abertos na plataforma puxam adutor e glúteo. O joelho acompanha a ponta do pé, sempre.'],
+  ['Rack pull (meio terra)', 'PERNA', 'Barra e suporte', 'A barra começa na altura do joelho. Serve para carregar mais que no terra completo sem depender da mobilidade de quadril.'],
+  ['Stiff com halteres', 'PERNA', 'Halteres', 'Joelho quase reto e quadril indo para trás. Se a lombar arredonda, você passou do ponto: pare antes.'],
+  ['Stiff unilateral com halter', 'PERNA', 'Halter', 'Uma perna só, a outra estende para trás como contrapeso. Quadril paralelo ao chão — não deixe abrir para o lado.'],
+  ['Stiff sumô', 'PERNA', 'Barra', 'Pés bem afastados e pontas para fora. Puxa mais adutor que o stiff comum.'],
+  ['Stiff no Smith', 'PERNA', 'Smith', 'A barra guiada tira o equilíbrio da conta. Bom para quem ainda está aprendendo o movimento do quadril.'],
+  ['Step up no banco', 'PERNA', 'Banco e halteres', 'Suba empurrando com o calcanhar da perna de cima. Não dê impulso com a de baixo: é ela que quer roubar o exercício.'],
+  ['Agachamento sissy', 'PERNA', 'Peso do corpo', 'Joelhos à frente, quadril alinhado com o tronco. Isola o quadríceps e é duro no joelho — só para quem não tem dor ali.'],
+  ['Flexão nórdica', 'PERNA', 'Apoio para os pés', 'Desça o tronco devagar com os pés presos. É a mais eficaz para prevenir lesão de posterior, e quase ninguém sobe sem ajuda no começo.'],
+  ['Flexora unilateral', 'PERNA', 'Mesa flexora', 'Uma perna por vez. Revela a diferença entre os lados que a bilateral esconde.'],
 
   // --- GLÚTEO --------------------------------------------------------------
   ['Elevação pélvica', 'GLUTEO', 'Barra', 'Contraia o glúteo no topo por 1 segundo. Queixo para o peito.'],
@@ -152,6 +195,12 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Cadeira abdutora (glúteo)', 'GLUTEO', 'Máquina', 'Incline o tronco à frente para pegar mais glúteo médio.'],
   ['Hip thrust na máquina', 'GLUTEO', 'Máquina', 'Amplitude completa. Pausa no topo.'],
   ['Passada reversa', 'GLUTEO', 'Halteres', 'Passo para trás. Menos joelho e mais glúteo que o afundo à frente.'],
+  ['Ponte rã', 'GLUTEO', 'Peso do corpo', 'Solas dos pés juntas e joelhos abertos. A posição tira o quadríceps da jogada e sobra glúteo.'],
+  ['Ostra com miniband', 'GLUTEO', 'Miniband', 'Deitado de lado, joelhos dobrados, abre e fecha. Não role o quadril para trás para conseguir abrir mais.'],
+  ['Abdução de quadril com o pé atrás', 'GLUTEO', 'Polia baixa', 'A perna vai para trás e para o lado ao mesmo tempo. Sem arquear a lombar para ganhar amplitude.'],
+  ['Cadeira abdutora com tronco inclinado', 'GLUTEO', 'Cadeira abdutora', 'Incline o tronco à frente. Muda o ângulo do glúteo médio — é o que a máquina sozinha não faz.'],
+  ['Glúteo quatro apoios na polia', 'GLUTEO', 'Polia baixa', 'Apoiado nas mãos e joelhos. Suba a perna sem arquear a lombar: o movimento é de quadril.'],
+  ['Extensão de quadril no banco romano', 'GLUTEO', 'Banco romano', 'Tronco arredondado de propósito, ao contrário da hiperextensão lombar. Aqui o alvo é glúteo, não lombar.'],
 
   // --- PANTURRILHA ---------------------------------------------------------
   ['Panturrilha em pé', 'PANTURRILHA', 'Máquina', 'Amplitude completa: desça até alongar, suba até o máximo. Pausa embaixo.'],
@@ -178,6 +227,7 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Bird dog', 'ABDOMEN', 'Peso corporal', 'Estenda braço e perna opostos sem inclinar o quadril.'],
   ['Prancha dinâmica', 'ABDOMEN', 'Peso corporal', 'Alterne apoio de mão e antebraço mantendo o quadril parado.'],
   ['Hollow hold', 'ABDOMEN', 'Peso corporal', 'Lombar colada. Braços e pernas o mais baixo que der sem descolar.'],
+  ['Abdominal bicicleta', 'ABDOMEN', 'Peso do corpo', 'Cotovelo ao joelho oposto, devagar. Feito rápido vira balanço de pescoço.'],
 
   // --- CORPO INTEIRO -------------------------------------------------------
   ['Burpee', 'CORPO_INTEIRO', 'Peso corporal', 'Movimento contínuo. Se cansar, tire o salto antes de perder a técnica.'],
@@ -192,6 +242,14 @@ export const EXERCICIOS_GLOBAIS: readonly ExercicioGlobal[] = [
   ['Mountain climber', 'CORPO_INTEIRO', 'Peso corporal', 'Prancha firme. O quadril não sobe conforme acelera.'],
   ['Jump squat', 'CORPO_INTEIRO', 'Peso corporal', 'Aterrisse com o joelho macio, nunca travado.'],
   ['Prowler / trenó', 'CORPO_INTEIRO', 'Trenó', 'Tronco inclinado, passos curtos e fortes.'],
+  ['Alongamento de peitoral', 'CORPO_INTEIRO', 'Peso do corpo', 'Antebraço no batente da porta, gire o tronco para o lado oposto. Trinta segundos, sem forçar até doer.'],
+  ['Alongamento de dorsal', 'CORPO_INTEIRO', 'Barra fixa ou apoio', 'Segure e deixe o corpo pendurar. Solte os ombros em vez de puxar.'],
+  ['Alongamento de quadríceps', 'CORPO_INTEIRO', 'Peso do corpo', 'Calcanhar no glúteo, joelhos juntos. Se o joelho da perna alongada vai à frente, o alongamento saiu do lugar.'],
+  ['Alongamento de posterior de coxa', 'CORPO_INTEIRO', 'Peso do corpo', 'Perna estendida à frente, quadril indo para trás. A lombar fica reta — arredondar tira o alongamento da coxa e joga na coluna.'],
+  ['Alongamento de ombro', 'CORPO_INTEIRO', 'Peso do corpo', 'Braço cruzado à frente do peito. Não empurre o cotovelo com força.'],
+  ['Mobilidade de quadril e tornozelo', 'CORPO_INTEIRO', 'Peso do corpo', 'Posição de afundo profundo, balanço suave à frente. Feito antes do agachamento, rende amplitude no mesmo treino.'],
+  ['Mobilidade de coluna (gato-camelo)', 'CORPO_INTEIRO', 'Peso do corpo', 'Quatro apoios, arredonda e arqueia devagar. É aquecimento sem carga, não alongamento máximo.'],
+  ['Agachamento profundo (mobilidade)', 'CORPO_INTEIRO', 'Peso do corpo', 'Desça até o fundo e fique. Segure num apoio se o calcanhar levantar — calcanhar subindo é sinal de tornozelo travado.'],
 
   // --- CARDIO --------------------------------------------------------------
   ['Esteira — caminhada inclinada', 'CARDIO', 'Esteira', 'Inclinação 8-12% sem se apoiar no corrimão. Apoiar tira metade do gasto.'],

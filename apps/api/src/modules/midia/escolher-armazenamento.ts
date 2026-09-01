@@ -22,26 +22,22 @@ export const VARIAVEIS_R2 = [
 export type DriverDeMidia = 'R2' | 'LOCAL';
 
 /**
- * O disco local é efêmero ou sobrevive ao deploy?
+ * O disco local sobrevive ao deploy?
  *
- * Disco de contêiner some a cada deploy; disco montado a partir de um volume
- * persistente, não. O Railway expõe `RAILWAY_VOLUME_MOUNT_PATH` quando há um
- * volume montado — se o `MEDIA_DIR` aponta para dentro dele, a mídia dura.
+ * **Não.** Nunca, na hospedagem atual. A resposta era condicional enquanto o
+ * app rodava no Railway, que expõe `RAILWAY_VOLUME_MOUNT_PATH` quando há um
+ * volume montado — se o `MEDIA_DIR` apontasse para dentro dele, a mídia durava.
  *
- * A distinção existe para o aviso não mentir. Um log que grita "as fotos serão
- * apagadas" quando elas não serão ensina todo mundo a ignorar os avisos, e aí
- * o dia em que ele estiver certo ninguém lê.
+ * Na Cloudflare não existe volume persistente para anexar: o Worker não tem
+ * disco, e o contêiner tem sistema de arquivos efêmero. Ou a mídia está no R2,
+ * ou ela morre no próximo deploy.
+ *
+ * A função continua existindo porque o aviso de boot depende dela, e continuar
+ * respondendo `false` de propósito é mais honesto que sumir com a pergunta:
+ * quem ler o log vai encontrar o alerta em vez do silêncio.
  */
-export function midiaEmDiscoPersistente(config: ConfigService): boolean {
-  const montagem = config.get<string>('RAILWAY_VOLUME_MOUNT_PATH');
-  const destino = config.get<string>('MEDIA_DIR');
-  if (!montagem || !destino) return false;
-
-  const normalizar = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
-  const raiz = normalizar(montagem);
-  const alvo = normalizar(destino);
-
-  return alvo === raiz || alvo.startsWith(`${raiz}/`);
+export function midiaEmDiscoPersistente(_config: ConfigService): boolean {
+  return false;
 }
 
 export function faltandoParaR2(config: ConfigService): string[] {

@@ -1,0 +1,15 @@
+{
+  // O que vira `dist/`. Só `src`: teste e script de manutenção não entram no
+  // bundle da API. É o `nest build` que lê este arquivo, por convenção.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  // Os `.spec` que moram junto do codigo em `src` tambem ficam de fora: eles
+  // eram compilados para `dist` e iam junto para producao, carregando `vitest`
+  // como dependencia de execucao de um bundle que nunca os roda.
+  "exclude": ["node_modules", "dist", "test", "prisma", "scripts", "src/**/*.spec.ts"]
+}

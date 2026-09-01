@@ -2,7 +2,7 @@
  * Por onde a mensagem sai.
  *
  * O Resend vai por **HTTP**, e não por SMTP, por um motivo aprendido em
- * produção: o Railway bloqueia a saída na porta 587, e a tentativa morre em
+ * produção: a hospedagem bloqueia a saída na porta 587, e a tentativa morre em
  * `Connection timeout` — que se parece com chave errada e não é. A API HTTP usa
  * a 443, que nenhuma plataforma bloqueia porque é a mesma do resto da internet.
  *

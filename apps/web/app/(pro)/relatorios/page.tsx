@@ -59,12 +59,30 @@ export default function Relatorios() {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
+    /*
+      Guarda de cancelamento. Sem ela, trocar 30 → 90 dias rápido deixava a
+      resposta lenta da janela anterior chegar por último e sobrescrever a
+      atual: a tela mostrava os números de um período com o botão do outro
+      marcado, e nada na tela denunciava a troca. É o mesmo cuidado que o painel
+      de progresso e o de gráficos já tinham; aqui faltava.
+    */
+    let ativo = true;
     setCarregando(true);
     sdk.relatorios
       .carteira(dias)
-      .then(setDados)
-      .catch(() => setErro('Não foi possível carregar o relatório.'))
-      .finally(() => setCarregando(false));
+      .then((d) => {
+        if (!ativo) return;
+        setDados(d);
+        setErro(null);
+      })
+      .catch(() => ativo && setErro('Não foi possível carregar o relatório.'))
+      .finally(() => {
+        if (ativo) setCarregando(false);
+      });
+
+    return () => {
+      ativo = false;
+    };
   }, [dias]);
 
   /*

@@ -30,7 +30,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const origens = origensPermitidas();
 
-  // Atrás do proxy do Railway, `req.ip` seria o IP do proxy — o mesmo para
+  // Atrás do proxy da Cloudflare, `req.ip` seria o IP do proxy — o mesmo para
   // todo mundo — e o limite de tentativas por IP trancaria o login geral em
   // vez de trancar o atacante. PROXY_HOPS diz quantos proxies confiar para ler
   // o X-Forwarded-For. Confiar demais é pior que não confiar: quem manda o

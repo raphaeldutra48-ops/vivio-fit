@@ -19,7 +19,7 @@ import { montarEmailDeVerificacao } from '../modules/auth/mensagem-verificacao';
  *
  * Em desenvolvimento:
  *   EMAIL_TESTE_PARA=voce@exemplo.com pnpm --filter @vivio/api email-teste
- * No Railway: defina EMAIL_TESTE_PARA e faça deploy — o `entrada.sh` chama a
+ * Na hospedagem: defina EMAIL_TESTE_PARA e faça deploy — o `entrada.sh` chama a
  * versão compilada, do mesmo jeito que faz com as outras tarefas.
  *
  * A mensagem enviada é a de confirmação de cadastro, com um link falso, e sai

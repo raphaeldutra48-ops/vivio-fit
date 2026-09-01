@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Papel, Prisma, StatusCompromisso, StatusVinculo, TipoCompromisso } from '@prisma/client';
+import { Prisma, StatusCompromisso, StatusVinculo, TipoCompromisso } from '@prisma/client';
 import {
   DURACAO_PADRAO_MIN,
   STATUS_ATIVOS,

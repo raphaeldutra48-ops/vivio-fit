@@ -11,7 +11,11 @@ import { TipoSerie } from '@vivio/contracts';
 export interface SerieParaMetrica {
   cargaKg: number;
   repsFeitas: number;
-  tipo: TipoSerie | string;
+  /*
+    `string` de proposito: a coluna e `String` no banco. `TipoSerie | string`
+    colapsava para `string` de qualquer jeito, com a aparencia de restringir.
+  */
+  tipo: string;
 }
 
 /** Epley: estimativa de 1RM a partir de carga e repetições. */

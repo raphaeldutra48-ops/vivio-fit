@@ -9,10 +9,20 @@ build/
 .turbo/
 *.tsbuildinfo
 
+# Saida do adaptador da Cloudflare: gerada por `cf:build` a cada deploy.
+.open-next/
+.wrangler/
+
 # ambiente — NUNCA versionar credencial
+#
+# O padrão largo é proposital. A lista era `.env`, `.env.local` e
+# `.env.*.local`, e um `.env.supabase` teria passado direto — com a senha do
+# banco dentro. Ignorar tudo que começa com `.env` e abrir exceção para o
+# exemplo erra para o lado seguro: esquecer de listar um arquivo novo deixa de
+# ser um vazamento.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # mobile
 .expo/

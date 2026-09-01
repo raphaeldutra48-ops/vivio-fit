@@ -63,7 +63,6 @@ function FotoOuVazio({ par, lado }: { par: ParDeFotos; lado: 'antes' | 'agora' }
         proxy de imagem guardaria em cache uma foto que é o dado mais íntimo
         do app.
       */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={foto.url}
         alt={`Foto ${NOME_DO_ANGULO[foto.angulo] ?? foto.angulo} de ${porExtenso(foto.data)}`}

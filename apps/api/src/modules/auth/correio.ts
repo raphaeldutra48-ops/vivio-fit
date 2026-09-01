@@ -130,7 +130,7 @@ export class CorreioResend implements Correio {
  * Driver para outro provedor, configurado por `SMTP_URL`
  * (ex.: `smtp://usuario:senha@smtp.provedor.com:587`).
  *
- * Atenção: várias plataformas de hospedagem — o Railway entre elas — bloqueiam
+ * Atenção: várias plataformas de hospedagem bloqueiam
  * a saída nas portas de SMTP, e a falha aparece como `Connection timeout`.
  */
 @Injectable()

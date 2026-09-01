@@ -5,7 +5,6 @@ import {
   MARCADORES,
   ROTULO_CLASSIFICACAO,
   ROTULO_FORCA,
-  ROTULO_SISTEMA,
   referenciaDe,
   type Faixa,
   type Fonte,

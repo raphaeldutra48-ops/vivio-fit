@@ -113,7 +113,14 @@ export class MetasService {
    */
   private async aferir(
     alunoId: string,
-    tipo: TipoMeta | string,
+    /*
+      `string`, e nao `TipoMeta | string`. A uniao parecia mais segura e nao
+      era: TypeScript colapsa `TipoMeta | string` em `string`, entao ela
+      aceitava qualquer texto enquanto aparentava aceitar so o enum. O tipo
+      real e este — a coluna do banco e `String`, e o `switch` abaixo e quem
+      trata o que nao reconhece.
+    */
+    tipo: string,
     exercicioId: string | null,
   ): Promise<number | null> {
     switch (tipo) {

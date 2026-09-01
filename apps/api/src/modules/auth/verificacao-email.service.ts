@@ -120,7 +120,7 @@ export class VerificacaoEmailService {
   }
 
   private montarEmail(nome: string, para: string, token: string) {
-    // A barra final de WEB_PUBLIC_URL é fácil de sobrar na variável do Railway,
+    // A barra final de WEB_PUBLIC_URL é fácil de sobrar na variável de ambiente,
     // e `https://app.viviofit.com.br//verificar-email` não é a mesma rota.
     const base = (this.config.get<string>('WEB_PUBLIC_URL') ?? 'http://localhost:3000').replace(
       /\/+$/,

@@ -1,9 +1,9 @@
 import type { ExecucaoResumo, RegistrarExecucaoInput } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
 import { enfileirar, lerFila, paraEnvio, registrarFalha, remover, type ItemDaFila } from './fila';
 import { sdk } from './sdk';
+import { useSondagem } from './sondagem';
 
 interface Sincronizacao {
   pendentes: ItemDaFila[];
@@ -100,19 +100,18 @@ export function SincronizacaoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void lerFila().then(setPendentes);
     void sincronizar();
-
-    // Voltar para o app é o melhor momento para tentar: normalmente é quando o
-    // aluno saiu da academia e reencontrou rede.
-    const inscricao = AppState.addEventListener('change', (estado) => {
-      if (estado === 'active') void sincronizar();
-    });
-    const intervalo = setInterval(() => void sincronizar(), INTERVALO_MS);
-
-    return () => {
-      inscricao.remove();
-      clearInterval(intervalo);
-    };
   }, [sincronizar]);
+
+  /*
+    A cada 30 s enquanto o app está na frente, e nunca em segundo plano.
+
+    Antes o intervalo continuava rodando com o app fechado — celular no bolso
+    batendo na API duas vezes por minuto, indefinidamente, de quem não estava
+    usando nada. O gancho também dispara ao voltar para a frente, que é o
+    melhor momento para tentar de qualquer forma: normalmente é quando o aluno
+    saiu da academia e reencontrou rede.
+  */
+  useSondagem(() => void sincronizar(), INTERVALO_MS);
 
   return (
     <Contexto.Provider value={{ pendentes, sincronizando, registrarTreino, sincronizar }}>

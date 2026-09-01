@@ -34,9 +34,26 @@
   escuro vira claro — imprimir fundo escuro gasta uma carga de toner e sai
   ilegível em quase toda impressora doméstica.
 */
+/*
+  O contrário de `data-nao-imprime`: só existe no papel.
+
+  Serve ao modo discreto. Com ele ligado a tela mostra `•••` no lugar do peso e
+  do percentual de gordura, mas imprimir é ato deliberado para um destinatário
+  conhecido — um PDF cheio de `•••` não serviria a ninguém.
+*/
+[data-so-imprime] {
+  display: none;
+}
+
 @media print {
   [data-nao-imprime] {
     display: none !important;
+  }
+
+  /* `revert` e não `inline`: o mesmo atributo marca um <span> com o peso e um
+     <div> com o gráfico inteiro, e cada um volta ao display que lhe cabe. */
+  [data-so-imprime] {
+    display: revert !important;
   }
 
   html,

@@ -49,11 +49,6 @@ export default function FichaDoAluno() {
       .then(setAluno)
       .catch(() => setErro('Não foi possível carregar a ficha.'));
 
-    sdk.medidas
-      .listar(alunoId)
-      .catch(() => undefined)
-      .then(() => undefined);
-
     recarregarPlanos();
   }, [alunoId, recarregarPlanos]);
 

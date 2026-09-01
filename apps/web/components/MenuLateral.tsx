@@ -20,6 +20,125 @@ function Selo() {
   );
 }
 
+/**
+ * Uma seção do menu.
+ *
+ * **No escopo do módulo, e não dentro de `MenuLateral`.** Definida lá dentro,
+ * ela virava uma função nova a cada renderização, e o React trata função nova
+ * como componente diferente: em vez de atualizar, ele desmontava e remontava o
+ * menu inteiro — a cada navegação e a cada seção aberta ou fechada.
+ *
+ * Custa uma lista de props mais longa. Custa menos que um menu de vinte itens
+ * refeito do zero sem motivo.
+ */
+function Secao({
+  secao,
+  caminho,
+  abertas,
+  setAbertas,
+  aoNavegar,
+}: {
+  secao: SecaoRecolhivel;
+  caminho: string;
+  abertas: Record<string, boolean>;
+  setAbertas: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  aoNavegar?: () => void;
+}) {
+  const temSubitens = secao.itens.length > 0;
+  const aberta = abertas[secao.rotulo] ?? false;
+  const ativa = secao.href ? caminho === secao.href : secao.itens.some((i) => caminho === i.href);
+
+  const conteudo = (
+    <>
+      <span aria-hidden style={{ width: 22 }}>
+        {secao.icone}
+      </span>
+      <span className="flex-1 text-left">{secao.rotulo}</span>
+      {!temSubitens && secao.estado === 'em-construcao' && <Selo />}
+      {temSubitens && (
+        <span aria-hidden style={{ color: 'var(--vv-texto-secundario)' }}>
+          {aberta ? '▴' : '▾'}
+        </span>
+      )}
+    </>
+  );
+
+  /*
+    Fundo cheio no item ativo, e não `superficieElevada`.
+
+    No tema claro `superficie` e `superficieElevada` são a mesma cor — branco
+    puro — e o menu inteiro fica sobre `superficie`. O realce de fundo
+    simplesmente não existia ali: sobravam 3 px de borda à esquerda para
+    marcar onde a pessoa está, num menu de vinte itens. O par
+    `primariaFundo`/`primariaTexto` já é medido em `paresDeContraste`.
+
+    A borda continua porque cor sozinha não deve carregar informação
+    (WCAG 1.4.1) — e porque `aria-current` só chega a quem usa leitor de tela.
+  */
+  const estilo: React.CSSProperties = {
+    background: ativa ? 'var(--vv-primaria-fundo)' : 'transparent',
+    color: ativa ? 'var(--vv-primaria-texto)' : 'var(--vv-texto-secundario)',
+    borderLeft: `3px solid ${ativa ? 'var(--vv-acao-fundo)' : 'transparent'}`,
+    fontWeight: ativa ? 600 : 400,
+  };
+
+  return (
+    <li>
+      {temSubitens ? (
+        <button
+          type="button"
+          aria-expanded={aberta}
+          onClick={() => setAbertas((a) => ({ ...a, [secao.rotulo]: !aberta }))}
+          className="flex min-h-toque w-full items-center gap-md rounded-sm px-md"
+          style={estilo}
+        >
+          {conteudo}
+        </button>
+      ) : (
+        <Link
+          href={secao.href ?? '#'}
+          onClick={aoNavegar}
+          aria-current={ativa ? 'page' : undefined}
+          className="flex min-h-toque items-center gap-md rounded-sm px-md"
+          style={estilo}
+        >
+          {conteudo}
+        </Link>
+      )}
+
+      {temSubitens && aberta && (
+        <ul className="mt-xs flex flex-col">
+          {secao.itens.map((item) => {
+            const itemAtivo = caminho === item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={aoNavegar}
+                  aria-current={itemAtivo ? 'page' : undefined}
+                  className="flex min-h-toque items-center gap-sm rounded-sm pl-2xl pr-md text-sm"
+                  /* Subitem ativo usa a primária como TEXTO, não como fundo:
+                     dois blocos cheios empilhados — a seção e o subitem —
+                     competiriam entre si e nenhum leria como "você está aqui".
+                     O par também é medido. */
+                  style={{
+                    color: itemAtivo ? 'var(--vv-primaria-fundo)' : 'var(--vv-texto-secundario)',
+                    borderLeft: `3px solid ${itemAtivo ? 'var(--vv-acao-fundo)' : 'transparent'}`,
+                    fontWeight: itemAtivo ? 600 : 400,
+                  }}
+                >
+                  <span className="flex-1">{item.rotulo}</span>
+                  {item.estado === 'em-construcao' && <Selo />}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: () => void }) {
   const caminho = usePathname();
   const blocos = menuPara(papel);
@@ -33,85 +152,6 @@ export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: ()
       .find((s) => s.itens.some((i) => caminho.startsWith(i.href)));
     if (daVez) setAbertas((a) => ({ ...a, [daVez.rotulo]: true }));
   }, [caminho]);
-
-  function Secao({ secao }: { secao: SecaoRecolhivel }) {
-    const temSubitens = secao.itens.length > 0;
-    const aberta = abertas[secao.rotulo] ?? false;
-    const ativa = secao.href ? caminho === secao.href : secao.itens.some((i) => caminho === i.href);
-
-    const conteudo = (
-      <>
-        <span aria-hidden style={{ width: 22 }}>
-          {secao.icone}
-        </span>
-        <span className="flex-1 text-left">{secao.rotulo}</span>
-        {!temSubitens && secao.estado === 'em-construcao' && <Selo />}
-        {temSubitens && (
-          <span aria-hidden style={{ color: 'var(--vv-texto-secundario)' }}>
-            {aberta ? '▴' : '▾'}
-          </span>
-        )}
-      </>
-    );
-
-    const estilo: React.CSSProperties = {
-      background: ativa ? 'var(--vv-superficie-elevada)' : 'transparent',
-      color: ativa ? 'var(--vv-texto-primario)' : 'var(--vv-texto-secundario)',
-      borderLeft: `3px solid ${ativa ? 'var(--vv-acao-fundo)' : 'transparent'}`,
-    };
-
-    return (
-      <li>
-        {temSubitens ? (
-          <button
-            type="button"
-            aria-expanded={aberta}
-            onClick={() => setAbertas((a) => ({ ...a, [secao.rotulo]: !aberta }))}
-            className="flex min-h-toque w-full items-center gap-md rounded-sm px-md"
-            style={estilo}
-          >
-            {conteudo}
-          </button>
-        ) : (
-          <Link
-            href={secao.href ?? '#'}
-            onClick={aoNavegar}
-            aria-current={ativa ? 'page' : undefined}
-            className="flex min-h-toque items-center gap-md rounded-sm px-md"
-            style={estilo}
-          >
-            {conteudo}
-          </Link>
-        )}
-
-        {temSubitens && aberta && (
-          <ul className="mt-xs flex flex-col">
-            {secao.itens.map((item) => {
-              const itemAtivo = caminho === item.href;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={aoNavegar}
-                    aria-current={itemAtivo ? 'page' : undefined}
-                    className="flex min-h-toque items-center gap-sm rounded-sm pl-2xl pr-md text-sm"
-                    style={{
-                      color: itemAtivo ? 'var(--vv-texto-primario)' : 'var(--vv-texto-secundario)',
-                      background: itemAtivo ? 'var(--vv-superficie-elevada)' : 'transparent',
-                      fontWeight: itemAtivo ? 600 : 400,
-                    }}
-                  >
-                    <span className="flex-1">{item.rotulo}</span>
-                    {item.estado === 'em-construcao' && <Selo />}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </li>
-    );
-  }
 
   return (
     <nav aria-label="Menu principal" className="flex flex-col gap-lg py-lg">
@@ -127,7 +167,14 @@ export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: ()
           )}
           <ul className="flex flex-col gap-xs">
             {bloco.secoes.map((secao) => (
-              <Secao key={secao.rotulo} secao={secao} />
+              <Secao
+                key={secao.rotulo}
+                secao={secao}
+                caminho={caminho}
+                abertas={abertas}
+                setAbertas={setAbertas}
+                aoNavegar={aoNavegar}
+              />
             ))}
           </ul>
         </div>

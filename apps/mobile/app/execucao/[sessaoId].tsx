@@ -13,14 +13,17 @@ import {
   type MidiaDeExercicios,
   type PlanoTreinoCompleto,
   type RecordeBatido,
+  type SerieEmAndamento,
   type SerieExecutadaInput,
   type SessaoTreinoResumo,
+  temAlgoAPreservar,
 } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { lerAnteriores, lerPlano, salvarAnteriores, salvarPlano } from '../../src/cacheTreino';
+import { descartarRascunho, lerRascunho, salvarRascunho } from '../../src/rascunhoTreino';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 import { useSincronizacao } from '../../src/sincronizacao';
@@ -28,16 +31,12 @@ import { Demonstracao, DemonstracaoAmpliada } from '../../src/componentes/Demons
 import { DOR_VAZIA, QuestionarioDeDor, type RespostaDeDor } from '../../src/componentes/QuestionarioDeDor';
 import { gerarUuid } from '../../src/uuid';
 
-interface SerieNaTela {
-  chave: string;
-  itemTreinoId: string;
-  exercicioId: string;
-  serieNum: number;
-  tipo: TipoSerie;
-  repsFeitas: string;
-  cargaKg: string;
-  concluida: boolean;
-}
+/*
+  O tipo mora em `contracts` porque é formato gravado no aparelho: um rascunho
+  salvo pela versão de hoje precisa continuar legível pela de amanhã. O apelido
+  local mantém o nome pelo qual a tela inteira já o chama.
+*/
+type SerieNaTela = SerieEmAndamento;
 
 /** Ordem em que o toque no selo alterna o tipo da série. */
 const CICLO_TIPO: TipoSerie[] = ['NORMAL', 'AQUECIMENTO', 'DROP', 'FALHA'];
@@ -93,6 +92,9 @@ export default function Execucao() {
   const [descansoRestante, setDescansoRestante] = useState<number | null>(null);
   const [midia, setMidia] = useState<MidiaDeExercicios>({});
   const [ampliado, setAmpliado] = useState<ExercicioResumo | null>(null);
+  /** URL assinada do vídeo em exibição, e se ela ainda está vindo. */
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [buscandoVideo, setBuscandoVideo] = useState(false);
   /** Segundos desde que o treino começou. Zera só ao sair da tela. */
   const [decorrido, setDecorrido] = useState(0);
   const [dor, setDor] = useState<RespostaDeDor>(DOR_VAZIA);
@@ -101,8 +103,23 @@ export default function Execucao() {
   const [cardioMin, setCardioMin] = useState('');
   const [cardioIntensidade, setCardioIntensidade] = useState<Intensidade>('MODERADA');
 
+  /** Preenchido quando a tela abriu retomando um treino interrompido. */
+  const [retomadoDe, setRetomadoDe] = useState<Date | null>(null);
+
   const clienteUuid = useRef(gerarUuid());
   const iniciadoEm = useRef(new Date());
+  /** As séries como o plano as define — o destino do "começar do zero". */
+  const seriesDoPlano = useRef<SerieNaTela[]>([]);
+  /**
+   * Trava o rascunho depois que o treino entra na fila.
+   *
+   * Sem ela havia um caminho de volta: concluir o treino, ficar na tela da
+   * medalha e mandar o app para segundo plano faria a gravação por `AppState`
+   * disparar e **regravar o rascunho que acabara de ser apagado**. Na próxima
+   * abertura da sessão, o app ofereceria retomar um treino já enviado — e
+   * concluí-lo de novo criaria uma execução duplicada.
+   */
+  const jaEnviado = useRef(false);
 
   useEffect(() => {
     if (!usuario || !sessaoId) return;
@@ -134,20 +151,42 @@ export default function Execucao() {
           return;
         }
         setSessao(encontrada);
-        setSeries(
-          encontrada.itens.flatMap((item) =>
-            Array.from({ length: item.series }, (_, indice) => ({
-              chave: `${item.id}-${indice + 1}`,
-              itemTreinoId: item.id,
-              exercicioId: item.exercicio.id,
-              serieNum: indice + 1,
-              tipo: 'NORMAL' as TipoSerie,
-              repsFeitas: '',
-              cargaKg: item.cargaSugeridaKg !== null ? String(item.cargaSugeridaKg) : '',
-              concluida: false,
-            })),
-          ),
+
+        const doPlano: SerieNaTela[] = encontrada.itens.flatMap((item) =>
+          Array.from({ length: item.series }, (_, indice) => ({
+            chave: `${item.id}-${indice + 1}`,
+            itemTreinoId: item.id,
+            exercicioId: item.exercicio.id,
+            serieNum: indice + 1,
+            tipo: 'NORMAL' as TipoSerie,
+            repsFeitas: '',
+            cargaKg: item.cargaSugeridaKg !== null ? String(item.cargaSugeridaKg) : '',
+            concluida: false,
+          })),
         );
+
+        /*
+          Antes de montar a tela do zero, procura um treino interrompido.
+
+          O `clienteUuid` e o `iniciadoEm` voltam junto, e os dois importam: o
+          primeiro impede que o servidor grave duas execuções se o envio já
+          tinha saído; o segundo é o que faz o cronômetro continuar de onde
+          parou, em vez de transformar 40 minutos de treino em 2.
+
+          Só retoma se houver trabalho de verdade: um rascunho idêntico ao que
+          o plano geraria não é retomada, é a mesma tela — e anunciá-la
+          confundiria quem acabou de abrir.
+        */
+        seriesDoPlano.current = doPlano;
+        const rascunho = await lerRascunho(usuario.id, sessaoId);
+        if (rascunho && temAlgoAPreservar(rascunho.series)) {
+          setSeries(rascunho.series);
+          clienteUuid.current = rascunho.clienteUuid;
+          iniciadoEm.current = new Date(rascunho.iniciadoEm);
+          setRetomadoDe(new Date(rascunho.iniciadoEm));
+        } else {
+          setSeries(doPlano);
+        }
 
         // Falha aqui não impede treinar: a coluna ANTERIOR cai para o cache e,
         // na pior das hipóteses, fica vazia.
@@ -174,6 +213,45 @@ export default function Execucao() {
       }
     })();
   }, [usuario, sessaoId]);
+
+  /*
+    Guarda o treino em andamento no aparelho.
+
+    Duas gravações, por dois motivos diferentes.
+
+    A **com atraso** existe para digitar: escrever "12" dispara duas mudanças
+    de estado, e gravar a cada tecla castigaria o armazenamento sem ganhar
+    nada. Meio segundo de atraso é imperceptível para quem digita e é o pior
+    caso do que se perde.
+
+    A **imediata, ao sair do app**, é a que de fato salva o treino. É esse o
+    instante em que o Android encerra o processo — a pessoa responde uma
+    mensagem entre duas séries e volta para um app reiniciado. Esperar o atraso
+    de meio segundo aí seria esperar por um processo que já não existe.
+  */
+  useEffect(() => {
+    if (!usuario || !sessaoId || series.length === 0) return;
+
+    const guardar = () => {
+      if (jaEnviado.current) return;
+      void salvarRascunho(usuario.id, {
+        sessaoId,
+        clienteUuid: clienteUuid.current,
+        iniciadoEm: iniciadoEm.current.toISOString(),
+        series,
+      });
+    };
+
+    const comAtraso = setTimeout(guardar, 500);
+    const inscricao = AppState.addEventListener('change', (estado) => {
+      if (estado !== 'active') guardar();
+    });
+
+    return () => {
+      clearTimeout(comAtraso);
+      inscricao.remove();
+    };
+  }, [usuario, sessaoId, series]);
 
   /*
     Cronômetro do treino inteiro. Conta desde a abertura da tela e não a
@@ -230,12 +308,29 @@ export default function Execucao() {
    * O link do vídeo é assinado e expira em 5 minutos, então é pedido na hora do
    * toque — guardá-lo junto do plano deixaria um link morto no cache offline.
    */
-  async function abrirVideo(exercicioId: string) {
+  /**
+   * Abre a demonstração ampliada já pedindo o vídeo.
+   *
+   * O link é assinado e vale cinco minutos, então é buscado no toque e não
+   * guardado: em cache chegaria morto.
+   *
+   * A tela abre **antes** de o link chegar, com o player em carregamento. O
+   * contrário — esperar a rede para só então abrir — deixaria o aluno tocando
+   * um botão que parece não fazer nada.
+   */
+  async function abrirVideo(exercicio: ExercicioResumo) {
+    setAmpliado(exercicio);
+    setVideoUrl(null);
+    setBuscandoVideo(true);
     try {
-      const { url } = await sdk.exercicios.urlDoVideo(exercicioId);
-      await Linking.openURL(url);
+      const { url } = await sdk.exercicios.urlDoVideo(exercicio.id);
+      setVideoUrl(url);
     } catch {
-      setErro('Não foi possível abrir o vídeo agora (precisa de conexão).');
+      // O player mostra a falha no lugar do vídeo; um erro no rodapé da tela
+      // de treino ficaria longe de onde a pessoa está olhando.
+      setVideoUrl(null);
+    } finally {
+      setBuscandoVideo(false);
     }
   }
 
@@ -303,6 +398,16 @@ export default function Execucao() {
           comentario: teveDor && dor.relato.trim() ? dor.relato.trim() : undefined,
         },
       });
+
+      /*
+        O rascunho sai assim que o treino entra na fila, e não quando o
+        servidor confirma. A fila já é durável — ela existe justamente para
+        sobreviver à falta de rede — então manter o rascunho depois disso
+        guardaria a mesma coisa em dois lugares, e o treino reapareceria como
+        "em andamento" na próxima abertura da tela.
+      */
+      jaEnviado.current = true;
+      await descartarRascunho(usuario.id);
 
       /*
         O cardio vai depois do treino porque precisa do id da execução para
@@ -556,6 +661,66 @@ export default function Execucao() {
         </View>
       )}
 
+      {/*
+        Faixa de retomada.
+
+        Existe porque recuperar em silêncio assusta: a pessoa abre o app depois
+        de o sistema tê-lo encerrado, encontra séries marcadas, e não sabe se
+        são dela ou se o app se confundiu. Dizer o horário de início responde a
+        pergunta sozinho.
+
+        E vem com saída. Retomar o treino errado é pior que perder o rascunho —
+        séries que ninguém fez entrariam no histórico e o personal ajustaria a
+        carga da semana seguinte em cima delas.
+      */}
+      {retomadoDe && (
+        <View
+          style={{
+            backgroundColor: tema.superficieElevada,
+            paddingVertical: espacamento.sm,
+            paddingHorizontal: espacamento.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: espacamento.md,
+          }}
+        >
+          <Text style={{ flex: 1, color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            Retomando o treino que você começou às{' '}
+            {retomadoDe.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              Alert.alert(
+                'Começar do zero?',
+                'As séries que você já marcou neste treino serão apagadas.',
+                [
+                  { text: 'Continuar de onde parei', style: 'cancel' },
+                  {
+                    text: 'Começar do zero',
+                    style: 'destructive',
+                    onPress: () => {
+                      setSeries(seriesDoPlano.current);
+                      // Identidade e relógio novos: é outro treino a partir daqui.
+                      clienteUuid.current = gerarUuid();
+                      iniciadoEm.current = new Date();
+                      setDecorrido(0);
+                      setRetomadoDe(null);
+                      if (usuario) void descartarRascunho(usuario.id);
+                    },
+                  },
+                ],
+              );
+            }}
+            style={{ minHeight: alvoToqueMin, justifyContent: 'center' }}
+          >
+            <Text style={{ color: tema.acaoFundo, fontWeight: tipografia.peso.forte }}>
+              Começar do zero
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.xl }}>
         {sessao.itens.map((item) => {
           const previas = anteriores[item.exercicio.id] ?? [];
@@ -581,7 +746,7 @@ export default function Execucao() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Ver vídeo de ${item.exercicio.nome}`}
-                    onPress={() => void abrirVideo(item.exercicio.id)}
+                    onPress={() => void abrirVideo(item.exercicio)}
                     style={{
                       minHeight: alvoToqueMin,
                       paddingHorizontal: espacamento.md,
@@ -981,7 +1146,15 @@ export default function Execucao() {
       <DemonstracaoAmpliada
         exercicio={ampliado}
         url={ampliado ? (midia[ampliado.id]?.imagemUrl ?? null) : null}
-        aoFechar={() => setAmpliado(null)}
+        videoUrl={videoUrl}
+        carregandoVideo={buscandoVideo}
+        aoFechar={() => {
+          setAmpliado(null);
+          // Solta o vídeo ao fechar: sem isto o player continuaria com o
+          // arquivo carregado, gastando memória durante o resto do treino.
+          setVideoUrl(null);
+          setBuscandoVideo(false);
+        }}
         tema={tema}
       />
     </View>

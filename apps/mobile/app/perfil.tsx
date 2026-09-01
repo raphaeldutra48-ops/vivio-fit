@@ -1,5 +1,5 @@
 import { SexoBiologico, type MeuPerfil } from '@vivio/contracts';
-import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
+import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

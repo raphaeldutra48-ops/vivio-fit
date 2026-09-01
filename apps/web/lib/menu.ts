@@ -16,8 +16,6 @@ export interface ItemDeMenu {
   estado: EstadoDoItem;
   /** Papéis que enxergam o item. Vazio = todos os profissionais. */
   papeis?: Papel[];
-  /** O que a tela faz — exibido enquanto ela não existe. */
-  descricao?: string;
 }
 
 export interface GrupoDeMenu {
@@ -55,6 +53,9 @@ export const MENU: BlocoDeMenu[] = [
   {
     titulo: null,
     secoes: [
+      /* Primeiro item e tela inicial: responde "quem precisa de mim hoje?"
+         antes de o profissional ter de procurar aluno por aluno. */
+      { rotulo: 'Resumo', icone: '🏠', href: '/resumo', estado: 'pronto', itens: [] },
       { rotulo: 'Alunos', icone: '👥', href: '/alunos', estado: 'pronto', itens: [] },
       { rotulo: 'Agenda', icone: '📅', href: '/agenda', estado: 'pronto', itens: [] },
       {
@@ -112,28 +113,28 @@ export const MENU: BlocoDeMenu[] = [
             rotulo: 'Cardápios',
             href: '/plano-alimentar/cardapios',
             estado: 'pronto',
-            descricao:
-              'Modelos de plano alimentar reutilizáveis, para montar a dieta de um paciente novo sem começar do zero.',
+            // Modelos de plano alimentar reutilizáveis, para montar a dieta de um
+            // paciente novo sem começar do zero.
           },
           {
             rotulo: 'Refeições',
             href: '/plano-alimentar/refeicoes',
             estado: 'pronto',
-            descricao:
-              'Refeições prontas (café da manhã padrão, pré-treino) para encaixar em qualquer cardápio.',
+            // Refeições prontas (café da manhã padrão, pré-treino) para encaixar em
+            // qualquer cardápio.
           },
           {
             rotulo: 'Receitas',
             href: '/plano-alimentar/receitas',
             estado: 'pronto',
-            descricao:
-              'Receitas com modo de preparo e macros calculados a partir dos ingredientes.',
+            // Receitas com modo de preparo e macros calculados a partir dos
+            // ingredientes.
           },
           {
             rotulo: 'Alimentos',
             href: '/plano-alimentar/alimentos',
             estado: 'pronto',
-            descricao: 'Tabela de composição nutricional e alimentos próprios.',
+            // Tabela de composição nutricional e alimentos próprios.
           },
         ],
       },
@@ -154,19 +155,19 @@ export const MENU: BlocoDeMenu[] = [
             rotulo: 'Modelos de prescrições',
             href: '/prescricoes/modelos',
             estado: 'pronto',
-            descricao: 'Modelos reutilizáveis de prescrição, com posologia e orientações.',
+            // Modelos reutilizáveis de prescrição, com posologia e orientações.
           },
           {
             rotulo: 'Suplementos',
             href: '/prescricoes/suplementos',
             estado: 'pronto',
-            descricao: 'Cadastro de suplementos com dose, horário e forma de uso.',
+            // Cadastro de suplementos com dose, horário e forma de uso.
           },
           {
             rotulo: 'Fitoterápicos',
             href: '/prescricoes/fitoterapicos',
             estado: 'pronto',
-            descricao: 'Cadastro de fitoterápicos com posologia e contraindicações.',
+            // Cadastro de fitoterápicos com posologia e contraindicações.
           },
           {
             // Prescrever medicamento é privativo do médico (CRM) — a API recusa
@@ -175,7 +176,7 @@ export const MENU: BlocoDeMenu[] = [
             href: '/prescricoes/medicamentos',
             estado: 'pronto',
             papeis: [Papel.MEDICO, Papel.ADMIN],
-            descricao: 'Cadastro de medicamentos com princípio ativo e apresentação.',
+            // Cadastro de medicamentos com princípio ativo e apresentação.
           },
         ],
       },
@@ -187,15 +188,15 @@ export const MENU: BlocoDeMenu[] = [
             rotulo: 'Bioimpedância',
             href: '/avaliacao/bioimpedancia',
             estado: 'pronto',
-            descricao:
-              'Importa os dados da balança de bioimpedância e alimenta os gráficos de composição corporal.',
+            // Importa os dados da balança de bioimpedância e alimenta os gráficos de
+            // composição corporal.
           },
           {
             rotulo: 'Adipometria',
             href: '/avaliacao/adipometria',
             estado: 'pronto',
-            descricao:
-              'Dobras cutâneas com cálculo de percentual de gordura pelos protocolos Pollock e Jackson-Pollock.',
+            // Dobras cutâneas com cálculo de percentual de gordura pelos protocolos
+            // Pollock e Jackson-Pollock.
           },
         ],
       },
@@ -215,13 +216,13 @@ export const MENU: BlocoDeMenu[] = [
             rotulo: 'Meu perfil',
             href: '/cadastros/perfil',
             estado: 'pronto',
-            descricao: 'Seus dados, registro no conselho e especialidades.',
+            // Seus dados, registro no conselho e especialidades.
           },
           {
             rotulo: 'Modelos de anamnese',
             href: '/cadastros/anamnese',
             estado: 'pronto',
-            descricao: 'Questionários de anamnese personalizados por tipo de atendimento.',
+            // Questionários de anamnese personalizados por tipo de atendimento.
           },
         ],
       },
@@ -256,14 +257,3 @@ export function menuPara(papel: Papel): BlocoDeMenu[] {
   })).filter((bloco) => bloco.secoes.length > 0);
 }
 
-/** Encontra a descrição de uma rota — usada pela tela de "em construção". */
-export function descricaoDaRota(href: string): { rotulo: string; descricao?: string } | null {
-  for (const bloco of MENU) {
-    for (const secao of bloco.secoes) {
-      if (secao.href === href) return { rotulo: secao.rotulo };
-      const item = secao.itens.find((i) => i.href === href);
-      if (item) return { rotulo: item.rotulo, descricao: item.descricao };
-    }
-  }
-  return null;
-}

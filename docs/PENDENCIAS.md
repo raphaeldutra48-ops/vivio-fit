@@ -5,28 +5,6 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 
 ## Abertas
 
-### 2. Teste roda contra o banco de desenvolvimento
-**Assumida em:** B2
-**Estado:** os e2e criam e apagam usuários no mesmo Neon usado para desenvolver.
-Usam sufixo único por execução, então não colidem entre si.
-**O que já está feito:** `apps/api/test/banco-de-teste.ts` roda antes de tudo e
-(a) usa `DATABASE_URL_TEST` quando existe, (b) avisa em voz alta quando não
-existe, e (c) **recusa rodar** se a URL parecer de produção ou `NODE_ENV` for
-`production` — a suíte faz `deleteMany`, e apontá-la para o banco errado uma
-vez basta para o estrago.
-**O que falta (ação sua, precisa da conta Neon):** no painel do Neon, `Branches`
-→ `New branch`, nome `test`, a partir de `main`. Copiar a connection string e
-pôr em `apps/api/.env`:
-
-```
-DATABASE_URL_TEST=<string do branch test, com -pooler>
-DIRECT_URL_TEST=<a mesma, sem -pooler>
-```
-
-Depois, uma vez: `cd apps/api && npx prisma migrate deploy` e `pnpm seed` com
-`DATABASE_URL` apontando para o branch novo. A partir daí `pnpm test` usa o
-branch sozinho, e o aviso some.
-**Pagar em:** antes do CI.
 
 ### 4b. O limite de tentativas é por processo, não distribuído
 **Assumida em:** dívidas técnicas (o que sobrou da pendência 4)
@@ -350,7 +328,79 @@ modelagem com migração, e não cabia dentro da área de feedback.
 **Enquanto isso:** conversa duplicada e vazia é inofensiva e dá para apagar à
 mão. Se aparecer em produção, apagar a que não tem mensagem.
 
+### 25. Seis `useEffect` com dependência faltando
+**Assumida em:** 2026-09-01, pelo ESLint recém-instalado
+**Estado:** seis efeitos omitem `recarregar` (ou equivalente) da lista de
+dependências. Hoje funcionam: as listas foram mantidas à mão e estão corretas.
+**O risco:** é latente, não ativo. Quem editar `recarregar` para usar uma
+variável nova e esquecer de acrescentá-la ao efeito ganha um closure velho —
+tela que não atualiza, sem erro nenhum.
+**Por que não foi corrigido junto:** a correção certa é `useCallback`, e
+nenhum dos seis arquivos tem teste que prove que o comportamento não mudou.
+Mexer às cegas em código que funciona troca um risco latente por um ativo.
+**Onde:** `apps/mobile/app/(tabs)/nutricao.tsx`, `apps/mobile/app/fotos.tsx`,
+`apps/web/app/(pro)/exercicios/page.tsx`, `apps/web/components/MenuLateral.tsx`,
+`apps/web/components/MetasDoAluno.tsx` (dois).
+**Pagar em:** junto com o teste de render de cada uma dessas telas (pendência 14b).
+
+### 26. `treino.e2e.spec.ts` falhou uma vez em quatro, sem causa apurada
+**Assumida em:** 2026-09-01
+**Estado:** numa das quatro execuções completas da suíte, 8 dos 20 testes de
+`treino.e2e.spec.ts` falharam — os do bloco "a lista como histórico". As outras
+três execuções passaram 648/648, e o arquivo sozinho passa 20/20 sempre.
+
+**O que já foi descartado, com evidência:**
+- Paralelismo entre arquivos — `vitest.config.ts` tem `fileParallelism: false`
+- Acúmulo de planos da Ana entre execuções — conferido no banco: 2 planos, ambos
+  arquivados, e o `afterAll` apaga só o que o próprio teste criou
+- `NaN` no comparador de ordenação — `PESO_DO_STATUS` é
+  `Record<StatusPlano, number>` e cobre os três status
+- Regressão da limpeza feita neste dia — o arquivo passa sozinho, e as demais
+  47 suítes passam
+
+**Por que não foi resolvida:** a saída da execução que falhou foi filtrada por
+`grep` antes de ser guardada, e as mensagens de erro se perderam. Sem elas,
+qualquer conserto seria chute — e chute em teste verde vira teste que esconde
+defeito.
+
+**O que fazer quando repetir:** guardar a saída inteira (`pnpm --filter
+@vivio/api test > saida.log 2>&1`, sem filtro) e ler a asserção que falhou.
+
+**Correção aplicada no caminho, mas de outro defeito:** `PlanosService.listar`
+ordenava por `criadoEm: 'desc'` sem desempate. Dois planos criados no mesmo
+milissegundo — o que acontece ao versionar, porque a versão nova nasce junto do
+arquivamento da antiga — saíam em ordem arbitrária do Postgres, e a lista
+mudava de ordem entre carregamentos da tela. Agora desempata por `versao` e
+`id`. **Isto não explica a falha acima**, porque as asserções são sobre status,
+não sobre data.
+**Pagar em:** na próxima vez que a suíte ficar vermelha.
+
 ## Resolvidas
+
+### A suíte ganhou banco próprio — resolvida em 2026-09-01
+
+Era a pendência 2, e ela estava **pior do que descrita**. O texto dizia "o mesmo
+Neon usado para desenvolver"; na verdade era o mesmo Neon usado em **produção**.
+`apps/api/.env` apontava para `ep-jolly-glade-ayydu988-pooler` e a produção para
+`ep-jolly-glade-ayydu988` — o mesmo banco, por duas portas.
+
+A rede de segurança não pegou porque procurava a palavra `prod` na URL, e nenhum
+provedor gerenciado põe isso no hostname. Regra na forma errada: procurava o
+nome do perigo em vez de exigir que o seguro fosse declarado.
+
+**O que mudou:**
+
+1. A migração para o Supabase liberou o Neon. Ele tem o schema completo e nenhum
+   usuário real — virou o banco de teste que faltava. `DATABASE_URL_TEST` aponta
+   para lá.
+2. `banco-de-teste.ts` agora **recusa rodar** sem declaração explícita:
+   `DATABASE_URL_TEST` num branch próprio, ou `BANCO_DE_TESTE_ASSUMIDO=sim` para
+   quem aceita mexer no banco comum de propósito. Verificado nos dois sentidos.
+3. O aviso antigo dizia "banco de DESENVOLVIMENTO". Reescrito — um aviso que
+   nomeia errado o risco é pior que nenhum, porque tranquiliza.
+
+Os 6 usuários `@teste.com` que a suíte tinha criado não foram levados para o
+Supabase: o migrador os deixa para trás junto com tudo que depende deles.
 
 ### O laudo do exame passou a ter arquivo — resolvida em 2026-08-04
 **Era:** pendência 22. O modelo já tinha `chaveArquivo` e `podeVerArquivo()` já

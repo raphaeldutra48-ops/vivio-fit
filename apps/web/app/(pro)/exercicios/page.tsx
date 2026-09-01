@@ -13,6 +13,155 @@ import { FilaDeGravacao } from '../../../components/FilaDeGravacao';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
 
+/**
+ * Uma lista de exercícios.
+ *
+ * No escopo do módulo, e não dentro de `Exercicios`. Definida lá dentro, era
+ * uma função nova a cada renderização — e o React, vendo um componente
+ * diferente, desmontava e remontava a lista inteira. Como a busca é filtro que
+ * roda no estado, **cada tecla digitada destruía e recriava os 159 cartões**,
+ * junto com o vídeo em reprodução e a ficha que estivesse aberta.
+ *
+ * As sete props abaixo são o que ela tomava emprestado do render. Explícitas,
+ * dá para ver o acoplamento; implícitas, ele custava a lista toda por tecla.
+ */
+function Lista({
+  itens,
+  titulo,
+  aberto,
+  setAberto,
+  videoAberto,
+  setVideoAberto,
+  verVideo,
+  enviandoVideoDe,
+  escolherVideo,
+}: {
+  itens: ExercicioResumo[];
+  titulo: string;
+  aberto: string | null;
+  setAberto: (id: string | null) => void;
+  videoAberto: { id: string; url: string } | null;
+  setVideoAberto: (v: { id: string; url: string } | null) => void;
+  verVideo: (id: string) => void;
+  enviandoVideoDe: string | null;
+  escolherVideo: (exercicioId: string, ehMeuExercicio: boolean) => void;
+}) {
+  if (itens.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-md">
+      <h2 className="text-lg font-semibold">{titulo}</h2>
+      {itens.map((e) =>
+        aberto === e.id ? (
+          <FichaDeExercicio
+            key={e.id}
+            exercicio={e}
+            aoFechar={() => {
+              setAberto(null);
+              setVideoAberto(null);
+            }}
+            videoUrl={videoAberto?.id === e.id ? videoAberto.url : null}
+            aoPedirVideo={() => void verVideo(e.id)}
+          />
+        ) : (
+        <Cartao key={e.id}>
+          <div className="flex flex-wrap items-center justify-between gap-md">
+            <div className="flex items-center gap-md">
+              {/*
+                Miniatura na lista: biblioteca se navega olhando. Sem ela, a
+                tela é uma lista de nomes e escolher exercício exige abrir um
+                por um.
+              */}
+              {e.imagemUrl && (
+                <img
+                  src={e.imagemUrl}
+                  alt=""
+                  aria-hidden
+                  width={56}
+                  height={56}
+                  className="rounded-md"
+                  style={{ objectFit: 'contain', background: 'var(--vv-fundo)' }}
+                />
+              )}
+              <div>
+                <button
+                  onClick={() => setAberto(e.id)}
+                  className="text-left font-semibold underline"
+                >
+                  {e.nome}
+                </button>
+                <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  {e.grupoMuscular.replace('_', ' ')}
+                  {e.equipamento && ` · ${e.equipamento}`}
+                  {e.passos.length > 0 && ' · passo a passo'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-md">
+              {/*
+                Três estados, não dois. "Já gravei este" e "o acervo tem um
+                vídeo genérico" são coisas diferentes para quem está passando
+                por 159 exercícios — juntar as duas num "com vídeo" só faz
+                regravar o que já foi gravado.
+              */}
+              {e.temDemonstracao ? (
+                <>
+                  <Etiqueta texto="✓ gravei este" cor="var(--vv-sucesso)" />
+                  <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
+                    Rever
+                  </Botao>
+                </>
+              ) : e.temVideo ? (
+                <>
+                  <Etiqueta texto="vídeo do acervo" cor="var(--vv-texto-secundario)" />
+                  <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
+                    Ver
+                  </Botao>
+                </>
+              ) : (
+                <span className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                  sem vídeo
+                </span>
+              )}
+              {/*
+                A gravação própria vale para o exercício GLOBAL também, e é
+                esse o ponto: o personal quer gravar o supino da academia
+                dele sem criar um "supino do Diego", que quebraria o
+                histórico de carga do aluno — indexado por exercício.
+
+                `capture` faz o celular abrir a câmera direto em vez do
+                seletor de arquivos. No computador o atributo é ignorado e
+                vira uma escolha de arquivo comum, que é o comportamento
+                certo nos dois lugares.
+              */}
+              <Botao
+                variante="neutra"
+                disabled={enviandoVideoDe === e.id}
+                onClick={() => escolherVideo(e.id, e.escopo === 'PRIVADO')}
+              >
+                {enviandoVideoDe === e.id
+                  ? 'Enviando…'
+                  : e.temDemonstracao
+                    ? '🎥 Regravar'
+                    : '🎥 Gravar minha demonstração'}
+              </Botao>
+            </div>
+          </div>
+
+          {videoAberto?.id === e.id && (
+            <video
+              controls
+              src={videoAberto.url}
+              className="mt-md w-full rounded-md"
+              style={{ maxHeight: 420, background: '#000' }}
+            />
+          )}
+        </Cartao>
+        ),
+      )}
+    </section>
+  );
+}
+
 export default function Exercicios() {
   const [exercicios, setExercicios] = useState<ExercicioResumo[]>([]);
   const [busca, setBusca] = useState('');
@@ -135,122 +284,6 @@ export default function Exercicios() {
   const meus = exercicios.filter((e) => e.escopo === 'PRIVADO');
   const globais = exercicios.filter((e) => e.escopo === 'GLOBAL');
 
-  function Lista({ itens, titulo }: { itens: ExercicioResumo[]; titulo: string }) {
-    if (itens.length === 0) return null;
-    return (
-      <section className="flex flex-col gap-md">
-        <h2 className="text-lg font-semibold">{titulo}</h2>
-        {itens.map((e) =>
-          aberto === e.id ? (
-            <FichaDeExercicio
-              key={e.id}
-              exercicio={e}
-              aoFechar={() => {
-                setAberto(null);
-                setVideoAberto(null);
-              }}
-              videoUrl={videoAberto?.id === e.id ? videoAberto.url : null}
-              aoPedirVideo={() => void verVideo(e.id)}
-            />
-          ) : (
-          <Cartao key={e.id}>
-            <div className="flex flex-wrap items-center justify-between gap-md">
-              <div className="flex items-center gap-md">
-                {/*
-                  Miniatura na lista: biblioteca se navega olhando. Sem ela, a
-                  tela é uma lista de nomes e escolher exercício exige abrir um
-                  por um.
-                */}
-                {e.imagemUrl && (
-                  <img
-                    src={e.imagemUrl}
-                    alt=""
-                    aria-hidden
-                    width={56}
-                    height={56}
-                    className="rounded-md"
-                    style={{ objectFit: 'contain', background: 'var(--vv-fundo)' }}
-                  />
-                )}
-                <div>
-                  <button
-                    onClick={() => setAberto(e.id)}
-                    className="text-left font-semibold underline"
-                  >
-                    {e.nome}
-                  </button>
-                  <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                    {e.grupoMuscular.replace('_', ' ')}
-                    {e.equipamento && ` · ${e.equipamento}`}
-                    {e.passos.length > 0 && ' · passo a passo'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-md">
-                {/*
-                  Três estados, não dois. "Já gravei este" e "o acervo tem um
-                  vídeo genérico" são coisas diferentes para quem está passando
-                  por 159 exercícios — juntar as duas num "com vídeo" só faz
-                  regravar o que já foi gravado.
-                */}
-                {e.temDemonstracao ? (
-                  <>
-                    <Etiqueta texto="✓ gravei este" cor="var(--vv-sucesso)" />
-                    <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
-                      Rever
-                    </Botao>
-                  </>
-                ) : e.temVideo ? (
-                  <>
-                    <Etiqueta texto="vídeo do acervo" cor="var(--vv-texto-secundario)" />
-                    <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
-                      Ver
-                    </Botao>
-                  </>
-                ) : (
-                  <span className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                    sem vídeo
-                  </span>
-                )}
-                {/*
-                  A gravação própria vale para o exercício GLOBAL também, e é
-                  esse o ponto: o personal quer gravar o supino da academia
-                  dele sem criar um "supino do Diego", que quebraria o
-                  histórico de carga do aluno — indexado por exercício.
-
-                  `capture` faz o celular abrir a câmera direto em vez do
-                  seletor de arquivos. No computador o atributo é ignorado e
-                  vira uma escolha de arquivo comum, que é o comportamento
-                  certo nos dois lugares.
-                */}
-                <Botao
-                  variante="neutra"
-                  disabled={enviandoVideoDe === e.id}
-                  onClick={() => escolherVideo(e.id, e.escopo === 'PRIVADO')}
-                >
-                  {enviandoVideoDe === e.id
-                    ? 'Enviando…'
-                    : e.temDemonstracao
-                      ? '🎥 Regravar'
-                      : '🎥 Gravar minha demonstração'}
-                </Botao>
-              </div>
-            </div>
-
-            {videoAberto?.id === e.id && (
-              <video
-                controls
-                src={videoAberto.url}
-                className="mt-md w-full rounded-md"
-                style={{ maxHeight: 420, background: '#000' }}
-              />
-            )}
-          </Cartao>
-          ),
-        )}
-      </section>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-xl">
@@ -333,8 +366,28 @@ export default function Exercicios() {
         recarregarEm={filaVersao}
       />
 
-      <Lista itens={meus} titulo="Meus exercícios" />
-      <Lista itens={globais} titulo="Biblioteca global" />
+      <Lista
+        itens={meus}
+        titulo="Meus exercícios"
+        aberto={aberto}
+        setAberto={setAberto}
+        videoAberto={videoAberto}
+        setVideoAberto={setVideoAberto}
+        verVideo={(id) => void verVideo(id)}
+        enviandoVideoDe={enviandoVideoDe}
+        escolherVideo={escolherVideo}
+      />
+      <Lista
+        itens={globais}
+        titulo="Biblioteca global"
+        aberto={aberto}
+        setAberto={setAberto}
+        videoAberto={videoAberto}
+        setVideoAberto={setVideoAberto}
+        verVideo={(id) => void verVideo(id)}
+        enviandoVideoDe={enviandoVideoDe}
+        escolherVideo={escolherVideo}
+      />
     </div>
   );
 }

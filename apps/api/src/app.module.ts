@@ -27,6 +27,7 @@ import { ImportacaoDietaModule } from './modules/importacao-dieta/importacao-die
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { MetasModule } from './modules/metas/metas.module';
 import { ProgressoModule } from './modules/progresso/progresso.module';
+import { ResumoModule } from './modules/resumo/resumo.module';
 import { MedidasModule } from './modules/medidas/medidas.module';
 import { MidiaModule } from './modules/midia/midia.module';
 import { NotificacoesModule } from './modules/notificacoes/notificacoes.module';
@@ -56,6 +57,7 @@ import { VinculosModule } from './modules/vinculos/vinculos.module';
     MedidasModule,
     CheckinModule,
     ProgressoModule,
+    ResumoModule,
     MetasModule,
     ComparativoModule,
     FeedbackModule,

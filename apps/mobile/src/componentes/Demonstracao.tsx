@@ -2,6 +2,7 @@ import type { ExercicioResumo } from '@vivio/contracts';
 import type { Tema } from '@vivio/ui-native';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { PlayerDeVideo } from './PlayerDeVideo';
 
 /**
  * A demonstração do movimento, dentro do treino.
@@ -105,15 +106,26 @@ export function Demonstracao({
   );
 }
 
-/** Tela cheia: a imagem grande e o passo a passo inteiro, para ler com calma. */
+/**
+ * Tela cheia: o vídeo, a imagem grande e o passo a passo, para ver com calma.
+ *
+ * O vídeo toca **aqui dentro**. Antes ele abria no navegador do sistema, o que
+ * tirava o aluno do app no meio do treino — e voltar significava reencontrar o
+ * aplicativo e cair numa tela remontada, sem as séries já marcadas.
+ */
 export function DemonstracaoAmpliada({
   exercicio,
   url,
+  videoUrl,
+  carregandoVideo,
   aoFechar,
   tema,
 }: {
   exercicio: ExercicioResumo | null;
   url: string | null;
+  /** URL assinada do vídeo. `null` quando não há vídeo ou ainda está vindo. */
+  videoUrl?: string | null;
+  carregandoVideo?: boolean;
   aoFechar: () => void;
   tema: Tema;
 }) {
@@ -154,6 +166,20 @@ export function DemonstracaoAmpliada({
         </View>
 
         <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}>
+          {/*
+            O vídeo vem antes da imagem parada: quando existe, ele responde a
+            dúvida melhor, e quem já sabe o movimento rola direto para o passo
+            a passo.
+          */}
+          {(videoUrl || carregandoVideo) && (
+            <PlayerDeVideo
+              url={videoUrl ?? null}
+              nome={exercicio.nome}
+              credito={exercicio.videoCredito}
+              tema={tema}
+            />
+          )}
+
           {url && (
             <View>
               <Image

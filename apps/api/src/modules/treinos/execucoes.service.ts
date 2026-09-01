@@ -138,14 +138,52 @@ export class ExecucoesService {
       porExercicio.set(s.exercicioId, atual);
     }
 
-    const nomes = new Map(
-      (
-        await this.prisma.exercicio.findMany({
-          where: { id: { in: [...porExercicio.keys()] } },
-          select: { id: true, nome: true },
-        })
-      ).map((e) => [e.id, e.nome]),
-    );
+    const exercicioIds = [...porExercicio.keys()];
+
+    /*
+      Duas consultas em paralelo, e não uma por exercício.
+
+      A versão anterior perguntava o histórico dentro do laço: oito exercícios
+      na sessão viravam oito consultas em fila, cada uma pagando a ida e volta
+      até o banco — no caminho mais quente do app, que é o aluno apertando
+      "concluir" com o celular na mão no meio da academia. E era o único lugar
+      do sistema cujo custo crescia com o tamanho do treino.
+
+      **Sem corte de data e sem `take`, de propósito.** Recorde é "melhor de
+      todos os tempos"; limitar a busca faria marca antiga sair da comparação e
+      voltar como medalha nova. Seria uma mudança de regra disfarçada de
+      otimização — e o aluno receberia parabéns por um peso que ele já tinha
+      levantado no ano passado.
+
+      Pelo mesmo motivo o aquecimento não é filtrado no SQL: `seriesDeTrabalho`
+      tem um caso de borda em que ele conta (quando é tudo o que existe), e
+      repetir a regra na consulta a faria divergir da versão testada.
+    */
+    const [listaDeNomes, historico] = await Promise.all([
+      this.prisma.exercicio.findMany({
+        where: { id: { in: exercicioIds } },
+        select: { id: true, nome: true },
+      }),
+      this.prisma.serieExecutada.findMany({
+        where: {
+          exercicioId: { in: exercicioIds },
+          execucao: { alunoId, id: { not: execucao.id } },
+        },
+        select: { exercicioId: true, cargaKg: true, repsFeitas: true, tipo: true },
+      }),
+    ]);
+
+    const nomes = new Map(listaDeNomes.map((e) => [e.id, e.nome]));
+
+    const anterioresPorExercicio = new Map<
+      string,
+      { cargaKg: number; repsFeitas: number; tipo: string }[]
+    >();
+    for (const s of historico) {
+      const lista = anterioresPorExercicio.get(s.exercicioId) ?? [];
+      lista.push({ cargaKg: Number(s.cargaKg), repsFeitas: s.repsFeitas, tipo: s.tipo });
+      anterioresPorExercicio.set(s.exercicioId, lista);
+    }
 
     const batidos: RecordeBatido[] = [];
 
@@ -153,21 +191,9 @@ export class ExecucoesService {
       const hoje = marcasDe(series);
       if (!hoje) continue;
 
-      const anteriores = await this.prisma.serieExecutada.findMany({
-        where: {
-          exercicioId,
-          execucao: { alunoId, id: { not: execucao.id } },
-        },
-        select: { cargaKg: true, repsFeitas: true, tipo: true },
-      });
-
-      const antes = marcasDe(
-        anteriores.map((s) => ({
-          cargaKg: Number(s.cargaKg),
-          repsFeitas: s.repsFeitas,
-          tipo: s.tipo,
-        })),
-      );
+      // Lista vazia quando é a primeira vez no exercício: `marcasDe` devolve
+      // `null`, e `recordesBatidos` já trata isso como "não há o que superar".
+      const antes = marcasDe(anterioresPorExercicio.get(exercicioId) ?? []);
 
       for (const r of recordesBatidos(hoje, antes)) {
         batidos.push({

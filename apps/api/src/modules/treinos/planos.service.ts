@@ -50,7 +50,21 @@ export class PlanosService {
     const planos = await this.prisma.planoTreino.findMany({
       where: { alunoId },
       include: { personal: { select: { id: true, nome: true } }, _count: { select: { sessoes: true } } },
-      orderBy: { criadoEm: 'desc' },
+      /*
+        Desempate explícito por versão e por id.
+
+        `criadoEm` sozinho não define ordem total: dois planos criados no mesmo
+        milissegundo — o que acontece ao versionar um plano, porque a versão
+        nova nasce junto do arquivamento da antiga — ficam empatados, e o
+        Postgres devolve empatados em ordem arbitrária. Como o `sort` de baixo
+        é estável, ele preserva essa arbitrariedade: a mesma lista sai em
+        ordens diferentes entre dois carregamentos da tela.
+
+        `versao` decide primeiro porque é o significado certo — dentro do mesmo
+        instante, a versão maior é a mais nova. `id` fecha como último critério
+        para garantir ordem total mesmo entre planos de raízes diferentes.
+      */
+      orderBy: [{ criadoEm: 'desc' }, { versao: 'desc' }, { id: 'desc' }],
     });
 
     return planos

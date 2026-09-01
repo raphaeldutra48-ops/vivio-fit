@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, StatusPlano } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type {
   AplicarModeloInput,
   CriarModeloCardapioInput,

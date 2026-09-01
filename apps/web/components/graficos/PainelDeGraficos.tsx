@@ -1,11 +1,12 @@
 'use client';
 
-import type { EvolucaoCorporal, ExecucaoResumo, HistoricoCarga, PainelDeProgresso } from '@vivio/contracts';
+import type { EvolucaoCorporal, ExecucaoResumo, HistoricoCarga } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useState } from 'react';
 import { comoPontos, rotuloDaSemana, treinosPorSemana } from '../../lib/graficos';
+import { useModoDiscreto } from '../../lib/modo-discreto';
 import { sdk } from '../../lib/sdk';
-import { Aviso, Cartao } from '../ui';
+import { Aviso, Cartao, EstadoVazio, Explicacao } from '../ui';
 import { GraficoDeBarras } from './GraficoDeBarras';
 import { GraficoDeLinha } from './GraficoDeLinha';
 
@@ -23,6 +24,36 @@ import { GraficoDeLinha } from './GraficoDeLinha';
  */
 
 const SEMANAS_NO_GRAFICO = 8;
+
+/**
+ * O que aparece no lugar de um gráfico de composição corporal com o modo
+ * discreto ligado.
+ *
+ * Um `•••` não serve aqui: a forma da linha revela tanto quanto o eixo. Quem
+ * olha por cima do ombro vê a curva descer e já sabe o que aconteceu, mesmo sem
+ * ler um número.
+ */
+function TalvezOculto({ oQue, children }: { oQue: string; children: React.ReactNode }) {
+  const { discreto } = useModoDiscreto();
+  if (!discreto) return <>{children}</>;
+
+  return (
+    <>
+      <div
+        data-nao-imprime
+        className="grid place-items-center rounded-md px-md py-xl text-center text-sm"
+        style={{ background: 'var(--vv-superficie-elevada)', color: 'var(--vv-texto-secundario)' }}
+      >
+        <p>
+          <span aria-hidden>🙈 </span>
+          {oQue} oculto pelo modo discreto.
+        </p>
+      </div>
+      {/* Mesma regra do `Sensivel`: no papel, o gráfico de verdade. */}
+      <div data-so-imprime>{children}</div>
+    </>
+  );
+}
 
 export function PainelDeGraficos({ alunoId, dias }: { alunoId: string; dias: number }) {
   const [evolucao, setEvolucao] = useState<EvolucaoCorporal | null>(null);
@@ -102,12 +133,14 @@ export function PainelDeGraficos({ alunoId, dias }: { alunoId: string; dias: num
                 · {peso.unidade}
               </span>
             </p>
-            <GraficoDeLinha
-              pontos={comoPontos(peso.pontos)}
-              unidade={peso.unidade}
-              cor="var(--vv-area-treino)"
-              descricao={`Evolução do peso corporal em ${peso.pontos.length} medições`}
-            />
+            <TalvezOculto oQue="Peso corporal">
+              <GraficoDeLinha
+                pontos={comoPontos(peso.pontos)}
+                unidade={peso.unidade}
+                cor="var(--vv-area-treino)"
+                descricao={`Evolução do peso corporal em ${peso.pontos.length} medições`}
+              />
+            </TalvezOculto>
           </Cartao>
         )}
 
@@ -119,17 +152,25 @@ export function PainelDeGraficos({ alunoId, dias }: { alunoId: string; dias: num
                 · {gordura.unidade}
               </span>
             </p>
-            <GraficoDeLinha
-              pontos={comoPontos(gordura.pontos)}
-              unidade={gordura.unidade}
-              cor="var(--vv-area-nutricao)"
-              descricao={`Evolução do percentual de gordura em ${gordura.pontos.length} medições`}
-            />
+            <TalvezOculto oQue="Percentual de gordura">
+              <GraficoDeLinha
+                pontos={comoPontos(gordura.pontos)}
+                unidade={gordura.unidade}
+                cor="var(--vv-area-nutricao)"
+                descricao={`Evolução do percentual de gordura em ${gordura.pontos.length} medições`}
+              />
+            </TalvezOculto>
           </Cartao>
         )}
 
         <Cartao>
-          <p className="mb-md font-semibold">Treinos por semana</p>
+          <p className="mb-md flex items-center gap-xs font-semibold">
+            Treinos por semana
+            <Explicacao termo="Treinos por semana">
+              Cada barra é uma semana começando na segunda-feira. Semana sem treino aparece como
+              barra zerada de propósito — omiti-la daria impressão de constância que não houve.
+            </Explicacao>
+          </p>
           {treinouAlgumaSemana ? (
             <GraficoDeBarras
               descricao={`Treinos realizados nas últimas ${SEMANAS_NO_GRAFICO} semanas`}
@@ -141,9 +182,11 @@ export function PainelDeGraficos({ alunoId, dias }: { alunoId: string; dias: num
               }))}
             />
           ) : (
-            <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-              Nenhum treino registrado nas últimas {SEMANAS_NO_GRAFICO} semanas.
-            </p>
+            <EstadoVazio
+              icone="🏋️"
+              titulo={`Nenhum treino nas últimas ${SEMANAS_NO_GRAFICO} semanas`}
+              descricao="O aluno registra o treino no aplicativo dele, ao terminar cada sessão. Se ele está treinando e nada aparece aqui, vale conferir se o plano ativo é o certo."
+            />
           )}
         </Cartao>
 

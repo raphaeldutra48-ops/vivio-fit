@@ -9,12 +9,15 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "eslint .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "turbo": "^2.3.3",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.68.0"
   }
 }

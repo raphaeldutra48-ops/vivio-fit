@@ -3,8 +3,9 @@
 import type { PainelDeProgresso as Painel } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useState } from 'react';
+import { Sensivel } from '../lib/modo-discreto';
 import { sdk } from '../lib/sdk';
-import { Aviso, Cartao } from './ui';
+import { Aviso, Cartao, EstadoVazio, Explicacao } from './ui';
 
 const JANELAS = [30, 60, 90] as const;
 
@@ -33,19 +34,34 @@ function Numero({
   valor,
   detalhe,
   cor,
+  sensivel,
+  explicacao,
 }: {
   rotulo: string;
   valor: string | null;
   detalhe?: string;
   cor?: string;
+  /**
+   * Some da tela no modo discreto.
+   *
+   * Reservado ao que constrange se lido por cima do ombro — peso e dor. "9
+   * treinos" não constrange ninguém, e esconder tudo indistintamente deixaria o
+   * painel inútil justamente quando ele é mais usado: em pé, no salão.
+   */
+  sensivel?: boolean;
+  explicacao?: string;
 }) {
   return (
     <div>
-      <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+      <p
+        className="flex items-center gap-xs text-sm"
+        style={{ color: 'var(--vv-texto-secundario)' }}
+      >
         {rotulo}
+        {explicacao && <Explicacao termo={rotulo}>{explicacao}</Explicacao>}
       </p>
       <p className="text-xl font-bold tabular-nums" style={cor ? { color: cor } : undefined}>
-        {valor ?? '—'}
+        {valor === null ? '—' : sensivel ? <Sensivel>{valor}</Sensivel> : valor}
       </p>
       {detalhe && (
         <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
@@ -187,16 +203,18 @@ export function PainelDeProgresso({
             Ausência de check-in não é adesão baixa. Dizer "0%" aqui faria o
             personal cobrar quem talvez nem saiba que o recurso existe.
           */
-          <Aviso tipo="info">
-            Este aluno ainda não fez nenhum check-in. Sem eles não dá para medir adesão — vale
-            explicar o recurso na próxima conversa.
-          </Aviso>
+          <EstadoVazio
+            icone="🗓️"
+            titulo="Nenhum check-in registrado"
+            descricao="Sem check-in não há como medir adesão, energia nem dor. Vale explicar o recurso na próxima conversa — ele fica na tela inicial do aplicativo do aluno."
+          />
         ) : (
           <div className="grid grid-cols-2 gap-lg sm:grid-cols-4">
             <Numero
               rotulo="Adesão"
               valor={checkins.aderencia === null ? null : `${checkins.aderencia}%`}
               detalhe={`em ${checkins.comCheckin} dias registrados`}
+              explicacao="Dias em que o aluno registrou check-in, sobre os dias do período. Não mede treino feito — mede resposta."
               cor={
                 checkins.aderencia !== null && checkins.aderencia < 60
                   ? 'var(--vv-alerta)'
@@ -206,10 +224,12 @@ export function PainelDeProgresso({
             <Numero
               rotulo="Energia média"
               valor={checkins.energiaMedia === null ? null : `${checkins.energiaMedia}/5`}
+              explicacao="Como o aluno avaliou a própria disposição no check-in, de 1 a 5. É percepção dele, não medição."
             />
             <Numero
               rotulo="Dias com dor"
               valor={String(checkins.diasComDor)}
+              sensivel
               cor={checkins.diasComDor > 0 ? 'var(--vv-alerta)' : undefined}
             />
             <Numero
@@ -229,10 +249,11 @@ export function PainelDeProgresso({
       <Cartao>
         <p className="mb-md font-semibold">Evolução de carga</p>
         {cargas.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-            Ainda não há exercício repetido o suficiente no período para mostrar tendência. São
-            necessários pelo menos dois dias diferentes com o mesmo exercício.
-          </p>
+          <EstadoVazio
+            icone="📈"
+            titulo="Ainda sem tendência para mostrar"
+            descricao="É preciso o mesmo exercício repetido em pelo menos dois dias diferentes dentro do período. Aumente a janela acima ou volte depois do próximo treino."
+          />
         ) : (
           <ul className="flex flex-col gap-sm">
             {cargas.map((c) => {
@@ -268,6 +289,7 @@ export function PainelDeProgresso({
           <Numero
             rotulo="Variação de peso no período"
             valor={`${variacaoPesoKg > 0 ? '+' : ''}${variacaoPesoKg} kg`}
+            sensivel
           />
         </Cartao>
       )}

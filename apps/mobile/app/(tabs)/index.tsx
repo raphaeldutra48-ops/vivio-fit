@@ -1,10 +1,12 @@
 import type { CheckinResumo, ExecucaoResumo, PlanoTreinoCompleto } from '@vivio/contracts';
 import { cobrancaDaDieta, dataLocalDoCheckin, type CobrancaDaDieta } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ContadorDeCalorias } from '../../src/componentes/ContadorDeCalorias';
+import { FalhouAoCarregar } from '../../src/componentes/Estado';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -15,6 +17,9 @@ export default function Inicio() {
   const [plano, setPlano] = useState<PlanoTreinoCompleto | null>(null);
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
   const [semPlano, setSemPlano] = useState(false);
+  /** Falha de rede — dizer "seu personal não montou" aqui seria acusá-lo à toa. */
+  const [falhouOPlano, setFalhouOPlano] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
   const [checkinDeHoje, setCheckinDeHoje] = useState<CheckinResumo | null>(null);
   const [naoLidas, setNaoLidas] = useState(0);
   const [convitesAbertos, setConvitesAbertos] = useState(0);
@@ -23,15 +28,27 @@ export default function Inicio() {
 
   useEffect(() => {
     if (!usuario) return;
+    setFalhouOPlano(false);
     sdk.treinos
       .obterAtivo(usuario.id)
-      .then(setPlano)
-      .catch(() => setSemPlano(true));
+      .then((p) => {
+        setPlano(p);
+        setSemPlano(false);
+      })
+      /*
+        404 é "não há plano"; o resto é "não consegui perguntar". Antes os dois
+        viravam a mesma frase — "Seu personal ainda não montou ou ativou um
+        plano para você" — dita a quem só estava sem sinal.
+      */
+      .catch((e: unknown) => {
+        if (e instanceof ErroApi && e.status === 404) setSemPlano(true);
+        else setFalhouOPlano(true);
+      });
     sdk.execucoes
       .listar(usuario.id, 5)
       .then(setExecucoes)
       .catch(() => undefined);
-  }, [usuario]);
+  }, [usuario, tentativa]);
 
   const buscarAoVoltar = useCallback(() => {
     if (!usuario) return;
@@ -193,6 +210,13 @@ export default function Inicio() {
         errada: o que falta é aceitar o convite, e dizer as duas coisas ao
         mesmo tempo faz a pessoa tentar resolver a que não depende dela.
       */}
+      {falhouOPlano && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar seu treino agora. Ele continua salvo — assim que a rede voltar, aparece aqui."
+          aoTentarDeNovo={() => setTentativa((t) => t + 1)}
+        />
+      )}
+
       {semPlano && temProfissional && convitesAbertos === 0 && (
         <View
           style={{

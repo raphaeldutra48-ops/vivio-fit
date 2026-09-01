@@ -1,10 +1,13 @@
 {
+  // Visão AMPLA — mesmo motivo do `apps/api`: o `typecheck` precisa enxergar
+  // `test/`, que tem os 64 testes de contraste e de geometria de gráfico.
+  // Enquanto este arquivo era o do build (`rootDir: src`, `exclude: [test]`),
+  // aqueles testes nunca passaram por verificação de tipo.
   "extends": "@vivio/config/tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"]
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

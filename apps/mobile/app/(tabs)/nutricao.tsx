@@ -4,9 +4,11 @@ import {
   type PlanoDietaCompleto,
   type ResumoDeAgua,
 } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { alvoToqueMin, espacamento, obterAreaTema, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../../src/componentes/Estado';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -23,6 +25,8 @@ export default function Nutricao() {
   const [agua, setAgua] = useState<ResumoDeAgua | null>(null);
   const [registros, setRegistros] = useState<Record<string, string>>({});
   const [semDieta, setSemDieta] = useState(false);
+  /** Falha de rede — diferente de não ter plano. */
+  const [falhou, setFalhou] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
 
   /*
@@ -46,13 +50,24 @@ export default function Nutricao() {
 
   async function recarregar() {
     if (!usuario) return;
+    setFalhou(false);
     sdk.dietas
       .obterAtiva(usuario.id)
       .then((d) => {
         setDieta(d);
+        setSemDieta(false);
         setExpandida((atual) => atual ?? d.refeicoes[0]?.id ?? null);
       })
-      .catch(() => setSemDieta(true));
+      /*
+        404 e falta de sinal davam a mesma tela: "Seu nutricionista ainda não
+        montou ou ativou um plano". Dito a quem está sem rede, é acusação falsa
+        contra a profissional — e o aluno vai cobrá-la por um plano que já
+        existe. O código do erro separa os dois.
+      */
+      .catch((e: unknown) => {
+        if (e instanceof ErroApi && e.status === 404) setSemDieta(true);
+        else setFalhou(true);
+      });
     sdk.agua.resumo(usuario.id).then(setAgua).catch(() => undefined);
     sdk.dietas
       .registrosDoDia(usuario.id)
@@ -223,6 +238,13 @@ export default function Nutricao() {
       )}
 
       {/* --- Dieta --------------------------------------------------------- */}
+      {falhou && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar seu plano alimentar agora. Ele continua salvo — assim que a rede voltar, aparece aqui."
+          aoTentarDeNovo={() => void recarregar()}
+        />
+      )}
+
       {semDieta && (
         <View style={cartao}>
           <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>Sem plano alimentar</Text>

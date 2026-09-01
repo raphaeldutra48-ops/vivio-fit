@@ -1,0 +1,25 @@
+{
+  // Configuração do Worker que serve o painel web.
+  //
+  // Ela mora em `apps/web` e não na raiz por causa do erro que o deploy deu:
+  // "The Cloudflare application detection logic has been run in the root of a
+  // workspace instead of targeting a specific project". O wrangler precisa ser
+  // executado de dentro da aplicação, não do monorepo — este arquivo é o que
+  // marca onde a aplicação começa.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vivio-web",
+  "main": ".open-next/worker.js",
+  // Data de compatibilidade fixa: subir sozinha mudaria o comportamento do
+  // runtime sem ninguém pedir.
+  "compatibility_date": "2026-08-01",
+  // Exigido pelo adaptador do Next: ele usa APIs de Node (streams, buffer) que
+  // só existem no Worker com esta bandeira.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

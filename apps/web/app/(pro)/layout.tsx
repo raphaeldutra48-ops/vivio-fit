@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Marca } from '../../components/Marca';
 import { MenuLateral } from '../../components/MenuLateral';
 import { Botao } from '../../components/ui';
+import { ProvedorDeModoDiscreto, useModoDiscreto } from '../../lib/modo-discreto';
 import { useSessao } from '../../lib/sessao';
 
 const NOME_DO_PAPEL: Partial<Record<Papel, string>> = {
@@ -16,7 +17,38 @@ const NOME_DO_PAPEL: Partial<Record<Papel, string>> = {
   ADMIN: 'Administrador',
 };
 
-export default function LayoutProfissional({ children }: { children: React.ReactNode }) {
+/**
+ * O interruptor do modo discreto, no cabeçalho.
+ *
+ * No cabeçalho e não numa tela de ajustes porque o momento de usar é quando
+ * alguém se aproxima: dois cliques a mais é tarde demais.
+ */
+function BotaoDiscreto() {
+  const { discreto, alternar } = useModoDiscreto();
+  return (
+    <button
+      type="button"
+      onClick={alternar}
+      aria-pressed={discreto}
+      title={
+        discreto
+          ? 'Mostrar os dados dos alunos novamente'
+          : 'Ocultar peso, medidas e dados clínicos da tela'
+      }
+      className="flex min-h-toque items-center gap-xs rounded-md border px-md text-sm"
+      style={{
+        borderColor: 'var(--vv-borda)',
+        background: discreto ? 'var(--vv-superficie-elevada)' : 'transparent',
+        color: discreto ? 'var(--vv-texto-primario)' : 'var(--vv-texto-secundario)',
+      }}
+    >
+      <span aria-hidden>{discreto ? '🙈' : '👁️'}</span>
+      <span className="hidden sm:inline">{discreto ? 'Dados ocultos' : 'Ocultar dados'}</span>
+    </button>
+  );
+}
+
+function PainelProfissional({ children }: { children: React.ReactNode }) {
   const { usuario, carregando, sair } = useSessao();
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
@@ -53,13 +85,14 @@ export default function LayoutProfissional({ children }: { children: React.React
           >
             ☰
           </button>
-          <Link href="/alunos" aria-label="Vívio Fit — início">
+          <Link href="/resumo" aria-label="Vívio Fit — início">
             <Marca tamanho={26} id="cabecalho" />
           </Link>
         </div>
 
-        <div className="flex items-center gap-lg">
-          <div className="text-right">
+        <div className="flex items-center gap-md">
+          <BotaoDiscreto />
+          <div className="hidden text-right sm:block">
             <p className="text-sm font-semibold">{usuario.nome}</p>
             <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
               {NOME_DO_PAPEL[usuario.papel] ?? usuario.papel}
@@ -110,5 +143,19 @@ export default function LayoutProfissional({ children }: { children: React.React
         </main>
       </div>
     </div>
+  );
+}
+
+/*
+  O provedor envolve o painel inteiro, e não cada tela: o modo discreto tem de
+  sobreviver à navegação. Ligar na ficha da aluna e ver os números voltarem ao
+  abrir o comparativo seria pior que não ter — a pessoa confiaria numa proteção
+  que já tinha caído.
+*/
+export default function LayoutProfissional({ children }: { children: React.ReactNode }) {
+  return (
+    <ProvedorDeModoDiscreto>
+      <PainelProfissional>{children}</PainelProfissional>
+    </ProvedorDeModoDiscreto>
   );
 }

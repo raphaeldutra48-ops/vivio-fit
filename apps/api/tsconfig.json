@@ -1,15 +1,26 @@
 {
+  // Visão AMPLA: editor, ESLint e `pnpm typecheck` enxergam tudo.
+  //
+  // Antes este arquivo era o do build — `rootDir: src`, `exclude: [test]` — e o
+  // `typecheck` usava ele. O efeito era que `test/`, `prisma/` e `scripts/`
+  // não passavam por verificação nenhuma: os 648 testes e2e e todos os scripts
+  // de seed e migração. O migrador do Supabase chegou a rodar contra o banco
+  // com uma variável declarada duas vezes, e o `tsc` dizia estar limpo porque
+  // nem abria o arquivo.
+  //
+  // O `nest build` agora usa `tsconfig.build.json`, que estreita para `src`.
+  // A ordem certa é esta: o arquivo padrão cobre tudo, e o build restringe.
+  // O contrário deixa buraco silencioso, que foi o que aconteceu.
   "extends": "@vivio/config/tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
-    "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": "./",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"]
+  "include": ["src/**/*", "test/**/*", "prisma/**/*", "scripts/**/*", "*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

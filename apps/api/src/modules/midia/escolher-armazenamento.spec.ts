@@ -85,30 +85,27 @@ describe('escolherDriverDeMidia', () => {
   });
 
   /**
-   * O aviso não pode mentir. Com volume montado a foto dura, e gritar o
-   * contrário ensina todo mundo a ignorar o log — aí o dia em que ele estiver
-   * certo, ninguém lê.
+   * O aviso não pode mentir — e agora ele é sempre verdadeiro.
+   *
+   * Enquanto o app rodava no Railway havia como montar um volume persistente,
+   * e nesse caso gritar "as fotos serão apagadas" seria falso. Na Cloudflare
+   * não existe volume para montar: Worker não tem disco e contêiner tem
+   * sistema de arquivos efêmero. Em produção sem R2, a foto morre no próximo
+   * deploy — e o log diz isso, sem ressalva.
    */
-  it('com volume persistente não grita, e diz qual disco está em uso', () => {
-    const { logger: l, error, warn, log } = logger();
-    const config = configFalsa({
-      NODE_ENV: 'production',
-      RAILWAY_VOLUME_MOUNT_PATH: '/dados/midia',
-      MEDIA_DIR: '/dados/midia',
-    });
+  it('em produção sem R2, avisa que a mídia será perdida', () => {
+    const { logger: l, error } = logger();
+    const config = configFalsa({ NODE_ENV: 'production', MEDIA_DIR: '/dados/midia' });
 
     expect(escolherDriverDeMidia(config, l)).toBe('LOCAL');
-    expect(error).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
-    expect(log.mock.calls[0]![0]).toMatch(/sobrevive ao deploy/);
+    expect(error).toHaveBeenCalled();
   });
 
-  /** R2 configurado ganha do volume: object storage é melhor que disco. */
-  it('R2 tem precedência sobre o volume', () => {
+  /** R2 ganha do disco sempre: é o único que sobrevive ao deploy. */
+  it('R2 tem precedência sobre o disco local', () => {
     const { logger: l } = logger();
     const config = configFalsa({
       ...R2_COMPLETO,
-      RAILWAY_VOLUME_MOUNT_PATH: '/dados/midia',
       MEDIA_DIR: '/dados/midia',
     });
 
@@ -117,36 +114,16 @@ describe('escolherDriverDeMidia', () => {
 });
 
 describe('midiaEmDiscoPersistente', () => {
-  it('reconhece o MEDIA_DIR dentro do volume montado', () => {
-    expect(
-      midiaEmDiscoPersistente(
-        configFalsa({ RAILWAY_VOLUME_MOUNT_PATH: '/dados/midia', MEDIA_DIR: '/dados/midia' }),
-      ),
-    ).toBe(true);
-
-    expect(
-      midiaEmDiscoPersistente(
-        configFalsa({ RAILWAY_VOLUME_MOUNT_PATH: '/dados', MEDIA_DIR: '/dados/midia/fotos' }),
-      ),
-    ).toBe(true);
-  });
-
-  /** Prefixo de string não basta: /dados-teste não está dentro de /dados. */
-  it('não confunde prefixo de texto com pasta de dentro', () => {
-    expect(
-      midiaEmDiscoPersistente(
-        configFalsa({ RAILWAY_VOLUME_MOUNT_PATH: '/dados', MEDIA_DIR: '/dados-teste/midia' }),
-      ),
-    ).toBe(false);
-  });
-
-  it('sem volume montado, ou apontando para fora dele, é efêmero', () => {
+  /*
+    Os casos de caminho — `MEDIA_DIR` dentro do volume, prefixo de texto que não
+    é pasta de dentro — sumiram junto com o Railway, que era quem expunha
+    `RAILWAY_VOLUME_MOUNT_PATH`. Na hospedagem atual não há volume nenhum para
+    apontar, então a resposta é uma só.
+  */
+  it('não há disco persistente na Cloudflare, em nenhuma configuração', () => {
     expect(midiaEmDiscoPersistente(configFalsa({ MEDIA_DIR: '/dados/midia' }))).toBe(false);
-    expect(
-      midiaEmDiscoPersistente(
-        configFalsa({ RAILWAY_VOLUME_MOUNT_PATH: '/dados/midia', MEDIA_DIR: './media' }),
-      ),
-    ).toBe(false);
+    expect(midiaEmDiscoPersistente(configFalsa({ MEDIA_DIR: './media' }))).toBe(false);
+    expect(midiaEmDiscoPersistente(configFalsa({}))).toBe(false);
   });
 
   /** Meia configuração é variável esquecida, não escolha — avisa mesmo em dev. */

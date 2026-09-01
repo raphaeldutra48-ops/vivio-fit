@@ -32,7 +32,7 @@ export default function Login() {
         setErro('Esta área é do profissional. Alunos usam o aplicativo no celular.');
         return;
       }
-      router.push('/alunos');
+      router.push('/resumo');
     } catch (e) {
       // O código é estável; o texto da API pode mudar sem quebrar a tela.
       if (e instanceof ErroApi && e.codigo === 'EMAIL_NAO_VERIFICADO') {

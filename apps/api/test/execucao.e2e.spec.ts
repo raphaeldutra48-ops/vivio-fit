@@ -19,7 +19,6 @@ describe('Execução de treino (e2e)', () => {
   let idSessao: string;
   let idItemSupino: string;
   let idExercicioSupino: string;
-  let idPlano: string;
 
   const url = (c: string) => `/api/v1${c}`;
 
@@ -85,7 +84,6 @@ describe('Execução de treino (e2e)', () => {
         ],
       });
 
-    idPlano = plano.body.id;
     idSessao = plano.body.sessoes[0].id;
     idItemSupino = plano.body.sessoes[0].itens[0].id;
     idExercicioSupino = supino.id;

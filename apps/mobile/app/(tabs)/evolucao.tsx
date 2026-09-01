@@ -3,6 +3,7 @@ import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Carregando, FalhouAoCarregar } from '../../src/componentes/Estado';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 import { useSincronizacao } from '../../src/sincronizacao';
@@ -12,12 +13,43 @@ export default function Evolucao() {
   const { pendentes, sincronizando, sincronizar } = useSincronizacao();
   const router = useRouter();
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
+  /*
+    Três estados, não um. Antes o erro era engolido e a lista ficava vazia — o
+    mesmo vazio de quem nunca treinou. O aluno sem sinal lia "0 treinos · 0
+    séries · 0 kg" com cinquenta treinos gravados no servidor, e concluía que
+    tinha perdido o histórico.
+  */
+  const [situacao, setSituacao] = useState<'carregando' | 'erro' | 'pronto'>('carregando');
+  /** Sobe a cada toque em "tentar de novo", para o efeito rodar outra vez. */
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     if (!usuario) return;
-    sdk.execucoes.listar(usuario.id, 30).then(setExecucoes).catch(() => undefined);
+    let ativo = true;
+    setSituacao('carregando');
+    sdk.execucoes
+      .listar(usuario.id, 30)
+      .then((lista) => {
+        if (!ativo) return;
+        setExecucoes(lista);
+        setSituacao('pronto');
+      })
+      .catch(() => ativo && setSituacao('erro'));
+    return () => {
+      ativo = false;
+    };
     // Recarrega quando a fila esvazia: o treino recém-enviado precisa aparecer.
-  }, [usuario, pendentes.length]);
+  }, [usuario, pendentes.length, tentativa]);
+
+  /*
+    Dado bom continua na tela mesmo quando a recarga falha — o aviso vai por
+    cima. Apagar um histórico já carregado porque a rede oscilou seria trocar
+    uma informação certa por nenhuma.
+
+    O contrário também vale: sem nunca ter carregado, não há número a mostrar,
+    e o zero seria mentira.
+  */
+  const podeMostrarNumeros = situacao === 'pronto' || execucoes.length > 0;
 
   const volumeTotal = execucoes.reduce((soma, e) => soma + e.volumeTotalKg, 0);
   const totalSeries = execucoes.reduce((soma, e) => soma + e.totalSeries, 0);
@@ -53,6 +85,20 @@ export default function Evolucao() {
         </Pressable>
       )}
 
+      {/*
+        Os números só aparecem quando são verdade. Enquanto carrega ou depois
+        de falhar, mostrar "0 treinos" seria pior que não mostrar nada — é uma
+        afirmação sobre a vida da pessoa, e estaria errada.
+      */}
+      {situacao === 'carregando' && !podeMostrarNumeros && <Carregando oQue="Buscando seus treinos…" />}
+      {situacao === 'erro' && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar seu histórico agora. Ele continua salvo — nada foi perdido."
+          aoTentarDeNovo={() => setTentativa((t) => t + 1)}
+        />
+      )}
+
+      {podeMostrarNumeros && (
       <View style={{ flexDirection: 'row', gap: espacamento.md }}>
         {[
           { rotulo: 'Treinos', valor: execucoes.length.toString() },
@@ -85,6 +131,7 @@ export default function Evolucao() {
           </View>
         ))}
       </View>
+      )}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento.sm }}>
         {[
@@ -117,11 +164,16 @@ export default function Evolucao() {
         ))}
       </View>
 
-      <Text style={{ fontSize: tipografia.tamanho.lg, fontWeight: '600', color: tema.textoPrimario }}>
-        Histórico
-      </Text>
+      {podeMostrarNumeros && (
+        <Text
+          style={{ fontSize: tipografia.tamanho.lg, fontWeight: '600', color: tema.textoPrimario }}
+        >
+          Histórico
+        </Text>
+      )}
 
-      {execucoes.length === 0 && (
+      {/* Este vazio agora é o de verdade: carregou e não há treino nenhum. */}
+      {situacao === 'pronto' && execucoes.length === 0 && (
         <Text style={{ color: tema.textoSecundario }}>
           Seus treinos aparecem aqui depois que você registrar o primeiro.
         </Text>

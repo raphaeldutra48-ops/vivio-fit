@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { FeedbackDoAluno, PainelDeFeedback } from '@vivio/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -185,13 +186,21 @@ describe('Feedback pós-treino do profissional (e2e)', () => {
     await app.close();
   });
 
-  const doFalante = (corpo: { linhas: { aluno: { id: string } }[] }) =>
+  /*
+    Tipado com `PainelDeFeedback`, o contrato de verdade, e nao com uma forma
+    minima so para filtrar. A versao anterior declarava apenas `aluno.id`, e
+    entao cada teste que precisava de `teveDor` ou `dificuldade` reinterpretava
+    o resultado com `as` — conversao que o TypeScript recusa quando as formas
+    nao se sobrepoem. O `as` escondia isso enquanto `test/` ficou fora do
+    typecheck; assim que entrou, os quatro apareceram de uma vez.
+  */
+  const doFalante = (corpo: PainelDeFeedback): FeedbackDoAluno[] =>
     corpo.linhas.filter((l) => l.aluno.id === idFalante);
 
   describe('o que chega', () => {
     it('traz os cinco treinos do aluno que autorizou', async () => {
       const r = await buscar('?dias=14').expect(200);
-      expect(doFalante(r.body)).toHaveLength(5);
+      expect(doFalante(r.body as PainelDeFeedback)).toHaveLength(5);
     });
 
     /*
@@ -214,11 +223,7 @@ describe('Feedback pós-treino do profissional (e2e)', () => {
     */
     it('a dor com sequência mais longa vem primeiro, não o treino de hoje', async () => {
       const r = await buscar('?dias=14').expect(200);
-      const linhas = doFalante(r.body) as {
-        teveDor: boolean;
-        sequenciaDeDor: number | null;
-        dificuldade: number;
-      }[];
+      const linhas = doFalante(r.body as PainelDeFeedback);
 
       expect(linhas[0].teveDor).toBe(true);
       expect(linhas[0].sequenciaDeDor).toBe(2);
@@ -229,7 +234,7 @@ describe('Feedback pós-treino do profissional (e2e)', () => {
 
     it('o treino tranquilo fica por último', async () => {
       const r = await buscar('?dias=14').expect(200);
-      const linhas = doFalante(r.body) as { teveDor: boolean; dificuldade: number }[];
+      const linhas = doFalante(r.body as PainelDeFeedback);
       const ultima = linhas[linhas.length - 1];
       expect(ultima.teveDor).toBe(false);
       expect(ultima.dificuldade).toBe(3);
@@ -245,7 +250,7 @@ describe('Feedback pós-treino do profissional (e2e)', () => {
     */
     it('a janela curta não reseta a contagem', async () => {
       const r = await buscar('?dias=5').expect(200);
-      const linhas = doFalante(r.body) as { teveDor: boolean; sequenciaDeDor: number | null }[];
+      const linhas = doFalante(r.body as PainelDeFeedback);
 
       const comDor = linhas.filter((l) => l.teveDor);
       expect(comDor).toHaveLength(1);
@@ -263,7 +268,7 @@ describe('Feedback pós-treino do profissional (e2e)', () => {
 
     it('apenasAtencao esconde o que está bem', async () => {
       const r = await buscar('?dias=14&apenasAtencao=true').expect(200);
-      const linhas = doFalante(r.body) as { teveDor: boolean; dificuldade: number }[];
+      const linhas = doFalante(r.body as PainelDeFeedback);
 
       expect(linhas).toHaveLength(3);
       expect(linhas.every((l) => l.teveDor || l.dificuldade === 1 || l.dificuldade === 5)).toBe(
