@@ -1,20 +1,46 @@
 {
   // Configuração do Worker que serve o painel web.
   //
-  // Ela mora em `apps/web` e não na raiz por causa do erro que o deploy deu:
-  // "The Cloudflare application detection logic has been run in the root of a
-  // workspace instead of targeting a specific project". O wrangler precisa ser
-  // executado de dentro da aplicação, não do monorepo — este arquivo é o que
-  // marca onde a aplicação começa.
+  // ## Por que ela mora em `apps/web` e não na raiz
+  //
+  // O primeiro deploy falhou com "The Cloudflare application detection logic
+  // has been run in the root of a workspace instead of targeting a specific
+  // project": o wrangler precisa ser executado de dentro da aplicação, não do
+  // monorepo. Este arquivo é o que marca onde a aplicação começa.
+  //
+  // No painel, basta apontar **Root directory = apps/web**. O resto — inclusive
+  // o build — está aqui, versionado junto do código.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vivio-web",
   "main": ".open-next/worker.js",
-  // Data de compatibilidade fixa: subir sozinha mudaria o comportamento do
-  // runtime sem ninguém pedir.
+  // Data fixa: subir sozinha mudaria o comportamento do runtime sem ninguém
+  // pedir.
   "compatibility_date": "2026-08-01",
-  // Exigido pelo adaptador do Next: ele usa APIs de Node (streams, buffer) que
-  // só existem no Worker com esta bandeira.
+  // Exigidas pelo adaptador do Next: ele usa APIs de Node (streams, buffer) que
+  // no Worker só existem com esta bandeira.
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  /*
+    O build vive aqui, e não no campo "Build command" do painel.
+
+    O deploy anterior rodou `npx wrangler deploy` sem nenhum build antes — não
+    havia `worker.js` para publicar. Com o comando declarado no próprio arquivo
+    de configuração, `wrangler deploy` constrói e publica numa etapa só, e a
+    receita fica versionada junto do código em vez de num formulário que
+    ninguém revisa.
+
+    `next build` sai separado do adaptador de propósito: o `opennextjs-cloudflare`
+    chama `pnpm build` por dentro com `execSync`, e a chamada aninhada quebra
+    por causa das variáveis `npm_config_*` que o pnpm externo injeta.
+
+    `npx` e não `pnpm exec`: o wrangler roda este comando pelo shell do sistema,
+    que no Windows é o `cmd` e não herda o PATH do terminal. O `npx` vem com o
+    Node e acha os binários de `node_modules` nos dois ambientes.
+  */
+  "build": {
+    "command": "npx next build && npx opennextjs-cloudflare build --skipNextBuild"
+  },
+
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
