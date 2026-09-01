@@ -377,7 +377,7 @@ não sobre data.
 
 ## Resolvidas
 
-### A suíte ganhou banco próprio — resolvida em 2026-09-01
+### A suíte parou de poder apagar gente de verdade — resolvida em 2026-09-01
 
 Era a pendência 2, e ela estava **pior do que descrita**. O texto dizia "o mesmo
 Neon usado para desenvolver"; na verdade era o mesmo Neon usado em **produção**.
@@ -385,22 +385,26 @@ Neon usado para desenvolver"; na verdade era o mesmo Neon usado em **produção*
 `ep-jolly-glade-ayydu988` — o mesmo banco, por duas portas.
 
 A rede de segurança não pegou porque procurava a palavra `prod` na URL, e nenhum
-provedor gerenciado põe isso no hostname. Regra na forma errada: procurava o
-nome do perigo em vez de exigir que o seguro fosse declarado.
+provedor gerenciado põe isso no hostname. A regra procurava o **nome** do perigo.
 
-**O que mudou:**
+**A solução mudou de ideia uma vez, e vale registrar por quê.** A primeira
+versão usou o Neon — liberado pela migração para o Supabase — como banco de
+teste separado. Funcionava, mas manter dois provedores só para isso foi contra a
+decisão de ficar em Cloudflare e Supabase, e a escolha passou a ser rodar contra
+o banco único.
 
-1. A migração para o Supabase liberou o Neon. Ele tem o schema completo e nenhum
-   usuário real — virou o banco de teste que faltava. `DATABASE_URL_TEST` aponta
-   para lá.
-2. `banco-de-teste.ts` agora **recusa rodar** sem declaração explícita:
-   `DATABASE_URL_TEST` num branch próprio, ou `BANCO_DE_TESTE_ASSUMIDO=sim` para
-   quem aceita mexer no banco comum de propósito. Verificado nos dois sentidos.
-3. O aviso antigo dizia "banco de DESENVOLVIMENTO". Reescrito — um aviso que
-   nomeia errado o risco é pior que nenhum, porque tranquiliza.
+O que protege agora **olha o conteúdo**, não o nome nem a variável: antes de
+qualquer arquivo de teste, `test/guarda-de-producao.ts` pergunta ao banco se há
+usuário fora da semente (`@viviofit.com.br`, `@exemplo.com`, `@teste.com`). Se
+houver, recusa a suíte inteira.
 
-Os 6 usuários `@teste.com` que a suíte tinha criado não foram levados para o
-Supabase: o migrador os deixa para trás junto com tudo que depende deles.
+Enquanto o app tem só semente dentro, apagar não custa nada. No dia em que o
+primeiro aluno se cadastrar, o portão fecha sozinho — sem depender de alguém
+lembrar de trocar uma variável no dia certo.
+
+A régua tem teste próprio (`guarda-de-producao.spec.ts`), e não por capricho:
+provar o guard criando um usuário falso no banco seria escrever em produção para
+verificar a proteção de produção.
 
 ### O laudo do exame passou a ter arquivo — resolvida em 2026-08-04
 **Era:** pendência 22. O modelo já tinha `chaveArquivo` e `podeVerArquivo()` já

@@ -14,6 +14,12 @@ export default defineConfig({
     // Decide o banco antes de qualquer import — o PrismaClient lê DATABASE_URL
     // ao ser construído, então depois já é tarde.
     setupFiles: ['./test/banco-de-teste.ts'],
+    /*
+      Roda UMA vez antes de tudo e recusa a suite se o banco tiver usuario de
+      verdade dentro. Fica aqui, e nao no setup por arquivo, porque a pergunta
+      e a mesma para os 48 e porque precisa de `await`.
+    */
+    globalSetup: ['./test/guarda-de-producao.ts'],
     // O Neon do plano gratuito escala a zero e fica lento sob carga; com a
     // suíte inteira, uma requisição chega a levar 10s. Margem generosa evita
     // falha por lentidão de infraestrutura sendo lida como bug.

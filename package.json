@@ -11,7 +11,9 @@
     "dev": "turbo run dev",
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "cf:build": "pnpm --filter @vivio/web cf:build",
+    "cf:deploy": "pnpm --filter @vivio/web cf:deploy"
   },
   "devDependencies": {
     "eslint": "^9.39.5",
