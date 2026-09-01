@@ -22,7 +22,8 @@
     "importar-wger": "tsx prisma/importar-wger.ts",
     "importar-taco": "tsx prisma/importar-taco.ts",
     "migrar-supabase": "tsx prisma/migrar-para-supabase.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "semear-auth": "tsx prisma/semear-auth.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
