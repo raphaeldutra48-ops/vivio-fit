@@ -1782,3 +1782,48 @@ model SessaoRefresh {
   @@index([userId, revogadoEm])
   @@index([familiaId])
 }
+
+/// Regra que transforma achado clínico em orientação endereçada a um papel.
+///
+/// Era um arranjo em TypeScript dentro da API. Virou tabela quando o acesso
+/// passou a ser por RLS: sem a API no meio, o alerta precisa nascer no banco —
+/// e como regra é DADO e não código, tabela é o lugar certo.
+///
+/// Ganho que veio junto: mudar o texto de uma orientação passou a ser mudança
+/// de linha, não deploy. Quem escreve essa orientação é profissional de saúde,
+/// não quem mexe no repositório.
+model RegraDeAlerta {
+  /// Identificador estável. Entra na deduplicação do alerta — mudar quebra o
+  /// histórico, porque o alerta já emitido aponta para cá.
+  id String @id
+
+  /// De onde o achado vem: MARCADOR (exame) ou CONDICAO (condição de saúde).
+  origem String
+
+  /// O marcador do exame, quando `origem = MARCADOR`.
+  marcador String?
+  /// As classificações que disparam: ATENCAO, CRITICO.
+  quando String[]
+  /// Distingue "baixo demais" de "alto demais" no mesmo marcador.
+  lado String?
+
+  /// O tipo de condição, quando `origem = CONDICAO`.
+  tipoCondicao String?
+  /// A região do corpo, quando a condição a tiver.
+  regiao       String?
+
+  /// PERSONAL | NUTRICIONISTA | MEDICO — quem recebe esta orientação.
+  papelDestino String
+  severidade   String
+  titulo       String
+  /// O que fazer, na língua de quem recebe. O personal lê movimento e padrão,
+  /// não diagnóstico.
+  orientacao   String
+
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([origem, marcador, ativa])
+  @@index([origem, tipoCondicao, ativa])
+}
