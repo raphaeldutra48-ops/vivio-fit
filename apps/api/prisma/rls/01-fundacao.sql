@@ -49,10 +49,18 @@ as $$
 
     Claim ausente devolve nulo, e nulo em condicao de politica e falso: sem
     token valido, nada e visivel.
+
+    O `nullif` de DENTRO existe por um defeito que so aparece na segunda
+    consulta da mesma conexao: `current_setting(x, true)` devolve nulo enquanto
+    a variavel nunca foi definida, mas depois que UMA transacao fez `set local`
+    nela, ela passa a existir na sessao e volta para STRING VAZIA quando a
+    transacao termina. E `''::jsonb` nao devolve nulo — lanca erro. Com o
+    coalesce so depois do cast, qualquer conexao de manutencao que encostasse
+    numa tabela com politica caia com "invalid input syntax for type json".
   */
   select nullif(
     coalesce(
-      current_setting('request.jwt.claims', true)::jsonb ->> 'vivio_id',
+      nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'vivio_id',
       ''
     ), '')
 $$;
@@ -72,11 +80,16 @@ $$;
 /*
   Condição 2 — vínculo ATIVO.
 
+  Em duas camadas por necessidade nova: o compartilhamento entre profissionais
+  precisa perguntar "o DETENTOR ainda tem vínculo?", e não só "eu tenho?". A
+  pergunta genérica mora em `vinculo_de`; `tem_vinculo` é ela aplicada a quem
+  está pedindo agora.
+
   O próprio aluno sempre passa. ADMIN **não** passa: administrar a plataforma
   não dá direito a ler prontuário, e é exatamente esse o acesso que a LGPD
   trata como indevido. A regra vem do CareLinkGuard e é mantida ao pé da letra.
 */
-create or replace function public.tem_vinculo(p_aluno_id text)
+create or replace function public.vinculo_de(p_profissional_id text, p_aluno_id text)
 returns boolean
 language sql
 stable
@@ -84,16 +97,27 @@ security definer
 set search_path = public
 as $$
   select
-    public.usuario_atual() is not null
+    p_profissional_id is not null
     and (
-      public.usuario_atual() = p_aluno_id
+      p_profissional_id = p_aluno_id
       or exists (
         select 1 from public."Vinculo" v
-      where v."alunoId" = p_aluno_id
-        and v."profissionalId" = public.usuario_atual()
+        where v."alunoId" = p_aluno_id
+          and v."profissionalId" = p_profissional_id
           and v.status = 'ATIVO'
       )
     )
+$$;
+
+create or replace function public.tem_vinculo(p_aluno_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and public.vinculo_de(public.usuario_atual(), p_aluno_id)
 $$;
 
 /*
@@ -103,8 +127,66 @@ $$;
   o caso mais comum. Esquecer essa metade da condição já causou um defeito
   antes: um relatório filtrava só por `profissionalId` e mostrava aluno que
   autorizou tudo como se não tivesse autorizado nada.
+
+  A guarda `p_profissional_id is not null` na versão genérica é a MESMA que
+  custou um teste na versão de sessão: `profissionalId is null` casa com
+  qualquer um, inclusive com ninguém. Passar nulo aqui devolveria TRUE.
 */
+create or replace function public.consentimento_de(
+  p_profissional_id text,
+  p_aluno_id text,
+  p_escopo text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p_profissional_id is not null
+    and (
+      p_profissional_id = p_aluno_id
+      or exists (
+        select 1 from public."Consentimento" c
+        where c."alunoId" = p_aluno_id
+          and c.escopo::text = p_escopo
+          and c."revogadoEm" is null
+          and (c."profissionalId" is null or c."profissionalId" = p_profissional_id)
+      )
+    )
+$$;
+
 create or replace function public.tem_consentimento(p_aluno_id text, p_escopo text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and public.consentimento_de(public.usuario_atual(), p_aluno_id, p_escopo)
+$$;
+
+/*
+  Condição 3 por outro caminho — autorização de um colega.
+
+  O aluno pode ter consentido a UM profissional e não à equipe. Quando a
+  nutricionista precisa do exame que só o médico enxerga, ela pede, e ele
+  autoriza. A tabela `SolicitacaoDeAcesso` guarda esse acordo.
+
+  ## A permissão é derivada, e é isso que a mantém honesta
+
+  Quem autoriza não é o dono do dado — o dono é o aluno. Então a autorização
+  não pode valer mais do que o acesso de quem a concedeu: cada leitura confere
+  se o DETENTOR ainda tem vínculo e consentimento agora. Se a Ana revogar o
+  consentimento do médico hoje, tudo que ele compartilhou fecha no mesmo
+  instante, sem rotina de limpeza e sem ninguém precisar lembrar.
+
+  Guardar um `permitido = true` na linha seria mais rápido e estaria errado
+  algumas horas por mês — que são exatamente as horas que importam.
+*/
+create or replace function public.tem_acesso_compartilhado(p_aluno_id text, p_escopo text)
 returns boolean
 language sql
 stable
@@ -113,20 +195,25 @@ set search_path = public
 as $$
   select
     public.usuario_atual() is not null
-    and (
-      public.usuario_atual() = p_aluno_id
-      or exists (
-        select 1 from public."Consentimento" c
-      where c."alunoId" = p_aluno_id
-        and c.escopo::text = p_escopo
-        and c."revogadoEm" is null
-          and (c."profissionalId" is null or c."profissionalId" = public.usuario_atual())
-      )
+    and exists (
+      select 1 from public."SolicitacaoDeAcesso" s
+      where s."alunoId" = p_aluno_id
+        and s."solicitanteId" = public.usuario_atual()
+        and s.escopo::text = p_escopo
+        and s.status = 'APROVADA'
+        and s."revogadoEm" is null
+        and (s."expiraEm" is null or s."expiraEm" > now())
+        and public.vinculo_de(s."detentorId", p_aluno_id)
+        and public.consentimento_de(s."detentorId", p_aluno_id, p_escopo)
     )
 $$;
 
 /*
   As três juntas — o que cada política de tabela de dado de aluno vai chamar.
+
+  O compartilhamento entra em OU com o consentimento e em E com o vínculo, e a
+  posição é a regra inteira: um colega pode suprir a autorização do aluno para
+  um escopo, e ninguém pode suprir o fato de você atender aquela pessoa.
 */
 create or replace function public.pode_ler_do_aluno(p_aluno_id text, p_escopo text)
 returns boolean
@@ -137,5 +224,8 @@ set search_path = public
 as $$
   select public.usuario_atual() is not null
      and public.tem_vinculo(p_aluno_id)
-     and public.tem_consentimento(p_aluno_id, p_escopo)
+     and (
+       public.tem_consentimento(p_aluno_id, p_escopo)
+       or public.tem_acesso_compartilhado(p_aluno_id, p_escopo)
+     )
 $$;

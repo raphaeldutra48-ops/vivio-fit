@@ -25,7 +25,21 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.pode_ler_do_aluno(p_aluno_id, p_escopo)
+  /*
+    NÃO chama `pode_ler_do_aluno`, e a diferença é a razão de existir deste
+    comentário: desde que existe compartilhamento entre profissionais, ler pode
+    vir da autorização de um colega — e escrever, não.
+
+    Se esta função delegasse à de leitura, o médico aprovar "veja o exame da
+    Ana" daria à nutricionista o direito de LANÇAR exame nela, porque a política
+    de escrita já aceita o papel NUTRICIONISTA. Autorização emprestada abre o
+    prontuário para consulta, nunca para caneta.
+
+    Escrever exige o consentimento do próprio aluno a quem escreve. Sempre.
+  */
+  select public.usuario_atual() is not null
+     and public.tem_vinculo(p_aluno_id)
+     and public.tem_consentimento(p_aluno_id, p_escopo)
      and (
        /*
          Lista vazia = titular ou qualquer profissional vinculado e consentido.

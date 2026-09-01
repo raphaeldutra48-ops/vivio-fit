@@ -134,6 +134,10 @@ model User {
   mensagensEnviadas  Mensagem[]             @relation("MensagensEnviadas")
 
   @@index([papel, status])
+  solicitacoesFeitas      SolicitacaoDeAcesso[] @relation("SolicitacaoSolicitante")
+  solicitacoesRecebidas   SolicitacaoDeAcesso[] @relation("SolicitacaoDetentor")
+  solicitacoesSobreMim    SolicitacaoDeAcesso[] @relation("SolicitacaoAluno")
+
 }
 
 model PerfilAluno {
@@ -1826,4 +1830,57 @@ model RegraDeAlerta {
 
   @@index([origem, marcador, ativa])
   @@index([origem, tipoCondicao, ativa])
+}
+
+/// Status de um pedido de acesso entre profissionais.
+/// RECUSADA e REVOGADA sao terminais: nao se volta atras, pede-se de novo.
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
+  REVOGADA
+}
+
+/// Um profissional pede a outro para ler um escopo do aluno que os dois atendem.
+///
+/// Existe porque o consentimento pode ser dado a UM profissional, e nao a
+/// equipe: a Ana autoriza o medico a ver o clinico e nao autoriza mais
+/// ninguem. Quando a nutricionista precisa do exame para ajustar a carga
+/// proteica, ela nao tem como chegar nele — e a alternativa real, hoje, e o
+/// medico mandar um print por WhatsApp. Isto e o caminho de dentro.
+///
+/// A permissao que nasce daqui e DERIVADA: vale enquanto o detentor puder ler.
+/// Se a Ana revogar o consentimento do medico, todo compartilhamento que ele
+/// concedeu morre no mesmo instante, sem rotina de limpeza. Quem verifica isso
+/// e `tem_acesso_compartilhado`, na leitura, e nao um campo gravado aqui.
+model SolicitacaoDeAcesso {
+  id             String            @id @default(cuid())
+  alunoId        String
+  aluno          User              @relation("SolicitacaoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
+  /// Quem pede. Precisa de vinculo ATIVO com o aluno — pedir nao e porta de
+  /// entrada para paciente que voce nao atende.
+  solicitanteId  String
+  solicitante    User              @relation("SolicitacaoSolicitante", fields: [solicitanteId], references: [id])
+  /// Quem autoriza. Nao e dono do dado (o aluno e), e por isso nao pode
+  /// conceder mais do que ele proprio tem.
+  detentorId     String
+  detentor       User              @relation("SolicitacaoDetentor", fields: [detentorId], references: [id])
+  escopo         EscopoDado
+  /// Finalidade especifica, exigida pela LGPD e lida pelo aluno na tela dele.
+  justificativa  String
+  status         StatusSolicitacao @default(PENDENTE)
+  /// Resposta do detentor quando recusa, ou motivo da revogacao.
+  motivoResposta String?
+  /// Prazo. Nao e nulo por padrao de proposito: acesso clinico concedido para
+  /// sempre e vazamento marcado para depois. Quem precisa de mais, renova.
+  expiraEm       DateTime?         @default(dbgenerated("(now() + interval '90 days')"))
+  criadoEm       DateTime          @default(now())
+  respondidaEm   DateTime?
+  revogadoEm     DateTime?
+
+  /// A caixa de entrada do detentor: "o que esta esperando resposta minha".
+  @@index([detentorId, status])
+  /// O caminho quente: roda em toda leitura que passa por compartilhamento.
+  @@index([solicitanteId, alunoId, escopo, status])
+  @@index([alunoId, status])
 }

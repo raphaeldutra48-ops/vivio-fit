@@ -7,33 +7,101 @@ import { join } from 'node:path';
  *
  *   SUPABASE_DIRECT_URL=... pnpm --filter @vivio/api exec tsx prisma/aplicar-rls.ts
  *
- * O divisor de comandos existe porque o driver não aceita várias instruções
- * numa chamada — e a primeira versão dele custou um susto: ela descartava toda
- * linha começando com `--`, e como os `enable row level security` vinham logo
- * depois de um comentário, foram engolidos junto. As políticas existiam e não
- * valiam, e o teste acusou "vazamento" que era só ausência de aplicação.
+ * O divisor existe porque o driver não aceita várias instruções numa chamada, e
+ * já errou duas vezes por olhar LINHA em vez de ler o texto:
  *
- * Agora os comentários são removidos ANTES de dividir, em vez de servirem de
- * critério para descartar comando.
+ * 1. Descartava toda linha começando com `--`. Como os `enable row level
+ *    security` vinham logo depois de um comentário, foram engolidos junto: as
+ *    políticas existiam e não valiam, e o teste acusou "vazamento" que era só
+ *    ausência de aplicação.
+ * 2. Alternava "dentro do corpo" em `linha.includes('$$')`. Uma linha com DOIS
+ *    `$$` alternava uma vez, e `$funcao$` não era reconhecido de jeito nenhum.
+ *
+ * Agora é um leitor de caracteres com estado, que é o que o problema sempre foi:
+ * comentário, texto entre aspas e corpo entre cifrões só significam alguma coisa
+ * em relação ao que veio antes deles.
  */
 export function comandos(sql: string): string[] {
-  const semComentarios = sql
-    .replace(/\/\*[\s\S]*?\*\//g, '') // blocos
-    .replace(/^\s*--.*$/gm, ''); // linhas
-
   const partes: string[] = [];
   let atual = '';
-  let dentroDeCorpo = false; // corpo de função entre $$ ... $$
-  for (const linha of semComentarios.split('\n')) {
-    if (linha.includes('$$')) dentroDeCorpo = !dentroDeCorpo;
-    atual += linha + '\n';
-    if (!dentroDeCorpo && linha.trimEnd().endsWith(';')) {
-      const c = atual.trim().replace(/;$/, '');
+  let i = 0;
+
+  const adiantar = (ate: string): void => {
+    const fim = sql.indexOf(ate, i);
+    i = fim === -1 ? sql.length : fim + ate.length;
+  };
+
+  while (i < sql.length) {
+    const resto = sql.slice(i);
+
+    // Comentário some do comando: o Postgres não precisa dele, e ele já
+    // confundiu o divisor uma vez. Só some FORA de texto e de corpo — o que é
+    // possível agora, e não era quando isto era um `replace` no arquivo todo.
+    if (resto.startsWith('--')) {
+      adiantar('\n');
+      atual += ' ';
+      continue;
+    }
+    if (resto.startsWith('/*')) {
+      // Bloco aninha em Postgres, ao contrário de quase toda outra linguagem.
+      let nivel = 1;
+      i += 2;
+      while (i < sql.length && nivel > 0) {
+        if (sql.startsWith('/*', i)) {
+          nivel += 1;
+          i += 2;
+        } else if (sql.startsWith('*/', i)) {
+          nivel -= 1;
+          i += 2;
+        } else {
+          i += 1;
+        }
+      }
+      atual += ' ';
+      continue;
+    }
+
+    // Texto entre aspas simples, com '' como aspa escapada.
+    if (resto.startsWith("'")) {
+      const inicio = i;
+      i += 1;
+      while (i < sql.length) {
+        if (sql[i] === "'" && sql[i + 1] === "'") i += 2;
+        else if (sql[i] === "'") {
+          i += 1;
+          break;
+        } else i += 1;
+      }
+      atual += sql.slice(inicio, i);
+      continue;
+    }
+
+    // Corpo entre cifrões: $$ ou $qualquernome$. É aqui que vive o `;` que NÃO
+    // termina comando, e é por isso que este bloco existe.
+    const etiqueta = /^\$[A-Za-z_][A-Za-z_0-9]*\$|^\$\$/.exec(resto);
+    if (etiqueta) {
+      const marca = etiqueta[0];
+      const fim = sql.indexOf(marca, i + marca.length);
+      const ate = fim === -1 ? sql.length : fim + marca.length;
+      atual += sql.slice(i, ate);
+      i = ate;
+      continue;
+    }
+
+    if (sql[i] === ';') {
+      const c = atual.trim();
       if (c) partes.push(c);
       atual = '';
+      i += 1;
+      continue;
     }
+
+    atual += sql[i];
+    i += 1;
   }
-  if (atual.trim()) partes.push(atual.trim().replace(/;$/, ''));
+
+  const ultimo = atual.trim();
+  if (ultimo) partes.push(ultimo);
   return partes;
 }
 
@@ -56,4 +124,5 @@ async function principal(): Promise<void> {
     await prisma.$disconnect();
   }
 }
-void principal();
+
+if (require.main === module) void principal();
