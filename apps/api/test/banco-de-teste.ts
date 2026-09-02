@@ -25,6 +25,16 @@ import { config as carregarEnv } from 'dotenv';
  * sem depender de alguém lembrar.
  */
 carregarEnv();
+/*
+  `.env.supabase` também, e sem sobrescrever o que já veio.
+
+  Ali moram SUPABASE_URL e a chave de serviço, que os testes de RLS e de
+  cadastro por gatilho precisam — eles falam com o Auth e com o Postgres
+  diretamente, sem passar pelo Nest. Quem não tiver o arquivo simplesmente não
+  roda esses dois: eles se pulam sozinhos quando as variáveis faltam, em vez de
+  falharem e parecerem defeito.
+*/
+carregarEnv({ path: '.env.supabase' });
 
 const teste = process.env.DATABASE_URL_TEST;
 
