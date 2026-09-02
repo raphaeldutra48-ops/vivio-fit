@@ -1,7 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { FINALIDADE_POR_ESCOPO, VERSAO_TERMO_ATUAL } from '@vivio/contracts';
+import {
+  FINALIDADE_POR_ESCOPO,
+  VERSAO_TERMO_ATUAL,
+  montarEvolucaoCorporal,
+} from '@vivio/contracts';
 import type {
   AlertaResumo,
+  ConsultaEvolucao,
+  EvolucaoCorporal,
   CondicaoResumo,
   ConcederConsentimentoInput,
   ConsentimentoResumo,
@@ -11,7 +17,10 @@ import type {
   RegistrarAlunoInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
+  MedidaParaSerie,
+  MedidaResumo,
   RegistrarCondicaoInput,
+  RegistrarMedidaInput,
   ResolverCondicaoInput,
   RespostaRegistro,
   ResumoPessoa,
@@ -625,6 +634,104 @@ export class MotorSupabase {
     return this.paraCondicao(linha);
   }
 
+
+  // --- medida corporal ----------------------------------------------------
+
+  private static readonly CAMPOS_MEDIDA =
+    'id,data,pesoKg,percentualGordura,massaMagraKg,cinturaCm,quadrilCm,bracoCm,coxaCm,toraxCm,fonte';
+
+  private paraMedida(m: Record<string, unknown>): MedidaResumo {
+    return {
+      id: m.id as string,
+      data: String(m.data).slice(0, 10),
+      pesoKg: n(m.pesoKg),
+      percentualGordura: n(m.percentualGordura),
+      massaMagraKg: n(m.massaMagraKg),
+      cinturaCm: n(m.cinturaCm),
+      quadrilCm: n(m.quadrilCm),
+      bracoCm: n(m.bracoCm),
+      coxaCm: n(m.coxaCm),
+      toraxCm: n(m.toraxCm),
+      fonte: m.fonte as string,
+    };
+  }
+
+  async listarMedidas(alunoId: string): Promise<MedidaResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('Medida')
+        .select(MotorSupabase.CAMPOS_MEDIDA)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false })
+        .limit(200),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((m) => this.paraMedida(m));
+  }
+
+  async registrarMedida(alunoId: string, dados: RegistrarMedidaInput): Promise<MedidaResumo> {
+    const eu = await this.meuId();
+    const dia = (dados.data instanceof Date ? dados.data : new Date(dados.data))
+      .toISOString()
+      .slice(0, 10);
+    /*
+      `upsert` e não `insert`: a tabela tem unique (aluno, data), e pesar duas
+      vezes no mesmo dia é corrigir a primeira, não criar uma segunda. Era o
+      que a API fazia; um `insert` puro devolveria "já existe" para quem só
+      digitou o peso errado.
+
+      `atualizadoEm` vai à mão porque `@updatedAt` é do Prisma, não do
+      Postgres: pelo PostgREST não há quem o preencha.
+    */
+    const linha = this.ou(
+      await this.db
+        .from('Medida')
+        .upsert(
+          {
+            id: `${alunoId}-${dia}`,
+            alunoId,
+            ...dados,
+            data: dia,
+            registradoPorId: eu,
+            deletadoEm: null,
+            atualizadoEm: new Date().toISOString(),
+          },
+          { onConflict: 'alunoId,data' },
+        )
+        .select(MotorSupabase.CAMPOS_MEDIDA)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraMedida(linha);
+  }
+
+  /**
+   * As séries do gráfico, calculadas aqui a partir das linhas.
+   *
+   * O cálculo mora em `@vivio/contracts` — a MESMA função que a API chama
+   * enquanto ela existe. Não precisa de servidor: é conta sobre medidas que
+   * quem pergunta já pode ler, e se não pudesse a política não as teria
+   * devolvido.
+   *
+   * Vem em ordem CRESCENTE de data, ao contrário da listagem: `de`, `ate` e a
+   * variação saem do primeiro e do último ponto.
+   */
+  async evolucaoCorporal(
+    alunoId: string,
+    consulta: Partial<ConsultaEvolucao> = {},
+  ): Promise<EvolucaoCorporal> {
+    let q = this.db
+      .from('Medida')
+      .select(MotorSupabase.CAMPOS_MEDIDA)
+      .eq('alunoId', alunoId)
+      .is('deletadoEm', null)
+      .order('data', { ascending: true })
+      .limit(consulta.limit ?? 60);
+    if (consulta.de) q = q.gte('data', consulta.de);
+    if (consulta.ate) q = q.lte('data', consulta.ate);
+
+    const linhas = this.ou(await q) as unknown as MedidaParaSerie[];
+    return montarEvolucaoCorporal(linhas);
+  }
 }
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
@@ -676,6 +783,20 @@ interface LinhaCondicao {
   resolvidaEm: string | null;
   registradoPor: { id: string; nome: string };
   resolvidaPor: { id: string; nome: string } | null;
+}
+
+/**
+ * O Postgres devolve `numeric` como TEXTO pelo PostgREST.
+ *
+ * Sem esta conversão, `pesoKg` chegaria à tela como `"82.50"`, e um
+ * `peso > 80` compararia string com número — que em JavaScript funciona por
+ * coerção e falha em silêncio no primeiro peso de três dígitos, onde
+ * `"100" < "82.50"` é verdadeiro.
+ */
+function n(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const numero = Number(v);
+  return Number.isFinite(numero) ? numero : null;
 }
 
 /**

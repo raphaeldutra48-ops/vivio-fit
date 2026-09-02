@@ -971,20 +971,22 @@ export class VivioClient {
   };
 
   readonly medidas = {
-    listar: (alunoId: string): Promise<MedidaResumo[]> =>
-      this.requisicao<MedidaResumo[]>(`/alunos/${alunoId}/medidas`),
+    listar: (alunoId: string): Promise<MedidaResumo[]> => this.supabase.listarMedidas(alunoId),
 
     registrar: (alunoId: string, dados: RegistrarMedidaInput): Promise<MedidaResumo> =>
-      this.requisicao<MedidaResumo>(`/alunos/${alunoId}/medidas`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarMedida(alunoId, dados),
 
-    /** Séries prontas para gráfico: peso, gordura, massa magra e circunferências. */
-    evolucao: (alunoId: string, consulta: Partial<ConsultaEvolucao> = {}): Promise<EvolucaoCorporal> =>
-      this.requisicao<EvolucaoCorporal>(`/alunos/${alunoId}/medidas/evolucao`, {
-        query: { de: consulta.de, ate: consulta.ate, limit: consulta.limit },
-      }),
+    /**
+     * Series prontas para grafico.
+     *
+     * A conta e feita no cliente, com a MESMA funcao de `@vivio/contracts` que
+     * a API chama: e conta sobre medidas que quem pergunta ja pode ler, e uma
+     * agregacao assim nao precisa de servidor — precisa de um lugar com teste.
+     */
+    evolucao: (
+      alunoId: string,
+      consulta: Partial<ConsultaEvolucao> = {},
+    ): Promise<EvolucaoCorporal> => this.supabase.evolucaoCorporal(alunoId, consulta),
   };
 
   // --- nutrição -------------------------------------------------------------
