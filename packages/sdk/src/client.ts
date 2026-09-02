@@ -165,15 +165,6 @@ export interface OpcoesCliente {
   aoAtualizarTokens?: (tokens: ParDeTokens) => void | Promise<void>;
   /** Chamado quando a sessão morreu de vez e o usuário precisa logar de novo. */
   aoPerderSessao?: () => void | Promise<void>;
-  /**
-   * Navegador: o refresh token fica num cookie httpOnly que o JavaScript não
-   * enxerga, e só o access token de 15 minutos vive em memória. Um XSS passa a
-   * conseguir no máximo esses 15 minutos, em vez dos 30 dias do refresh.
-   *
-   * Não usar no mobile: não há cookie jar, e o SecureStore já é armazenamento
-   * do sistema operacional, fora do alcance do JavaScript.
-   */
-  usarCookieDeRefresh?: boolean;
   fetch?: typeof fetch;
 }
 
@@ -209,52 +200,17 @@ export class VivioClient {
     this.tokens = tokens;
   }
 
-  private async obterTokens(): Promise<TokensArmazenados | null> {
-    if (this.tokens) return this.tokens;
-    const carregados = (await this.opcoes.carregarTokens?.()) ?? null;
-    this.tokens = carregados;
-    return carregados;
-  }
+  /*
+    O que morava aqui, e por que sumiu.
 
-  private async guardar(par: ParDeTokens): Promise<void> {
-    this.tokens = { accessToken: par.accessToken, refreshToken: par.refreshToken };
-    await this.opcoes.aoAtualizarTokens?.(par);
-  }
+    `guardar` gravava o par de tokens; `renovar` fazia a renovacao compartilhada
+    — cinco 401 simultaneos nao podiam virar cinco refresh, porque o servidor,
+    corretamente, lia refresh reapresentado como vazamento e derrubava a sessao
+    inteira. Eram trinta linhas de codigo de concorrencia que existiam so para
+    nao dar tiro no proprio pe.
 
-  /**
-   * Renova o par. Concorrência importa: se cinco requisições receberem 401 ao
-   * mesmo tempo e cada uma tentar renovar, quatro vão reapresentar um refresh
-   * já usado — e o backend, corretamente, derruba a sessão inteira por suspeita
-   * de vazamento. Por isso a renovação é compartilhada.
-   */
-  private async renovar(): Promise<boolean> {
-    if (this.renovacaoEmCurso) return this.renovacaoEmCurso;
-
-    this.renovacaoEmCurso = (async () => {
-      const atuais = await this.obterTokens();
-      // No modo cookie o token não está aqui — quem decide se há sessão é o
-      // navegador, mandando (ou não) o cookie.
-      if (!this.opcoes.usarCookieDeRefresh && !atuais?.refreshToken) return false;
-      try {
-        const par = await this.requisicao<ParDeTokens>('/auth/refresh', {
-          metodo: 'POST',
-          corpo: this.opcoes.usarCookieDeRefresh ? {} : { refreshToken: atuais!.refreshToken },
-          autenticada: false,
-          jaTentouRenovar: true,
-        });
-        await this.guardar(par);
-        return true;
-      } catch {
-        this.tokens = null;
-        await this.opcoes.aoPerderSessao?.();
-        return false;
-      } finally {
-        this.renovacaoEmCurso = null;
-      }
-    })();
-
-    return this.renovacaoEmCurso;
-  }
+    O `supabase-js` faz as duas coisas, e serializa a renovacao sozinho.
+  */
 
   private async requisicao<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<T> {
     const { metodo = 'GET', corpo, query, autenticada = true, jaTentouRenovar = false } = opcoes;
@@ -266,11 +222,21 @@ export class VivioClient {
 
     const cabecalhos: Record<string, string> = {};
     if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
-    // É este cabeçalho que faz a API devolver o refresh em cookie em vez do corpo.
-    if (this.opcoes.usarCookieDeRefresh) cabecalhos['X-Vivio-Cliente'] = 'web';
     if (autenticada) {
-      const tokens = await this.obterTokens();
-      if (tokens) cabecalhos['Authorization'] = `Bearer ${tokens.accessToken}`;
+      /*
+        O token vem do Supabase, que agora e quem autentica.
+
+        Enquanto os grupos de dados nao migram, eles continuam batendo na API —
+        e a API aprendeu a aceitar esse token (`token-supabase.ts`). Ler do
+        campo antigo aqui deixaria o cabecalho VAZIO, porque `login` nao guarda
+        mais nada nele: toda chamada nao migrada voltava 401 com a pessoa
+        logada, e a tela concluia que a sessao tinha morrido.
+
+        `getSession()` do `supabase-js` renova sozinho quando falta pouco, o
+        que substitui o `renovar()` que vivia aqui.
+      */
+      const token = await this.supabase.token();
+      if (token) cabecalhos['Authorization'] = `Bearer ${token}`;
     }
 
     let resposta: Response;
@@ -279,8 +245,9 @@ export class VivioClient {
         method: metodo,
         headers: cabecalhos,
         body: corpo === undefined ? undefined : JSON.stringify(corpo),
-        // Sem isto o navegador não manda o cookie para outra origem.
-        credentials: this.opcoes.usarCookieDeRefresh ? 'include' : 'same-origin',
+        // Nao ha mais cookie nosso: a credencial e o token do Supabase, no
+        // cabecalho. `omit` deixa isso explicito em vez de depender do padrao.
+        credentials: 'omit',
       });
     } catch (erro) {
       throw new ErroApi(
@@ -292,9 +259,19 @@ export class VivioClient {
     }
 
     if (resposta.status === 401 && autenticada && !jaTentouRenovar) {
-      if (await this.renovar()) {
+      /*
+        Uma segunda chance, e so uma: pede a sessao de novo — o `supabase-js`
+        renova o token nessa hora se ele acabou de expirar — e repete.
+
+        O `renovar()` proprio, com toda a danca de concorrencia (cinco 401 ao
+        mesmo tempo nao podiam virar cinco refresh, que o servidor leria como
+        vazamento), saiu junto com a API. O `supabase-js` ja serializa isso.
+      */
+      const { data } = await this.supabase.db.auth.refreshSession();
+      if (data.session) {
         return this.requisicao<T>(caminho, { ...opcoes, jaTentouRenovar: true });
       }
+      await this.opcoes.aoPerderSessao?.();
     }
 
     if (resposta.status === 204) return undefined as T;
