@@ -66,12 +66,9 @@ export class CondicoesService {
       condição continua gravada e correta. Perder um aviso é ruim; perder o
       diagnóstico que o médico acabou de registrar é pior. E é idempotente.
     */
-    await this.alertas.gerarParaCondicao(alunoId, condicao.id, {
-      tipo: dados.tipo,
-      descricao: condicao.descricao,
-      regiao: (dados.regiao ?? null) as RegiaoCorpo | null,
-      gravidade: dados.gravidade,
-    });
+    // O alerta da condicao nasce no banco: `derivar_alertas_da_condicao`
+    // dispara no INSERT de `CondicaoSaude`, na mesma transacao.
+
 
     return paraResumo(condicao);
   }
@@ -109,7 +106,8 @@ export class CondicoesService {
 
     // O aviso existia porque a condição valia. Deixá-lo pendente faria o
     // personal continuar evitando agachamento por uma lesão que já teve alta.
-    await this.alertas.removerDaCondicao(condicaoId);
+    // O alerta some junto com a alta, por gatilho (`limpar_alertas_condicao`):
+    // assim nao existe caminho que resolva a condicao e esqueca o aviso.
 
     return paraResumo(condicao);
   }

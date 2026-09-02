@@ -6,13 +6,10 @@ import {
   type Marcador,
   type PapelDestino,
   type SeveridadeAlerta,
-  type SexoBiologico,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { podeVerMarcador } from '../exames/escopo';
-import { alertasDaCondicao, type CondicaoParaRegra } from './regras-condicao';
-import { alertasDoExame, type ResultadoParaRegra } from './regras';
 
 type LinhaAlerta = Prisma.AlertaClinicoGetPayload<{
   include: { reconhecidoPor: { select: { id: true; nome: true } } };
@@ -22,80 +19,26 @@ type LinhaAlerta = Prisma.AlertaClinicoGetPayload<{
 export class AlertasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Gera e grava os alertas de um exame.
-   *
-   * `skipDuplicates` com a unique (aluno, papel, regra, exame): reprocessar o
-   * mesmo exame não duplica aviso, e reconhecer um alerta não faz o próximo
-   * registro ressuscitá-lo.
-   */
-  async gerarParaExame(
-    alunoId: string,
-    exameId: string,
-    resultados: ResultadoParaRegra[],
-    sexo: SexoBiologico,
-  ): Promise<number> {
-    const gerados = alertasDoExame(resultados, sexo);
-    if (gerados.length === 0) return 0;
+  /*
+    A derivação saiu daqui: quem escreve alerta agora é o banco.
 
-    const { count } = await this.prisma.alertaClinico.createMany({
-      data: gerados.map((a) => ({
-        alunoId,
-        exameId,
-        papelDestino: a.papelDestino,
-        severidade: a.severidade,
-        regra: a.regra,
-        titulo: a.titulo,
-        orientacao: a.orientacao,
-        marcadorOrigem: a.marcador,
-      })),
-      skipDuplicates: true,
-    });
+    `derivar_alertas_do_marcador` e `derivar_alertas_da_condicao`
+    (`08-gatilho-alertas.sql`) fazem isto a partir da tabela `RegraDeAlerta`,
+    onde as 26 regras passaram a morar. Gatilho e não chamada de serviço porque
+    alerta que depende de alguém lembrar de chamar é alerta que um dia não
+    chega — e porque, sem API, não haveria quem chamasse.
 
-    return count;
-  }
+    Os dois conviveram por algumas horas, e o resultado foi aviso em dobro na
+    tela: o gatilho gravava `regra` com o id da linha (`ferro-baixo:PERSONAL`)
+    e o serviço com o slug (`ferro-baixo`), então a unique
+    (aluno, papel, regra, exame) não reconhecia os dois como o mesmo alerta.
+    Dois escritores na mesma tabela era o defeito; alinhar as chaves só teria
+    escondido ele.
 
-  /**
-   * Gera e grava os alertas de uma condição de saúde.
-   *
-   * Mesma mecânica do exame, outra origem. A unique por (aluno, papel, regra,
-   * condição) faz registrar a mesma condição de novo não encher a tela.
-   */
-  async gerarParaCondicao(
-    alunoId: string,
-    condicaoId: string,
-    condicao: CondicaoParaRegra,
-  ): Promise<number> {
-    const gerados = alertasDaCondicao(condicao);
-    if (gerados.length === 0) return 0;
-
-    const { count } = await this.prisma.alertaClinico.createMany({
-      data: gerados.map((a) => ({
-        alunoId,
-        condicaoId,
-        papelDestino: a.papelDestino,
-        severidade: a.severidade,
-        regra: a.regra,
-        titulo: a.titulo,
-        orientacao: a.orientacao,
-      })),
-      skipDuplicates: true,
-    });
-
-    return count;
-  }
-
-  /**
-   * Resolvida a condição, o aviso dela sai da frente.
-   *
-   * Apagar e não apenas marcar como reconhecido: o alerta existia porque a
-   * condição valia. Deixá-lo pendente faria o personal continuar evitando
-   * agachamento por uma lesão que já teve alta.
-   */
-  async removerDaCondicao(condicaoId: string): Promise<number> {
-    const { count } = await this.prisma.alertaClinico.deleteMany({ where: { condicaoId } });
-    return count;
-  }
+    `regras.ts` e `regras-condicao.ts` continuam onde estão: são a fonte de
+    onde `exportar-regras.ts` alimenta a tabela, e o teste que compara os dois
+    lados é o que garante que não divergem.
+  */
 
   /** Só os alertas endereçados ao papel de quem pediu. */
   async listar(alunoId: string, papel: Papel): Promise<AlertaResumo[]> {

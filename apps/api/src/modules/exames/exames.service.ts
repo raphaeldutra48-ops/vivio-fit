@@ -170,22 +170,15 @@ export class ExamesService {
     });
 
     /*
-      Os alertas cruzados nascem aqui — é o registro do exame que avisa o resto
-      da equipe de cuidado. Fica FORA da transação de propósito: se a geração
-      falhar, o exame continua gravado e correto. Perder um aviso é ruim;
-      perder o exame que o profissional acabou de digitar é pior, e a geração é
-      idempotente (a unique por regra + exame deixa reprocessar).
+      O alerta nao e gerado aqui: nasce no banco.
+
+      `derivar_alertas_do_marcador` dispara no INSERT de `ResultadoMarcador`,
+      dentro da mesma transacao que grava o exame. Ficava de fora de proposito
+      — perder um aviso e ruim, perder o exame digitado e pior — e no gatilho a
+      questao some: ou os dois entram, ou nenhum, e nao ha meio termo em que o
+      exame existe sem os avisos dele.
     */
-    await this.alertas.gerarParaExame(
-      alunoId,
-      exame.id,
-      exame.resultados.map((r) => ({
-        marcador: r.marcador as Marcador,
-        valor: Number(r.valor),
-        classificacao: r.classificacao as Classificacao,
-      })),
-      dados.sexo,
-    );
+
 
     return this.paraResumo(exame, papel);
   }

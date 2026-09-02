@@ -1810,6 +1810,13 @@ model RegraDeAlerta {
   quando String[]
   /// Distingue "baixo demais" de "alto demais" no mesmo marcador.
   lado String?
+  /// O numero que `lado` compara, por sexo: `{"M": 50, "F": 50}` ou `{"*": 5.4}`.
+  ///
+  /// Sem ele o gatilho ignorava `lado` e disparava a regra de "ferritina baixa"
+  /// tambem com ferritina alta — as duas sao "fora da faixa", e so o limite
+  /// distingue. A faixa vive em `@vivio/contracts`; aqui vem so o valor que a
+  /// regra precisa comparar, para o gatilho nao ter de saber de faixa nenhuma.
+  limites Json?
 
   /// O tipo de condição, quando `origem = CONDICAO`.
   tipoCondicao String?
