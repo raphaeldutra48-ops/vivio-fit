@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { FINALIDADE_POR_ESCOPO, VERSAO_TERMO_ATUAL } from '@vivio/contracts';
 import type {
+  AlertaResumo,
+  CondicaoResumo,
   ConcederConsentimentoInput,
   ConsentimentoResumo,
   EsqueciSenhaInput,
@@ -9,6 +11,8 @@ import type {
   RegistrarAlunoInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
+  RegistrarCondicaoInput,
+  ResolverCondicaoInput,
   RespostaRegistro,
   ResumoPessoa,
   UsuarioAutenticado,
@@ -467,6 +471,160 @@ export class MotorSupabase {
         .is('revogadoEm', null),
     );
   }
+
+  // --- alerta clínico -----------------------------------------------------
+
+  /*
+    A política já filtra por `papelDestino`: cada um recebe só os avisos
+    endereçados ao papel dele. Não há filtro a repetir aqui — repetir seria
+    criar um segundo lugar para a regra divergir.
+
+    `marcadorOrigem` e `exameId` vêm nulos para quem não pode vê-los porque a
+    linha NASCEU sem eles, e não porque alguém os apagou na saída. Ver
+    `13-colunas-sensiveis.sql`.
+  */
+  async listarAlertas(alunoId: string): Promise<AlertaResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('AlertaClinico')
+        .select(
+          'id,papelDestino,severidade,titulo,orientacao,marcadorOrigem,exameId,condicaoId,' +
+            'criadoEm,reconhecidoEm,' +
+            'reconhecidoPor:User!AlertaClinico_reconhecidoPorId_fkey(id,nome)',
+        )
+        .eq('alunoId', alunoId)
+        // Pendente primeiro; entre iguais, o mais novo antes.
+        .order('reconhecidoEm', { ascending: true, nullsFirst: true })
+        .order('criadoEm', { ascending: false })
+        .limit(100),
+    ) as unknown as LinhaAlerta[];
+
+    return linhas.map((a) => ({
+      id: a.id,
+      papelDestino: a.papelDestino as AlertaResumo['papelDestino'],
+      severidade: a.severidade as AlertaResumo['severidade'],
+      titulo: a.titulo,
+      orientacao: a.orientacao,
+      marcadorOrigem: a.marcadorOrigem,
+      exameId: a.exameId,
+      condicaoId: a.condicaoId,
+      criadoEm: a.criadoEm,
+      reconhecidoEm: a.reconhecidoEm,
+      reconhecidoPor: a.reconhecidoPor,
+    }));
+  }
+
+  async reconhecerAlerta(
+    alunoId: string,
+    alertaId: string,
+    anotacao?: string,
+  ): Promise<AlertaResumo> {
+    /*
+      `reconhecidoEm` e `reconhecidoPorId` NÃO são mandados: o gatilho os
+      carimba. Mandar o "quem" do lado do cliente seria deixar a assinatura do
+      reconhecimento ser escolhida por quem assina.
+    */
+    this.ou(
+      await this.db
+        .from('AlertaClinico')
+        .update({ reconhecidoEm: new Date().toISOString(), anotacao: anotacao ?? null })
+        .eq('id', alertaId)
+        .eq('alunoId', alunoId),
+    );
+    const lista = await this.listarAlertas(alunoId);
+    const alvo = lista.find((a) => a.id === alertaId);
+    if (!alvo) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Alerta não encontrado.', 404);
+    return alvo;
+  }
+
+  // --- condição de saúde --------------------------------------------------
+
+  private static readonly CAMPOS_CONDICAO =
+    'id,tipo,descricao,regiao,gravidade,inicioEm,observacao,criadoEm,resolvidaEm,' +
+    'registradoPor:User!CondicaoSaude_registradoPorId_fkey(id,nome),' +
+    'resolvidaPor:User!CondicaoSaude_resolvidaPorId_fkey(id,nome)';
+
+  private paraCondicao(c: LinhaCondicao): CondicaoResumo {
+    return {
+      id: c.id,
+      tipo: c.tipo as CondicaoResumo['tipo'],
+      descricao: c.descricao,
+      regiao: c.regiao as CondicaoResumo['regiao'],
+      gravidade: c.gravidade as CondicaoResumo['gravidade'],
+      inicioEm: c.inicioEm,
+      observacao: c.observacao,
+      registradoPor: c.registradoPor,
+      criadoEm: c.criadoEm,
+      resolvidaEm: c.resolvidaEm,
+      resolvidaPor: c.resolvidaPor,
+    };
+  }
+
+  async listarCondicoes(alunoId: string): Promise<CondicaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('CondicaoSaude')
+        .select(MotorSupabase.CAMPOS_CONDICAO)
+        .eq('alunoId', alunoId)
+        // Ativas primeiro: é a lista de "o que respeitar hoje".
+        .order('resolvidaEm', { ascending: true, nullsFirst: true })
+        .order('criadoEm', { ascending: false }),
+    ) as unknown as LinhaCondicao[];
+    return linhas.map((c) => this.paraCondicao(c));
+  }
+
+  async registrarCondicao(
+    alunoId: string,
+    dados: RegistrarCondicaoInput,
+  ): Promise<CondicaoResumo> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('CondicaoSaude')
+        .insert({
+          id: `${alunoId}-${Date.now()}`,
+          alunoId,
+          registradoPorId: eu,
+          tipo: dados.tipo,
+          descricao: dados.descricao,
+          regiao: dados.regiao ?? null,
+          gravidade: dados.gravidade,
+          inicioEm: dados.inicioEm ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_CONDICAO)
+        .single(),
+    ) as unknown as LinhaCondicao;
+    return this.paraCondicao(linha);
+  }
+
+  /**
+   * Dar alta. O alerta que a condição gerou some junto, por gatilho — deixá-lo
+   * pendente faria o personal continuar evitando agachamento por uma lesão que
+   * já teve alta.
+   */
+  async resolverCondicao(
+    alunoId: string,
+    condicaoId: string,
+    dados: ResolverCondicaoInput = {},
+  ): Promise<CondicaoResumo> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('CondicaoSaude')
+        .update({
+          resolvidaEm: new Date().toISOString(),
+          resolvidaPorId: eu,
+          ...(dados.observacao === undefined ? {} : { observacao: dados.observacao }),
+        })
+        .eq('id', condicaoId)
+        .eq('alunoId', alunoId)
+        .select(MotorSupabase.CAMPOS_CONDICAO)
+        .single(),
+    ) as unknown as LinhaCondicao;
+    return this.paraCondicao(linha);
+  }
+
 }
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
@@ -492,6 +650,33 @@ interface LinhaConsentimento {
   profissional: ResumoPessoa | null;
 }
 
+interface LinhaAlerta {
+  id: string;
+  papelDestino: string;
+  severidade: string;
+  titulo: string;
+  orientacao: string;
+  marcadorOrigem: string | null;
+  exameId: string | null;
+  condicaoId: string | null;
+  criadoEm: string;
+  reconhecidoEm: string | null;
+  reconhecidoPor: { id: string; nome: string } | null;
+}
+
+interface LinhaCondicao {
+  id: string;
+  tipo: string;
+  descricao: string;
+  regiao: string | null;
+  gravidade: string;
+  inicioEm: string | null;
+  observacao: string | null;
+  criadoEm: string;
+  resolvidaEm: string | null;
+  registradoPor: { id: string; nome: string };
+  resolvidaPor: { id: string; nome: string } | null;
+}
 
 /**
  * Lê o miolo do JWT sem verificar assinatura, de propósito.

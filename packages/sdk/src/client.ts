@@ -756,23 +756,17 @@ export class VivioClient {
    */
   readonly condicoes = {
     listar: (alunoId: string): Promise<CondicaoResumo[]> =>
-      this.requisicao<CondicaoResumo[]>(`/alunos/${alunoId}/condicoes`),
+      this.supabase.listarCondicoes(alunoId),
 
+    /** So o medico escreve — quem barra e a politica, nao esta linha. */
     registrar: (alunoId: string, dados: RegistrarCondicaoInput): Promise<CondicaoResumo> =>
-      this.requisicao<CondicaoResumo>(`/alunos/${alunoId}/condicoes`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarCondicao(alunoId, dados),
 
     resolver: (
       alunoId: string,
       condicaoId: string,
       dados: ResolverCondicaoInput = {},
-    ): Promise<CondicaoResumo> =>
-      this.requisicao<CondicaoResumo>(`/alunos/${alunoId}/condicoes/${condicaoId}/resolver`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+    ): Promise<CondicaoResumo> => this.supabase.resolverCondicao(alunoId, condicaoId, dados),
   };
 
   // --- alertas clínicos cruzados ----------------------------------------------
@@ -781,19 +775,21 @@ export class VivioClient {
    * O personal entra aqui — e só aqui. Ele não lê exame, mas recebe a
    * orientação derivada dele, sem marcador e sem valor.
    */
+  /*
+    O alerta ja chega filtrado pelo papel de quem pergunta: a politica confere
+    `papelDestino`. O cliente nao repete esse filtro — repetir criaria um
+    segundo lugar para a regra divergir, e o lugar errado seria justamente o
+    que o usuario controla.
+  */
   readonly alertas = {
-    listar: (alunoId: string): Promise<AlertaResumo[]> =>
-      this.requisicao<AlertaResumo[]>(`/alunos/${alunoId}/alertas`),
+    listar: (alunoId: string): Promise<AlertaResumo[]> => this.supabase.listarAlertas(alunoId),
 
     reconhecer: (
       alunoId: string,
       alertaId: string,
       dados: ReconhecerAlertaInput = {},
     ): Promise<AlertaResumo> =>
-      this.requisicao<AlertaResumo>(`/alunos/${alunoId}/alertas/${alertaId}/reconhecer`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.reconhecerAlerta(alunoId, alertaId, dados.anotacao),
   };
 
   // --- cardápios e lista de compras ------------------------------------------
