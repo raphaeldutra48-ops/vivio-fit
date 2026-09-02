@@ -19,6 +19,24 @@ export const CodigoErro = {
   DADOS_INVALIDOS: 'DADOS_INVALIDOS',
   CONFLITO: 'CONFLITO',
   LIMITE_EXCEDIDO: 'LIMITE_EXCEDIDO',
+  /**
+   * O banco recusou e nao disse qual das tres condicoes faltou.
+   *
+   * Nasceu com o RLS. A politica devolve so "nao" — de proposito: distinguir
+   * "voce nao tem vinculo" de "voce nao tem consentimento para o clinico deste
+   * aluno" ja confirmaria que o aluno existe e que ele tem dado clinico.
+   *
+   * Quando a tela PRECISA saber para oferecer o pedido de consentimento, ela
+   * pergunta em separado, pelo `possoLer` — que responde sobre a relacao, e nao
+   * sobre o conteudo.
+   */
+  ACESSO_NEGADO: 'ACESSO_NEGADO',
+  /**
+   * Existe conta no Auth e nao existe linha em `User`. So acontece se o gatilho
+   * de cadastro falhar. E recusado na cara em vez de deixar entrar: a tela
+   * abriria e toda consulta voltaria vazia, sem explicar por que.
+   */
+  CONTA_INCOMPLETA: 'CONTA_INCOMPLETA',
 } as const;
 export type CodigoErro = (typeof CodigoErro)[keyof typeof CodigoErro];
 

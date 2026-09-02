@@ -4,23 +4,38 @@ import { Papel, senhaSchema } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Marca } from '../../components/Marca';
 import { Aviso, Botao, Campo, Cartao } from '../../components/ui';
 import { sdk } from '../../lib/sdk';
 
 /**
- * Escolha da senha nova, a partir do token do link.
+ * Escolha da senha nova.
  *
- * Diferente da confirmação de e-mail, aqui **não se dispara nada ao abrir a
- * página**: o token só é gasto quando a pessoa envia a senha. Consumir no
- * carregamento queimaria o link de quem abriu o e-mail no celular só para ver
- * do que se tratava.
+ * O que prova a posse do e-mail deixou de ser um `?token=` na URL e passou a
+ * ser a SESSÃO que o link do Supabase abre sozinho ao carregar a página. Por
+ * isso o gate aqui é "existe sessão?", e não "veio token?".
+ *
+ * Uma propriedade se perdeu, e vale registrar: antes o link só era gasto ao
+ * enviar a senha, então abrir o e-mail no celular só para ver do que se
+ * tratava não queimava nada. Agora abrir já consome. Não há como manter as
+ * duas coisas — o que autentica a troca é a sessão, e a sessão nasce da
+ * abertura.
  */
 function Formulario() {
   const parametros = useSearchParams();
   const router = useRouter();
-  const token = parametros.get('token');
+  // O Supabase avisa link expirado por aqui.
+  const erroDoLink = parametros.get('error_description') ?? parametros.get('error');
+  const [temSessao, setTemSessao] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (erroDoLink) {
+      setTemSessao(false);
+      return;
+    }
+    void sdk.auth.sessaoAberta().then(setTemSessao);
+  }, [erroDoLink]);
 
   const [senha, setSenha] = useState('');
   const [repetida, setRepetida] = useState('');
@@ -37,15 +52,20 @@ function Formulario() {
 
   const naoConfere = repetida !== '' && senha !== repetida;
   const podeEnviar =
-    !!token && senha !== '' && repetida !== '' && !problemaDaSenha && !naoConfere && !enviando;
+    temSessao === true &&
+    senha !== '' &&
+    repetida !== '' &&
+    !problemaDaSenha &&
+    !naoConfere &&
+    !enviando;
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
-    if (!podeEnviar || !token) return;
+    if (!podeEnviar) return;
     setErro(null);
     setEnviando(true);
     try {
-      const r = await sdk.auth.redefinirSenha({ token, senha });
+      const r = await sdk.auth.redefinirSenha({ token: '', senha });
       router.push(r.usuario.papel === Papel.ALUNO ? '/login' : '/alunos');
     } catch (e) {
       setErro(
@@ -57,13 +77,21 @@ function Formulario() {
     }
   }
 
-  if (!token) {
+  if (temSessao === null) {
     return (
       <Cartao>
-        <p className="mb-xs font-semibold">Link incompleto</p>
+        <Aviso tipo="info">Conferindo o link…</Aviso>
+      </Cartao>
+    );
+  }
+
+  if (!temSessao) {
+    return (
+      <Cartao>
+        <p className="mb-xs font-semibold">Link expirado ou já usado</p>
         <Aviso tipo="erro">
-          Este endereço não traz o código de redefinição. Abra o link direto do e-mail, sem
-          copiar e colar pedaços.
+          Este link não vale mais. Abra sempre o link direto do e-mail, sem copiar e colar
+          pedaços, e peça um novo se já tiver passado do prazo.
         </Aviso>
         <div className="mt-lg">
           <Link href="/esqueci-senha" className="text-sm underline">

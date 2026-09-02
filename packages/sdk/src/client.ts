@@ -1,3 +1,4 @@
+import { MotorSupabase, type OpcoesSupabase } from './supabase';
 import type {
   AcessoRegistrado,
   AnterioresDaSessao,
@@ -148,7 +149,16 @@ export interface TokensArmazenados {
 }
 
 export interface OpcoesCliente {
+  /**
+   * Onde a API ainda responde.
+   *
+   * Some quando o ultimo grupo sair dela. Enquanto isso, os dois motores
+   * convivem no mesmo cliente e as telas nao percebem qual atende cada
+   * chamada — que e o ponto de a migracao caber dentro do SDK.
+   */
   baseUrl: string;
+  /** O motor novo. Autenticacao ja passa toda por aqui. */
+  supabase: OpcoesSupabase;
   /** Lê os tokens de onde o app guarda (localStorage, SecureStore...). */
   carregarTokens?: () => TokensArmazenados | null | Promise<TokensArmazenados | null>;
   /** Chamado sempre que um par novo é emitido — o app persiste. */
@@ -187,9 +197,12 @@ export class VivioClient {
   private tokens: TokensArmazenados | null = null;
   private renovacaoEmCurso: Promise<boolean> | null = null;
   private readonly fetchImpl: typeof fetch;
+  /** Acesso direto ao Postgres para quem precisa consultar sem passar por metodo. */
+  readonly supabase: MotorSupabase;
 
   constructor(private readonly opcoes: OpcoesCliente) {
     this.fetchImpl = opcoes.fetch ?? globalThis.fetch.bind(globalThis);
+    this.supabase = new MotorSupabase(opcoes.supabase);
   }
 
   definirTokens(tokens: TokensArmazenados | null): void {
@@ -306,80 +319,82 @@ export class VivioClient {
 
   // --- auth ---------------------------------------------------------------
 
+  /*
+    Autenticacao: toda no Supabase Auth.
+
+    O que saiu daqui junto com a API: Argon2, tabela de sessao, rodizio de
+    refresh, cookie httpOnly, os dois fluxos de e-mail e o `renovar()` com sua
+    danca de concorrencia — cinco 401 simultaneos que nao podiam virar cinco
+    refresh. Era codigo de seguranca escrito por nos, que e o tipo mais caro de
+    manter e o pior de errar. O `supabase-js` renova sozinho antes de expirar.
+
+    Os nomes dos metodos ficam: sao 158 chamadas nas telas, e nenhuma precisa
+    saber que o motor mudou.
+  */
   readonly auth = {
-    /** Não guarda tokens: o cadastro não abre sessão até o e-mail ser confirmado. */
+    /** Nao abre sessao: a conta so vale depois do e-mail confirmado. */
     registrarAluno: (dados: RegistrarAlunoInput): Promise<RespostaRegistro> =>
-      this.requisicao<RespostaRegistro>('/auth/registrar/aluno', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      }),
+      this.supabase.registrarAluno(dados),
 
     registrarProfissional: (dados: RegistrarProfissionalInput): Promise<RespostaRegistro> =>
-      this.requisicao<RespostaRegistro>('/auth/registrar/profissional', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      }),
+      this.supabase.registrarProfissional(dados),
 
-    /** Confirma o e-mail pelo token do link — é aqui que a sessão começa. */
-    verificarEmail: async (dados: VerificarEmailInput): Promise<RespostaAutenticacao> => {
-      const r = await this.requisicao<RespostaAutenticacao>('/auth/verificar-email', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      });
-      await this.guardar(r);
-      return r;
+    /**
+     * Confirmacao de e-mail.
+     *
+     * Mudou de mecanica, e a assinatura acompanha. Antes, o link trazia
+     * `?token=` e a API o gastava; agora o link e do proprio Supabase e chega
+     * com a sessao ja montada na URL — o `supabase-js` a consome sozinho ao
+     * carregar a pagina, e aqui so se le o que ele deixou.
+     *
+     * O parametro fica opcional para as telas antigas nao quebrarem, e e
+     * ignorado: nao ha mais token nosso para gastar.
+     */
+    verificarEmail: async (_dados?: VerificarEmailInput): Promise<RespostaAutenticacao> => {
+      const usuario = await this.supabase.usuarioAtual();
+      if (!usuario) {
+        throw new ErroApi('TOKEN_INVALIDO', 'O link expirou ou ja foi usado. Peca outro.', 401);
+      }
+      const { data } = await this.supabase.db.auth.getSession();
+      return {
+        accessToken: data.session!.access_token,
+        refreshToken: data.session!.refresh_token,
+        expiraEm: (data.session!.expires_at ?? 0) * 1000,
+        usuario: { ...usuario, emailVerificado: true },
+      };
     },
 
     reenviarVerificacao: (dados: ReenviarVerificacaoInput): Promise<void> =>
-      this.requisicao<void>('/auth/reenviar-verificacao', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      }),
+      this.supabase.reenviarVerificacao(dados.email),
 
-    /** Responde 204 exista o e-mail ou não — a tela não deve inventar diferença. */
-    esqueciSenha: (dados: EsqueciSenhaInput): Promise<void> =>
-      this.requisicao<void>('/auth/esqueci-senha', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      }),
+    /** Responde igual exista o e-mail ou nao — a tela nao deve inventar diferenca. */
+    esqueciSenha: (dados: EsqueciSenhaInput): Promise<void> => this.supabase.esqueciSenha(dados),
 
-    /** Troca a senha pelo token do link e já abre a sessão. */
-    redefinirSenha: async (dados: RedefinirSenhaInput): Promise<RespostaAutenticacao> => {
-      const r = await this.requisicao<RespostaAutenticacao>('/auth/redefinir-senha', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      });
-      await this.guardar(r);
-      return r;
+    /**
+     * Troca a senha da sessao que o link de recuperacao abriu.
+     *
+     * O `token` do contrato antigo e ignorado: quem prova a posse do e-mail
+     * agora e a sessao que o proprio link montou.
+     *
+     * Uma propriedade se perdeu no caminho, e vale dizer: antes o link so era
+     * gasto ao ENVIAR a senha nova, entao abrir o e-mail no celular so para
+     * ver do que se tratava nao queimava nada. No Supabase, abrir o link ja o
+     * consome. Nao ha como manter os dois — o que autentica a troca e a sessao,
+     * e a sessao nasce da abertura.
+     */
+    redefinirSenha: (dados: RedefinirSenhaInput): Promise<RespostaAutenticacao> =>
+      this.supabase.redefinirSenha(dados.senha),
+
+    /** Ha sessao agora? A tela de redefinicao usa para saber se o link valeu. */
+    sessaoAberta: async (): Promise<boolean> => {
+      const { data } = await this.supabase.db.auth.getSession();
+      return data.session !== null;
     },
 
-    login: async (dados: LoginInput): Promise<RespostaAutenticacao> => {
-      const r = await this.requisicao<RespostaAutenticacao>('/auth/login', {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      });
-      await this.guardar(r);
-      return r;
-    },
+    login: (dados: LoginInput): Promise<RespostaAutenticacao> => this.supabase.entrar(dados),
 
     logout: async (): Promise<void> => {
-      const tokens = await this.obterTokens();
-      // No modo cookie o corpo vai vazio de propósito: o servidor revoga pelo
-      // cookie e o apaga na mesma resposta.
-      if (this.opcoes.usarCookieDeRefresh || tokens?.refreshToken) {
-        await this.requisicao<void>('/auth/logout', {
-          metodo: 'POST',
-          corpo: this.opcoes.usarCookieDeRefresh ? {} : { refreshToken: tokens!.refreshToken },
-          autenticada: false,
-        });
-      }
+      await this.supabase.sair();
       this.tokens = null;
     },
   };
@@ -387,7 +402,18 @@ export class VivioClient {
   // --- usuário ------------------------------------------------------------
 
   readonly me = {
-    obter: (): Promise<UsuarioAutenticado> => this.requisicao<UsuarioAutenticado>('/me'),
+    /**
+     * Quem esta logado, lido do TOKEN.
+     *
+     * Evita uma ida ao banco em todo boot de tela e, mais importante, garante
+     * que a tela e as politicas olham o MESMO papel: se divergissem, o menu
+     * mostraria o que o banco depois recusa.
+     */
+    obter: async (): Promise<UsuarioAutenticado> => {
+      const u = await this.supabase.usuarioAtual();
+      if (!u) throw new ErroApi('NAO_AUTENTICADO', 'Sua sessao expirou. Entre de novo.', 401);
+      return u;
+    },
 
     perfil: (): Promise<MeuPerfil> => this.requisicao<MeuPerfil>('/me/perfil'),
 

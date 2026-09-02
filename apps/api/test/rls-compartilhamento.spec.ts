@@ -82,6 +82,7 @@ describe('RLS: pedir dado a um colega', () => {
   });
 
   afterAll(async () => {
+    await p.condicaoSaude.deleteMany({ where: { alunoId } });
     await p.solicitacaoDeAcesso.deleteMany({ where: { alunoId } });
     await p.exame.deleteMany({ where: { alunoId } });
     await p.consentimento.deleteMany({ where: { alunoId } });
@@ -151,6 +152,56 @@ describe('RLS: pedir dado a um colega', () => {
          values ('${marca}-e2','${alunoId}','${nutri}','Prova',now(),'F',now())`,
       ),
     ).rejects.toThrow();
+  });
+
+  it('a escrita legítima FUNCIONA — e é esta que pega revogação demais', async () => {
+    /*
+      A asserção positiva, e a razão de ela existir.
+
+      Um arquivo cheio de "fulano NÃO consegue" continua verde quando nada
+      funciona. Foi o que aconteceu: uma revogação de EXECUTE em
+      `pode_escrever_do_aluno` quebrou TODA escrita pelo PostgREST, e o teste
+      que deveria pegar afirmava só a recusa da nutricionista — que continuou
+      verdadeira, pelo motivo errado.
+
+      Esta afirma o contrário: o médico, que tem papel, vínculo e
+      consentimento, escreve. Se alguém revogar demais outra vez, quebra aqui.
+    */
+    const id = `${marca}-cond`;
+    await como(
+      medico,
+      `insert into "CondicaoSaude" (id,"alunoId",tipo,descricao,gravidade,"registradoPorId","criadoEm")
+       values ('${id}','${alunoId}','LESAO','Prova de escrita','LEVE','${medico}',now())`,
+    );
+    const r = await como<{ n: bigint }>(
+      medico,
+      `select count(*)::bigint n from "CondicaoSaude" where id='${id}'`,
+    );
+    expect(Number(r[0]!.n)).toBe(1);
+
+    // E a nutricionista continua sem poder — agora provado contra um caminho
+    // que comprovadamente funciona para quem pode.
+    await expect(
+      como(
+        nutri,
+        `insert into "CondicaoSaude" (id,"alunoId",tipo,descricao,gravidade,"registradoPorId","criadoEm")
+         values ('${marca}-cond2','${alunoId}','LESAO','Nao devia','LEVE','${nutri}',now())`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('a equipe de cuidado enxerga a si mesma', async () => {
+    // Sem isto não há como saber A QUEM pedir: cada profissional via só o
+    // próprio vínculo, e o pedido de acesso ficava sem porta de entrada.
+    const r = await como<{ profissionalId: string }>(
+      nutri,
+      `select "profissionalId" from "Vinculo" where "alunoId"='${alunoId}'`,
+    );
+    const vistos = r.map((x) => x.profissionalId);
+    expect(vistos).toContain(nutri);
+    expect(vistos).toContain(medico);
+    // O personal não atende este aluno, e não aparece nem para quem atende.
+    expect(vistos).not.toContain(personal);
   });
 
   it('o aluno enxerga o acordo sobre ele; quem é de fora, não', async () => {

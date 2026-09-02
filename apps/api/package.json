@@ -43,6 +43,7 @@
     "@prisma/client": "^6.2.1",
     "@vivio/contracts": "workspace:*",
     "cookie-parser": "^1.4.7",
+    "jose": "^6.2.10",
     "nodemailer": "^9.0.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

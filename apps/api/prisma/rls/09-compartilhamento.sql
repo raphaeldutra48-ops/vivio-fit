@@ -47,16 +47,47 @@ create policy solicitacaoacesso_le on public."SolicitacaoDeAcesso" for select us
   Não passa por `pode_ler_do_aluno` de propósito. Se passasse, só conseguiria
   pedir quem já podia ler — e o pedido existe justamente para quem não pode.
 */
+/*
+  A pergunta composta que a política do pedido de acesso precisa.
+
+  A política precisava de `vinculo_de` para os DOIS lados, e `vinculo_de` está
+  revogada. Esta função responde só a pergunta inteira — "posso pedir a este
+  colega, sobre este aluno?" — em vez de emprestar a peça genérica.
+
+  Ela devolve, de fato, se o detentor atende o aluno. Isso não abre nada novo:
+  a política de `Vinculo` abaixo já mostra a equipe de cuidado a quem faz parte
+  dela.
+*/
+create or replace function public.pode_pedir_acesso(p_aluno_id text, p_detentor_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and public.papel_atual() in ('PERSONAL', 'NUTRICIONISTA', 'MEDICO')
+     and p_detentor_id <> public.usuario_atual()
+     -- Quem pede tem de atender o aluno. Pedir não é porta de entrada.
+     and public.vinculo_de(public.usuario_atual(), p_aluno_id)
+     -- E quem vai autorizar também.
+     and public.vinculo_de(p_detentor_id, p_aluno_id)
+$$;
+
 drop policy if exists solicitacaoacesso_pede on public."SolicitacaoDeAcesso";
 create policy solicitacaoacesso_pede on public."SolicitacaoDeAcesso" for insert
   with check (
     "solicitanteId" = public.usuario_atual()
-    and public.papel_atual() in ('PERSONAL', 'NUTRICIONISTA', 'MEDICO')
-    and "detentorId" <> "solicitanteId"
     and status = 'PENDENTE'
     and "revogadoEm" is null
-    and public.vinculo_de("solicitanteId", "alunoId")
-    and public.vinculo_de("detentorId", "alunoId")
+    /*
+      Papel, os dois vinculos e "nao e voce mesmo" moram em `pode_pedir_acesso`,
+      e nao soltos aqui, porque a politica precisaria chamar `vinculo_de`
+      diretamente — e funcao chamada do corpo de uma politica roda como quem
+      pede, o que obrigaria a expor `vinculo_de` a todo mundo. Ela responde
+      sobre TERCEIROS, e nao deve ser exposta.
+    */
+    and public.pode_pedir_acesso("alunoId", "detentorId")
   );
 
 /*

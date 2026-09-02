@@ -8,6 +8,7 @@ import type { Request } from 'express';
 import { CHAVE_PUBLICO } from '../decorators/publico.decorator';
 import { ErroDominio } from '../erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
+import { verificarTokenSupabase } from './token-supabase';
 
 /**
  * Guard global de autenticação.
@@ -15,6 +16,10 @@ import { PrismaService } from '../../infra/prisma.service';
  * Revalida o usuário no banco a cada requisição em vez de confiar apenas no
  * token: conta suspensa ou desativada precisa perder acesso na hora, não só
  * quando o access token de 15 minutos expirar.
+ *
+ * Aceita DOIS emissores enquanto a migração anda: o Supabase, que já é quem
+ * autentica, e o nosso antigo, para as sessões abertas antes da virada. O
+ * segundo caminho é temporário e sai junto com esta API.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -38,17 +43,44 @@ export class JwtAuthGuard implements CanActivate {
       throw ErroDominio.naoAutenticado();
     }
 
-    let payload: PayloadAccessToken;
-    try {
-      payload = await this.jwt.verifyAsync<PayloadAccessToken>(header.slice(7), {
-        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-      });
-    } catch {
-      throw ErroDominio.tokenInvalido();
+    /*
+      Dois emissores, enquanto a migracao anda.
+
+      O Supabase primeiro porque, dali para a frente, e ele que emite tudo: o
+      token proprio so aparece em sessao aberta antes da virada, e essas
+      expiram sozinhas. Quando nao houver mais nenhuma, o `else` some — e a
+      API inteira logo depois.
+
+      Sem os dois caminhos, migrar auth obrigaria a migrar as 177 rotas no
+      mesmo dia, num app de saude com gente usando.
+    */
+    const bruto = header.slice(7);
+    let id: string;
+
+    const urlSupabase = this.config.get<string>('SUPABASE_URL');
+    const doSupabase = urlSupabase ? await verificarTokenSupabase(bruto, urlSupabase) : null;
+
+    if (doSupabase) {
+      /*
+        `vivio_id` e nao `sub`: o `sub` e o uuid do Auth, e os nossos ids sao
+        cuid para quem foi criado antes da migracao. Quem nasceu depois tem os
+        dois iguais — e ai o `sub` serve de reserva.
+      */
+      id = doSupabase.vivio_id ?? doSupabase.sub;
+    } else {
+      let payload: PayloadAccessToken;
+      try {
+        payload = await this.jwt.verifyAsync<PayloadAccessToken>(bruto, {
+          secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        });
+      } catch {
+        throw ErroDominio.tokenInvalido();
+      }
+      id = payload.sub;
     }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id },
       select: { id: true, email: true, nome: true, papel: true, status: true, deletadoEm: true },
     });
 

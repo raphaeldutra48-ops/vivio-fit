@@ -12,7 +12,17 @@ type Estado = 'confirmando' | 'pronto' | 'falhou';
 function Confirmacao() {
   const parametros = useSearchParams();
   const router = useRouter();
-  const token = parametros.get('token');
+  /*
+    O link mudou de dono.
+
+    Antes vinha `?token=` e a API o gastava. Agora quem manda o e-mail e o
+    Supabase, e o link volta com a sessao montada no fragmento da URL — o
+    `supabase-js` a consome ao carregar a pagina. Exigir `token` aqui fazia
+    todo mundo que clicava no link ver "invalido".
+
+    O `erro` continua sendo lido: e por ele que o Supabase avisa link expirado.
+  */
+  const erroDoLink = parametros.get('error_description') ?? parametros.get('error');
   const [estado, setEstado] = useState<Estado>('confirmando');
   const [nome, setNome] = useState('');
   const [ehAluno, setEhAluno] = useState(false);
@@ -21,7 +31,7 @@ function Confirmacao() {
   const jaTentou = useRef(false);
 
   useEffect(() => {
-    if (!token) {
+    if (erroDoLink) {
       setEstado('falhou');
       return;
     }
@@ -29,14 +39,14 @@ function Confirmacao() {
     jaTentou.current = true;
 
     sdk.auth
-      .verificarEmail({ token })
+      .verificarEmail()
       .then((r) => {
         setNome(r.usuario.nome.split(' ')[0]);
         setEhAluno(r.usuario.papel === Papel.ALUNO);
         setEstado('pronto');
       })
       .catch(() => setEstado('falhou'));
-  }, [token]);
+  }, [erroDoLink]);
 
   return (
     <main className="grid min-h-dvh place-items-center p-lg">
