@@ -5,9 +5,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
@@ -15,6 +16,8 @@
   },
   "devDependencies": {
     "@vivio/config": "workspace:*",
-    "typescript": "^5.7.2"
+    "dotenv": "^17.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   }
 }

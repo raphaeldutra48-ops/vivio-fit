@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { FINALIDADE_POR_ESCOPO, VERSAO_TERMO_ATUAL } from '@vivio/contracts';
 import type {
+  ConcederConsentimentoInput,
+  ConsentimentoResumo,
   EsqueciSenhaInput,
   LoginInput,
   Papel,
@@ -7,7 +10,9 @@ import type {
   RegistrarProfissionalInput,
   RespostaAutenticacao,
   RespostaRegistro,
+  ResumoPessoa,
   UsuarioAutenticado,
+  VinculoResumo,
 } from '@vivio/contracts';
 import { ErroApi } from './erro';
 
@@ -275,7 +280,218 @@ export class MotorSupabase {
   async reenviarVerificacao(email: string): Promise<void> {
     await this.db.auth.resend({ type: 'signup', email: email.toLowerCase().trim() });
   }
+
+  // --- dados -------------------------------------------------------------
+
+  /**
+   * Desembrulha a resposta do PostgREST, ou lança o `ErroApi` que as telas já
+   * sabem tratar.
+   *
+   * Existe para que nenhum método precise repetir `if (error) throw` — que é o
+   * tipo de linha que um dia falta em um lugar só.
+   */
+  private ou<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+    if (r.error) throw erroDoSupabase(r.error);
+    return r.data as T;
+  }
+
+  /** Chama uma função do banco. */
+  async rpc<T>(nome: string, args: Record<string, unknown> = {}): Promise<T> {
+    const r = await this.db.rpc(nome, args);
+    if (r.error) throw erroDoSupabase(r.error);
+    return r.data as T;
+  }
+
+  private async meuId(): Promise<string> {
+    const u = await this.usuarioAtual();
+    if (!u) throw new ErroApi('NAO_AUTENTICADO', 'Sua sessão expirou. Entre de novo.', 401);
+    return u.id;
+  }
+
+  // --- vínculo ------------------------------------------------------------
+
+  /*
+    Os dois lados de um vínculo, embutidos numa consulta só.
+
+    `!Vinculo_alunoId_fkey` nomeia a chave estrangeira porque `Vinculo` aponta
+    DUAS vezes para `User` — sem o nome, o PostgREST não sabe qual das duas
+    ligações usar e recusa a consulta.
+  */
+  private static readonly CAMPOS_VINCULO =
+    'id,tipo,status,iniciadoEm,encerradoEm,alunoId,convidadoPorId,' +
+    'aluno:User!Vinculo_alunoId_fkey(id,nome,email,avatarUrl),' +
+    'profissional:User!Vinculo_profissionalId_fkey(id,nome,email,avatarUrl)';
+
+  /**
+   * A contraparte é quem está do outro lado EM RELAÇÃO A QUEM PERGUNTA: o
+   * mesmo vínculo mostra o aluno para o profissional e o profissional para o
+   * aluno. Quem decide isso é o id de quem consultou, e por isso ele entra.
+   */
+  private paraVinculo(v: LinhaVinculo, eu: string): VinculoResumo {
+    const souOAluno = v.alunoId === eu;
+    return {
+      id: v.id,
+      tipo: v.tipo as VinculoResumo['tipo'],
+      status: v.status as VinculoResumo['status'],
+      iniciadoEm: v.iniciadoEm,
+      encerradoEm: v.encerradoEm,
+      contraparte: souOAluno ? v.profissional : v.aluno,
+      // Convite que quem mandou pudesse aceitar não seria convite.
+      aguardandoMinhaResposta: v.status === 'PENDENTE' && v.convidadoPorId !== eu,
+    };
+  }
+
+  async vinculosOndeSou(
+    lado: 'profissional' | 'aluno',
+    status?: string,
+  ): Promise<VinculoResumo[]> {
+    const eu = await this.meuId();
+    let q = this.db
+      .from('Vinculo')
+      .select(MotorSupabase.CAMPOS_VINCULO)
+      .eq(lado === 'aluno' ? 'alunoId' : 'profissionalId', eu)
+      .order('criadoEm', { ascending: false });
+    if (status) q = q.eq('status', status);
+    const linhas = this.ou(await q) as unknown as LinhaVinculo[];
+    return linhas.map((v) => this.paraVinculo(v, eu));
+  }
+
+  /** Depois de convidar ou responder, devolve o vínculo já montado. */
+  private async vinculoPorId(id: string): Promise<VinculoResumo> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db.from('Vinculo').select(MotorSupabase.CAMPOS_VINCULO).eq('id', id).single(),
+    ) as unknown as LinhaVinculo;
+    return this.paraVinculo(linha, eu);
+  }
+
+  /*
+    Convidar e responder passam por FUNÇÃO, e não por escrita direta.
+
+    As regras do vínculo são transições com invariante — quem convidou não
+    aceita o próprio convite, um profissional ativo por tipo, registro no
+    conselho conferido — e nada disso cabe num `with check`, que só enxerga a
+    linha nova. Por isso a tabela não tem política de escrita nenhuma.
+  */
+  async convidarVinculo(email: string): Promise<VinculoResumo> {
+    return this.vinculoPorId(await this.rpc<string>('convidar_vinculo', { p_email: email }));
+  }
+
+  async responderVinculo(
+    id: string,
+    acao: 'ACEITAR' | 'RECUSAR' | 'ENCERRAR',
+  ): Promise<VinculoResumo> {
+    return this.vinculoPorId(
+      await this.rpc<string>('responder_vinculo', { p_vinculo_id: id, p_acao: acao }),
+    );
+  }
+
+  // --- consentimento ------------------------------------------------------
+
+  async listarConsentimentos(incluirRevogados = false): Promise<ConsentimentoResumo[]> {
+    const eu = await this.meuId();
+    let q = this.db
+      .from('Consentimento')
+      .select(
+        'id,escopo,finalidade,versaoTermo,concedidoEm,revogadoEm,' +
+          'profissional:User!Consentimento_profissionalId_fkey(id,nome,email,avatarUrl)',
+      )
+      .eq('alunoId', eu)
+      .order('concedidoEm', { ascending: false });
+    if (!incluirRevogados) q = q.is('revogadoEm', null);
+
+    return (this.ou(await q) as unknown as LinhaConsentimento[]).map((c) => ({
+      id: c.id,
+      escopo: c.escopo as ConsentimentoResumo['escopo'],
+      finalidade: c.finalidade,
+      versaoTermo: c.versaoTermo,
+      concedidoEm: c.concedidoEm,
+      revogadoEm: c.revogadoEm,
+      profissional: c.profissional,
+    }));
+  }
+
+  async concederConsentimento(dados: ConcederConsentimentoInput): Promise<ConsentimentoResumo> {
+    const eu = await this.meuId();
+    const id = `${eu}-${dados.escopo}-${Date.now()}`;
+    /*
+      A finalidade não vem da tela: vem de `FINALIDADE_POR_ESCOPO`, no contrato.
+
+      É o texto que o aluno leu ao aceitar, e é a prova de finalidade específica
+      que a LGPD pede. Deixar o cliente escolhê-lo faria a prova valer nada —
+      qualquer um poderia gravar "autorizo tudo" no lugar do termo real.
+    */
+    const linha = this.ou(
+      await this.db
+        .from('Consentimento')
+        .insert({
+          id,
+          alunoId: eu,
+          escopo: dados.escopo,
+          profissionalId: dados.profissionalId ?? null,
+          finalidade: FINALIDADE_POR_ESCOPO[dados.escopo],
+          versaoTermo: VERSAO_TERMO_ATUAL,
+        })
+        .select(
+          'id,escopo,finalidade,versaoTermo,concedidoEm,revogadoEm,' +
+            'profissional:User!Consentimento_profissionalId_fkey(id,nome,email,avatarUrl)',
+        )
+        .single(),
+    ) as unknown as LinhaConsentimento;
+
+    return {
+      id: linha.id,
+      escopo: linha.escopo as ConsentimentoResumo['escopo'],
+      finalidade: linha.finalidade,
+      versaoTermo: linha.versaoTermo,
+      concedidoEm: linha.concedidoEm,
+      revogadoEm: linha.revogadoEm,
+      profissional: linha.profissional,
+    };
+  }
+
+  /**
+   * Revogar é marcar a data, nunca apagar a linha.
+   *
+   * O consentimento revogado é a prova de que ele existiu e de quando deixou de
+   * valer — apagar destruiria justamente o registro que a LGPD manda guardar.
+   */
+  async revogarConsentimento(id: string): Promise<void> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db
+        .from('Consentimento')
+        .update({ revogadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .eq('alunoId', eu)
+        .is('revogadoEm', null),
+    );
+  }
 }
+
+/** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
+interface LinhaVinculo {
+  id: string;
+  tipo: string;
+  status: string;
+  iniciadoEm: string | null;
+  encerradoEm: string | null;
+  alunoId: string;
+  convidadoPorId: string;
+  aluno: ResumoPessoa;
+  profissional: ResumoPessoa;
+}
+
+interface LinhaConsentimento {
+  id: string;
+  escopo: string;
+  finalidade: string;
+  versaoTermo: string;
+  concedidoEm: string;
+  revogadoEm: string | null;
+  profissional: ResumoPessoa | null;
+}
+
 
 /**
  * Lê o miolo do JWT sem verificar assinatura, de propósito.

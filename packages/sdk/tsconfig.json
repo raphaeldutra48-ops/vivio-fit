@@ -1,11 +1,19 @@
 {
+  // Visão AMPLA: editor, ESLint e `pnpm typecheck` enxergam tudo.
+  //
+  // Antes este arquivo era o do build — `rootDir: src`, `include: [src]` — e
+  // com isso `teste/` e `vitest.config.ts` não passavam por verificação
+  // nenhuma. É o mesmo buraco que `apps/api` já teve: lá, um script de
+  // migração rodou contra o banco com uma variável declarada duas vezes
+  // enquanto o `tsc` dizia estar limpo, porque nem abria o arquivo.
+  //
+  // A ordem certa é esta: o arquivo padrão cobre tudo, e o build restringe.
   "extends": "@vivio/config/tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
     "lib": ["ES2022", "DOM"],
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "teste/**/*", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

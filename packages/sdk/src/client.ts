@@ -401,24 +401,33 @@ export class VivioClient {
 
   // --- vínculos -----------------------------------------------------------
 
+  /*
+    Vinculo: convidar e responder passam por FUNCAO no banco.
+
+    As regras sao transicoes com invariante — quem convidou nao aceita o
+    proprio convite, um profissional ativo por tipo, registro no conselho
+    conferido — e nada disso cabe num `with check`, que so enxerga a linha
+    nova. Por isso a tabela nao tem politica de escrita: ou passa pelas
+    funcoes, ou nao acontece.
+  */
   readonly vinculos = {
-    convidar: (email: string): Promise<VinculoResumo> =>
-      this.requisicao<VinculoResumo>('/vinculos/convidar', { metodo: 'POST', corpo: { email } }),
+    convidar: (email: string): Promise<VinculoResumo> => this.supabase.convidarVinculo(email),
 
     aceitar: (id: string): Promise<VinculoResumo> =>
-      this.requisicao<VinculoResumo>(`/vinculos/${id}/aceitar`, { metodo: 'PATCH' }),
+      this.supabase.responderVinculo(id, 'ACEITAR'),
 
     recusar: (id: string): Promise<VinculoResumo> =>
-      this.requisicao<VinculoResumo>(`/vinculos/${id}/recusar`, { metodo: 'PATCH' }),
+      this.supabase.responderVinculo(id, 'RECUSAR'),
 
     encerrar: (id: string): Promise<VinculoResumo> =>
-      this.requisicao<VinculoResumo>(`/vinculos/${id}/encerrar`, { metodo: 'PATCH' }),
+      this.supabase.responderVinculo(id, 'ENCERRAR'),
 
+    /** A carteira do profissional. */
     meusAlunos: (status?: StatusVinculo): Promise<VinculoResumo[]> =>
-      this.requisicao<VinculoResumo[]>('/vinculos/meus-alunos', { query: { status } }),
+      this.supabase.vinculosOndeSou('profissional', status),
 
-    meusProfissionais: (): Promise<VinculoResumo[]> =>
-      this.requisicao<VinculoResumo[]>('/vinculos/meus-profissionais'),
+    /** A equipe de cuidado do aluno. */
+    meusProfissionais: (): Promise<VinculoResumo[]> => this.supabase.vinculosOndeSou('aluno'),
   };
 
   // --- alunos -------------------------------------------------------------
@@ -432,15 +441,13 @@ export class VivioClient {
 
   readonly consentimentos = {
     listar: (incluirRevogados = false): Promise<ConsentimentoResumo[]> =>
-      this.requisicao<ConsentimentoResumo[]>('/consentimentos', {
-        query: { incluirRevogados: incluirRevogados ? 'true' : undefined },
-      }),
+      this.supabase.listarConsentimentos(incluirRevogados),
 
     conceder: (dados: ConcederConsentimentoInput): Promise<ConsentimentoResumo> =>
-      this.requisicao<ConsentimentoResumo>('/consentimentos', { metodo: 'POST', corpo: dados }),
+      this.supabase.concederConsentimento(dados),
 
-    revogar: (id: string): Promise<void> =>
-      this.requisicao<void>(`/consentimentos/${id}`, { metodo: 'DELETE' }),
+    /** Revogar marca a data; a linha fica, porque ela e a prova. */
+    revogar: (id: string): Promise<void> => this.supabase.revogarConsentimento(id),
   };
 
   // --- auditoria ----------------------------------------------------------

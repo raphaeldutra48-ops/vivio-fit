@@ -1,0 +1,12 @@
+{
+  // O que vira `dist/`. Só `src`: teste e configuração de teste não entram no
+  // pacote que a web e o mobile consomem.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "teste", "vitest.config.ts"]
+}
