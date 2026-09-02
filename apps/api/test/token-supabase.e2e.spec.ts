@@ -56,19 +56,46 @@ describe.skipIf(!urlSupabase || !anon)('token do Supabase na API (e2e)', () => {
     expect(r.body.papel).toBe('PERSONAL');
   });
 
-  it('token adulterado não entra', async () => {
-    // Troca o último caractere da assinatura. O corpo continua legível e
-    // plausível; o que não fecha é a assinatura — que é a única coisa que
-    // decide.
-    const partes = tokenSupabase.split('.');
-    const assinatura = partes[2]!;
-    const adulterado = `${partes[0]}.${partes[1]}.${assinatura.slice(0, -1)}${
-      assinatura.endsWith('A') ? 'B' : 'A'
-    }`;
+  it('assinatura adulterada não entra', async () => {
+    /*
+      Troca um caractere do MEIO da assinatura, e não do fim.
+
+      A primeira versão deste teste trocava o último, e passava reto: a
+      assinatura ES256 tem 64 bytes, que em base64url dão 86 caracteres —
+      86 × 6 = 516 bits para 512 de dados. Os 4 bits que sobram são
+      preenchimento, e vivem justamente no último caractere. Trocar `A` por
+      `B` ali mexia só no preenchimento, os bytes decodificavam idênticos, e o
+      token continuava válido. O teste dizia "adulterado" sobre um token que
+      não tinha sido adulterado.
+    */
+    const [cabecalho, corpo, assinatura] = tokenSupabase.split('.');
+    const meio = Math.floor(assinatura!.length / 2);
+    const trocado =
+      assinatura!.slice(0, meio) +
+      (assinatura![meio] === 'A' ? 'B' : 'A') +
+      assinatura!.slice(meio + 1);
 
     await request(app.getHttpServer())
       .get(url('/me'))
-      .set('Authorization', `Bearer ${adulterado}`)
+      .set('Authorization', `Bearer ${cabecalho}.${corpo}.${trocado}`)
+      .expect(401);
+  });
+
+  it('editar as claims para virar outra pessoa não entra', async () => {
+    // A adulteração que de fato interessa: trocar `vivio_id` por outro id e
+    // manter a assinatura. É o que separa "o token diz quem eu sou" de "o
+    // token PROVA quem eu sou".
+    const [cabecalho, corpo, assinatura] = tokenSupabase.split('.');
+    const claims = JSON.parse(Buffer.from(corpo!, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    claims.vivio_id = 'sou-outra-pessoa';
+    const corpoTrocado = Buffer.from(JSON.stringify(claims)).toString('base64url');
+
+    await request(app.getHttpServer())
+      .get(url('/me'))
+      .set('Authorization', `Bearer ${cabecalho}.${corpoTrocado}.${assinatura}`)
       .expect(401);
   });
 
