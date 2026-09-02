@@ -162,6 +162,21 @@ async function principal(): Promise<void> {
     }
 
     /*
+      O escopo de cada marcador, pela mesma razão das regras: o gatilho precisa
+      saber se o destinatário do alerta pode ver aquele marcador, e a
+      alternativa era uma lista de marcadores escrita à mão dentro do SQL — que
+      é exatamente como as regras divergiram da fonte uma vez.
+    */
+    for (const [marcador, ref] of Object.entries(REFERENCIAS)) {
+      await prisma.marcadorEscopo.upsert({
+        where: { marcador },
+        update: { escopo: ref.escopo },
+        create: { marcador, escopo: ref.escopo },
+      });
+    }
+    console.log(`marcadores com escopo: ${Object.keys(REFERENCIAS).length}`);
+
+    /*
       O que sobrou na tabela e não existe mais no TypeScript é desligado, não
       apagado: um alerta já entregue aponta para a regra que o gerou, e a tela
       mostra de onde ele veio. Apagar deixaria histórico órfão.

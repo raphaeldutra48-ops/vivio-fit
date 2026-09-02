@@ -26,6 +26,35 @@
 --   * sem `lado`, a regra de "ferritina baixa" disparava também com ferritina
 --     alta, porque as duas são "fora da faixa" e só o limite as separa.
 
+-- --------------------------------------------------------------------------
+-- Quem vê qual marcador, em SQL.
+--
+-- Tradução de `podeVerMarcador`, de `apps/api/src/modules/exames/escopo.ts`. O
+-- mapa marcador→escopo NÃO está escrito aqui: vem da tabela `MarcadorEscopo`,
+-- alimentada de `REFERENCIAS` pelo `exportar-regras.ts`. Escrever a lista à mão
+-- no SQL é exatamente como as regras de alerta divergiram da fonte uma vez.
+-- --------------------------------------------------------------------------
+create or replace function public.pode_ver_marcador(p_papel text, p_marcador text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    -- O aluno é o titular: vê o próprio exame inteiro. O médico também.
+    when p_papel in ('ALUNO', 'MEDICO') then true
+    when p_marcador is null then false
+    when p_papel = 'NUTRICIONISTA' then exists (
+      select 1 from public."MarcadorEscopo" m
+      where m.marcador = p_marcador and m.escopo = 'NUTRICIONAL'
+    )
+    -- Papel sem decisão explícita não vê nada. O padrão seguro é o silêncio,
+    -- não a herança do caso anterior.
+    else false
+  end
+$$;
+
 create or replace function public.derivar_alertas_do_marcador()
 returns trigger
 language plpgsql
@@ -103,7 +132,28 @@ begin
         tela do nutricionista mostrava a mesma orientação duas vezes.
       */
       split_part(v_regra.id, ':', 1),
-      v_regra.titulo, v_regra.orientacao, new.marcador, new."exameId", now()
+      v_regra.titulo, v_regra.orientacao,
+      /*
+        O marcador só é GRAVADO quando o destinatário poderia vê-lo.
+
+        RLS protege a linha, não a coluna: com o marcador na linha do personal,
+        ele lia `TFG_ESTIMADA` junto com a conduta — e o alerta existe
+        exatamente para ele receber a conduta SEM o número. Era o diferencial
+        do produto virando o contrário de si mesmo.
+
+        Nem grant nem política resolvem, porque a resposta depende do PAPEL de
+        quem lê. O gatilho já sabe para qual papel este alerta vai, então a
+        forma mais simples de não vazar é não escrever: a linha do personal
+        não tem marcador nenhum.
+
+        Vale também para a nutricionista em marcador de escopo MEDICO — TSH,
+        T4 livre, DHEA-S, prolactina.
+      */
+      case when public.pode_ver_marcador(v_regra."papelDestino", new.marcador)
+           then new.marcador else null end,
+      case when public.pode_ver_marcador(v_regra."papelDestino", new.marcador)
+           then new."exameId" else null end,
+      now()
     )
     on conflict do nothing;
   end loop;

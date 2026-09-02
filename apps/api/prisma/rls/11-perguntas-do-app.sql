@@ -28,6 +28,10 @@ grant execute on function public.tem_consentimento(text, text) to authenticated;
 grant execute on function public.tem_acesso_compartilhado(text, text) to authenticated;
 grant execute on function public.pode_ler_do_aluno(text, text) to authenticated;
 grant execute on function public.pode_escrever_do_aluno(text, text, text[]) to authenticated;
+-- Chamadas pela politica de `User`, pelo mesmo motivo: corpo de politica roda
+-- como quem pede.
+grant execute on function public.ha_vinculo_qualquer(text) to authenticated;
+grant execute on function public.mesma_equipe(text) to authenticated;
 
 -- --------------------------------------------------------------------------
 -- O que o APP pergunta, e por quê.
@@ -61,31 +65,8 @@ revoke execute on function public.pode_escrever_do_aluno(text, text, text[]) fro
 revoke execute on function public.tem_vinculo(text) from anon;
 revoke execute on function public.tem_consentimento(text, text) from anon;
 revoke execute on function public.tem_acesso_compartilhado(text, text) from anon;
+revoke execute on function public.ha_vinculo_qualquer(text) from anon;
+revoke execute on function public.mesma_equipe(text) from anon;
 
 grant execute on function public.pode_pedir_acesso(text, text) to authenticated;
 revoke execute on function public.pode_pedir_acesso(text, text) from anon;
-
-/*
-  A equipe de cuidado enxerga a si mesma.
-
-  Antes, cada profissional via só o próprio vínculo — e com isso não tinha como
-  saber A QUEM pedir um exame, o que deixava a funcionalidade de pedido sem
-  porta de entrada.
-
-  Quem entra na lista é só quem já atende o aluno, e o aluno escolheu cada um
-  deles. O que fica visível é nome e papel de quem está na mesma equipe, não
-  dado nenhum de saúde — para esse continua valendo o consentimento por escopo.
-*/
-drop policy if exists vinculo_le on public."Vinculo";
-create policy vinculo_le on public."Vinculo" for select using (
-  "alunoId" = public.usuario_atual()
-  or "profissionalId" = public.usuario_atual()
-  /*
-    `tem_vinculo` e nao um `exists` aqui dentro: consultar `Vinculo` de dentro
-    da politica de `Vinculo` dispara a propria politica outra vez, e o Postgres
-    para com "infinite recursion detected in policy". A funcao e
-    `security definer` justamente para quebrar esse ciclo — e foi por isso que
-    ela nasceu, na fundacao.
-  */
-  or (status = 'ATIVO' and public.tem_vinculo("alunoId"))
-);

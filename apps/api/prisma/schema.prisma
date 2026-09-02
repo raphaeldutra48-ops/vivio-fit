@@ -1891,3 +1891,17 @@ model SolicitacaoDeAcesso {
   @@index([solicitanteId, alunoId, escopo, status])
   @@index([alunoId, status])
 }
+
+/// De que escopo e cada marcador de exame — a tabela que o banco consulta para
+/// saber quem pode ver o que.
+///
+/// A verdade mora em `REFERENCIAS`, em `@vivio/contracts`, e vem para ca pelo
+/// `exportar-regras.ts`. Sem isto, o gatilho de alerta teria de carregar uma
+/// lista de marcadores escrita a mao — que e exatamente como as regras de
+/// alerta divergiram da fonte uma vez.
+model MarcadorEscopo {
+  marcador String @id
+  /// NUTRICIONAL ou MEDICO. O nutricionista le so os NUTRICIONAL; o medico e o
+  /// proprio aluno leem todos.
+  escopo   String
+}

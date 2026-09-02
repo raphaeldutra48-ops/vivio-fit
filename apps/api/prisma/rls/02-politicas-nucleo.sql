@@ -14,20 +14,68 @@
 -- ---------------------------------------------------------------------------
 alter table public."User" enable row level security;
 alter table public."User" force row level security;
+/*
+  Quem enxerga o cadastro de quem.
+
+  Tres casos, e os dois ultimos foram aprendidos depois:
+
+  1. Voce mesmo.
+  2. Alguem com quem voce tem VINCULO, em qualquer status — e nao so ATIVO.
+     Com "so ativo", o profissional que acabava de convidar um aluno recebia o
+     convite pendente com a contraparte NULA: ele sabia o e-mail, porque foi ele
+     que digitou, e mesmo assim nao conseguia ler o nome. A tela mostrava
+     "Convites pendentes: 1" sem dizer de quem.
+  3. Quem esta na MESMA EQUIPE de cuidado: dois profissionais com vinculo ativo
+     com o mesmo aluno. Sem isso nao ha como saber a quem pedir um exame, e o
+     pedido de acesso entre profissionais fica sem porta de entrada. O que fica
+     visivel e nome e contato de colega — dado de saude continua preso ao
+     consentimento por escopo, que nao passa por aqui.
+
+  `senhaHash` nao entra em nenhum dos tres: RLS e por linha, e quem cuida da
+  coluna e o `grant` em `13-colunas-sensiveis.sql`.
+*/
+create or replace function public.ha_vinculo_qualquer(p_outro_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and (
+       public.usuario_atual() = p_outro_id
+       or exists (
+         select 1 from public."Vinculo" v
+         where (v."alunoId" = p_outro_id and v."profissionalId" = public.usuario_atual())
+            or (v."profissionalId" = p_outro_id and v."alunoId" = public.usuario_atual())
+       )
+     )
+$$;
+
+create or replace function public.mesma_equipe(p_outro_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and exists (
+       select 1
+       from public."Vinculo" meu
+       join public."Vinculo" dele on dele."alunoId" = meu."alunoId"
+       where meu."profissionalId" = public.usuario_atual()
+         and meu.status = 'ATIVO'
+         and dele."profissionalId" = p_outro_id
+         and dele.status = 'ATIVO'
+     )
+$$;
+
 drop policy if exists user_le on public."User";
 create policy user_le on public."User" for select using (
   id = public.usuario_atual()
-  or public.tem_vinculo(id)
-  /*
-    O profissional também precisa aparecer para o aluno — a tela "minha equipe"
-    mostra nome e especialidade de quem cuida dele.
-  */
-  or exists (
-    select 1 from public."Vinculo" v
-    where v."profissionalId" = "User".id
-      and v."alunoId" = public.usuario_atual()
-      and v.status = 'ATIVO'
-  )
+  or public.ha_vinculo_qualquer(id)
+  or public.mesma_equipe(id)
 );
 
 -- ---------------------------------------------------------------------------
@@ -35,9 +83,23 @@ create policy user_le on public."User" for select using (
 -- ---------------------------------------------------------------------------
 alter table public."Vinculo" enable row level security;
 alter table public."Vinculo" force row level security;
+/*
+  Vinculo: os dois lados enxergam o proprio laco, e a equipe enxerga a si mesma.
+
+  A terceira condicao existe pelo mesmo motivo do `user_le`: sem ela, cada
+  profissional via so o proprio vinculo e nao tinha como saber A QUEM pedir um
+  exame.
+
+  `tem_vinculo` e nao um `exists` aqui dentro: consultar `Vinculo` de dentro da
+  politica de `Vinculo` dispara a propria politica outra vez, e o Postgres para
+  com "infinite recursion detected in policy". A funcao e `security definer`
+  justamente para quebrar esse ciclo.
+*/
 drop policy if exists vinculo_le on public."Vinculo";
 create policy vinculo_le on public."Vinculo" for select using (
-  "alunoId" = public.usuario_atual() or "profissionalId" = public.usuario_atual()
+  "alunoId" = public.usuario_atual()
+  or "profissionalId" = public.usuario_atual()
+  or (status = 'ATIVO' and public.tem_vinculo("alunoId"))
 );
 
 alter table public."Consentimento" enable row level security;
