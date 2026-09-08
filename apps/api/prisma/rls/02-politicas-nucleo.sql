@@ -71,11 +71,38 @@ as $$
      )
 $$;
 
+/*
+  Quarto caso: quem APARECE na minha auditoria.
+
+  "Quem viu meus dados" é o direito de saber QUEM — e sem isto a tela mostrava
+  a ação e a data com o nome em branco. Acontece com o admin, que acessa sem
+  vínculo nenhum, e é justamente o acesso que mais interessa ao titular saber
+  que houve.
+
+  Abre pouco e abre o certo: só o nome de quem já mexeu nos dados DESTA pessoa,
+  e só para ela.
+*/
+create or replace function public.foi_meu_ator(p_outro_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.usuario_atual() is not null
+     and exists (
+       select 1 from public."LogAuditoria" l
+       where l."alunoId" = public.usuario_atual()
+         and l."atorId" = p_outro_id
+     )
+$$;
+
 drop policy if exists user_le on public."User";
 create policy user_le on public."User" for select using (
   id = public.usuario_atual()
   or public.ha_vinculo_qualquer(id)
   or public.mesma_equipe(id)
+  or public.foi_meu_ator(id)
 );
 
 -- ---------------------------------------------------------------------------

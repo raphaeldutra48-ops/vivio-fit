@@ -66,7 +66,6 @@ import type {
   LembreteResumo,
   NotificacaoResumo,
   RegistrarDispositivoInput,
-  EscopoDado,
   LoginInput,
   CheckinResumo,
   PainelDeProgresso,
@@ -457,16 +456,16 @@ export class VivioClient {
   // --- auditoria ----------------------------------------------------------
 
   readonly auditoria = {
+    /**
+     * "Quem viu meus dados" — direito do titular pela LGPD.
+     *
+     * So o proprio aluno le a auditoria dele: nem o profissional, nem o admin.
+     * Quem garante isso e a politica, nao esta chamada.
+     */
     meusAcessos: (
       consulta: Partial<ConsultaAuditoria> = {},
     ): Promise<{ dados: AcessoRegistrado[]; proximoCursor: string | null }> =>
-      this.requisicao('/auditoria/meus-acessos', {
-        query: {
-          cursor: consulta.cursor,
-          limit: consulta.limit,
-          escopo: consulta.escopo as EscopoDado | undefined,
-        },
-      }),
+      this.supabase.meusAcessos(consulta),
   };
 
   // --- exercícios ---------------------------------------------------------

@@ -32,6 +32,7 @@ grant execute on function public.pode_escrever_do_aluno(text, text, text[]) to a
 -- como quem pede.
 grant execute on function public.ha_vinculo_qualquer(text) to authenticated;
 grant execute on function public.mesma_equipe(text) to authenticated;
+grant execute on function public.foi_meu_ator(text) to authenticated;
 
 -- --------------------------------------------------------------------------
 -- O que o APP pergunta, e por quê.
@@ -67,6 +68,7 @@ revoke execute on function public.tem_consentimento(text, text) from anon;
 revoke execute on function public.tem_acesso_compartilhado(text, text) from anon;
 revoke execute on function public.ha_vinculo_qualquer(text) from anon;
 revoke execute on function public.mesma_equipe(text) from anon;
+revoke execute on function public.foi_meu_ator(text) from anon;
 
 grant execute on function public.pode_pedir_acesso(text, text) to authenticated;
 revoke execute on function public.pode_pedir_acesso(text, text) from anon;

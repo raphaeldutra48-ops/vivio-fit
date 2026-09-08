@@ -5,7 +5,9 @@ import {
   montarEvolucaoCorporal,
 } from '@vivio/contracts';
 import type {
+  AcessoRegistrado,
   AlertaResumo,
+  ConsultaAuditoria,
   ConsultaEvolucao,
   EvolucaoCorporal,
   CondicaoResumo,
@@ -852,6 +854,80 @@ export class MotorSupabase {
 
     return this.meuPerfil();
   }
+
+  // --- quem viu meus dados ------------------------------------------------
+
+  /**
+   * O direito do titular de saber quem acessou os dados dele.
+   *
+   * A política já garante o essencial: só o próprio aluno lê a auditoria dele
+   * — nem o profissional, nem o admin. O filtro por `alunoId` aqui é o do
+   * PostgREST, não a defesa; a defesa é a política.
+   *
+   * ## A paginação mudou de mecânica sem mudar de formato
+   *
+   * O Prisma paginava por `cursor: { id }`, que o PostgREST não tem. Aqui é
+   * keyset por `criadoEm`, com o id como desempate — e o cursor continua sendo
+   * o id da última linha, exatamente como antes. Manter o formato importa: uma
+   * página pedida pela API e continuada por aqui (ou o contrário) não pode
+   * quebrar enquanto os dois caminhos convivem.
+   *
+   * O desempate por id não é preciosismo: dois acessos gravados no mesmo
+   * instante são comuns — um mesmo carregamento de tela gera vários — e sem
+   * ele a página seguinte repetiria ou pularia linhas.
+   */
+  async meusAcessos(
+    consulta: Partial<ConsultaAuditoria> = {},
+  ): Promise<{ dados: AcessoRegistrado[]; proximoCursor: string | null }> {
+    const eu = await this.meuId();
+    const limite = consulta.limit ?? 30;
+
+    let q = this.db
+      .from('LogAuditoria')
+      .select('id,acao,recursoTipo,escopo,criadoEm,ator:User!LogAuditoria_atorId_fkey(id,nome,papel)')
+      .eq('alunoId', eu)
+      // O próprio acesso do aluno aos seus dados não polui a lista.
+      .neq('atorId', eu)
+      .order('criadoEm', { ascending: false })
+      .order('id', { ascending: false })
+      // Um a mais do que cabe: é assim que se sabe se há próxima página sem
+      // contar o total.
+      .limit(limite + 1);
+
+    if (consulta.escopo) q = q.eq('escopo', consulta.escopo);
+
+    if (consulta.cursor) {
+      const ancora = await this.db
+        .from('LogAuditoria')
+        .select('criadoEm')
+        .eq('id', consulta.cursor)
+        .maybeSingle();
+      const quando = (ancora.data as { criadoEm: string } | null)?.criadoEm;
+      // Cursor que não existe mais devolve a primeira página, e não erro: a
+      // linha pode ter saído entre uma página e outra.
+      if (quando) {
+        q = q.or(
+          `criadoEm.lt.${quando},and(criadoEm.eq.${quando},id.lt.${consulta.cursor})`,
+        );
+      }
+    }
+
+    const linhas = this.ou(await q) as unknown as LinhaAuditoria[];
+    const temMais = linhas.length > limite;
+    const pagina = temMais ? linhas.slice(0, limite) : linhas;
+
+    return {
+      dados: pagina.map((r) => ({
+        id: r.id,
+        acao: r.acao as AcessoRegistrado['acao'],
+        recursoTipo: r.recursoTipo,
+        escopo: r.escopo as AcessoRegistrado['escopo'],
+        criadoEm: r.criadoEm,
+        ator: r.ator,
+      })),
+      proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
+    };
+  }
 }
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
@@ -949,4 +1025,13 @@ function decodificarBase64Url(s: string): string {
   return decodeURIComponent(
     Array.from(bruto, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''),
   );
+}
+
+interface LinhaAuditoria {
+  id: string;
+  acao: string;
+  recursoTipo: string;
+  escopo: string | null;
+  criadoEm: string;
+  ator: AcessoRegistrado['ator'];
 }
