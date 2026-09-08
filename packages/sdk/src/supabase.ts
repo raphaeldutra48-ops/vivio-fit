@@ -11,6 +11,7 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  AlimentoResumo,
   Classificacao,
   ExameResumo,
   CheckinResumo,
@@ -28,6 +29,7 @@ import type {
   RegistrarProfissionalInput,
   RespostaAutenticacao,
   AtualizarPerfilInput,
+  ListarAlimentosQuery,
   Marcador,
   MedidaParaSerie,
   MedidaResumo,
@@ -1230,6 +1232,49 @@ export class MotorSupabase {
     );
 
     return this.obterExame(alunoId, id);
+  }
+
+  // --- catálogo de alimentos ----------------------------------------------
+
+  async listarAlimentos(consulta: Partial<ListarAlimentosQuery> = {}): Promise<AlimentoResumo[]> {
+    let q = this.db
+      .from('Alimento')
+      .select('id,nome,grupo,kcal,proteinaG,carboidratoG,gorduraG,fibraG,medidaCaseira,medidaGramas')
+      .order('grupo', { ascending: true })
+      .order('nome', { ascending: true })
+      .limit(consulta.limit ?? 50);
+    if (consulta.grupo) q = q.eq('grupo', consulta.grupo);
+    // `ilike` com `%` dos dois lados: a busca é por pedaço do nome, e caixa não
+    // pode separar "Arroz" de "arroz". Acento continua separando, como antes.
+    if (consulta.q) q = q.ilike('nome', `%${consulta.q}%`);
+
+    return (this.ou(await q) as unknown as Record<string, unknown>[]).map((a) => ({
+      id: a.id as string,
+      nome: a.nome as string,
+      grupo: a.grupo as string,
+      porcao100g: {
+        kcal: n(a.kcal) ?? 0,
+        proteinaG: n(a.proteinaG) ?? 0,
+        carboidratoG: n(a.carboidratoG) ?? 0,
+        gorduraG: n(a.gorduraG) ?? 0,
+        // Fibra ausente conta como zero: a soma da dieta não pode virar `NaN`
+        // por causa de um alimento sem o campo preenchido.
+        fibraG: n(a.fibraG) ?? 0,
+      },
+      medidaCaseira: (a.medidaCaseira as string | null) ?? null,
+      medidaGramas: n(a.medidaGramas),
+    }));
+  }
+
+  /**
+   * Os grupos do catálogo.
+   *
+   * Por função, e não por consulta: `distinct` não existe no PostgREST, e
+   * trazer as ~600 linhas para reduzir a dez grupos no cliente seria pagar rede
+   * por uma conta que o banco faz de graça.
+   */
+  async gruposDeAlimento(): Promise<string[]> {
+    return this.rpc<string[]>('grupos_de_alimento');
   }
 }
 

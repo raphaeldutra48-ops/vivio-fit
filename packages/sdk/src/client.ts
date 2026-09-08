@@ -1005,11 +1005,9 @@ export class VivioClient {
 
   readonly alimentos = {
     listar: (consulta: Partial<ListarAlimentosQuery> = {}): Promise<AlimentoResumo[]> =>
-      this.requisicao<AlimentoResumo[]>('/alimentos', {
-        query: { q: consulta.q, grupo: consulta.grupo, limit: consulta.limit },
-      }),
+      this.supabase.listarAlimentos(consulta),
 
-    grupos: (): Promise<string[]> => this.requisicao<string[]>('/alimentos/grupos'),
+    grupos: (): Promise<string[]> => this.supabase.gruposDeAlimento(),
   };
 
   readonly dietas = {
