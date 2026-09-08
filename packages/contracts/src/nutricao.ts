@@ -166,3 +166,49 @@ export interface ResumoDeAgua {
 
 /** Volumes de toque rápido no app. */
 export const VOLUMES_RAPIDOS_ML = [200, 300, 500, 750] as const;
+
+/** Meta padrão enquanto o nutricionista não define uma. */
+export const META_AGUA_PADRAO_ML = 2000;
+
+/**
+ * O copo de hoje: quanto já foi, quanto falta, e há quanto tempo não bebe.
+ *
+ * Função pura, e mora aqui pelo mesmo motivo das séries de evolução e do
+ * painel de check-in: é conta sobre linhas que quem pergunta já pode ler. Os
+ * dois lados chamam esta mesma implementação enquanto a API existe.
+ *
+ * Espera os registros em ordem DECRESCENTE de `registradoEm` — o primeiro é o
+ * último gole, e é dele que sai o `minutosDesdeUltimoRegistro` que alimenta o
+ * lembrete inteligente.
+ */
+export function resumoDeAgua(
+  dia: string,
+  metaMlDia: number | null,
+  registros: { id: string; volumeMl: number; registradoEm: string }[],
+  agora: Date = new Date(),
+): ResumoDeAgua {
+  const meta = metaMlDia ?? META_AGUA_PADRAO_ML;
+  const consumidoMl = registros.reduce((soma, r) => soma + r.volumeMl, 0);
+  const ultimo = registros[0];
+
+  return {
+    data: dia,
+    metaMlDia: meta,
+    consumidoMl,
+    // Teto em 100: beber o dobro da meta não é 200% de progresso, é o
+    // mesmo "cumpriu" — e a barra da tela não passa do fim.
+    percentual: Math.min(100, Math.round((consumidoMl / meta) * 100)),
+    /*
+      Travado em zero: o relógio do banco e o de quem pergunta não são o mesmo,
+      e alguns segundos de diferença bastam para o `Math.floor` devolver -1.
+      "Bebeu há -1 minuto" não existe; "agora mesmo" existe.
+    */
+    minutosDesdeUltimoRegistro: ultimo
+      ? Math.max(
+          0,
+          Math.floor((agora.getTime() - new Date(ultimo.registradoEm).getTime()) / 60_000),
+        )
+      : null,
+    registros,
+  };
+}

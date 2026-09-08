@@ -4,6 +4,7 @@ import {
   VERSAO_TERMO_ATUAL,
   hojeUtc,
   montarEvolucaoCorporal,
+  resumoDeAgua,
   resumoDeCheckins,
 } from '@vivio/contracts';
 import type {
@@ -26,10 +27,13 @@ import type {
   MedidaParaSerie,
   MedidaResumo,
   MeuPerfil,
+  DefinirMetaAguaInput,
+  RegistrarAguaInput,
   RegistrarCheckinInput,
   RegistrarCondicaoInput,
   RegistrarMedidaInput,
   ResolverCondicaoInput,
+  ResumoDeAgua,
   ResumoDeCheckins,
   RespostaRegistro,
   ResumoPessoa,
@@ -355,8 +359,8 @@ export class MotorSupabase {
       id: v.id,
       tipo: v.tipo as VinculoResumo['tipo'],
       status: v.status as VinculoResumo['status'],
-      iniciadoEm: v.iniciadoEm,
-      encerradoEm: v.encerradoEm,
+      iniciadoEm: instanteOuNulo(v.iniciadoEm),
+      encerradoEm: instanteOuNulo(v.encerradoEm),
       contraparte: souOAluno ? v.profissional : v.aluno,
       // Convite que quem mandou pudesse aceitar não seria convite.
       aguardandoMinhaResposta: v.status === 'PENDENTE' && v.convidadoPorId !== eu,
@@ -427,8 +431,8 @@ export class MotorSupabase {
       escopo: c.escopo as ConsentimentoResumo['escopo'],
       finalidade: c.finalidade,
       versaoTermo: c.versaoTermo,
-      concedidoEm: c.concedidoEm,
-      revogadoEm: c.revogadoEm,
+      concedidoEm: instante(c.concedidoEm),
+      revogadoEm: instanteOuNulo(c.revogadoEm),
       profissional: c.profissional,
     }));
   }
@@ -466,8 +470,8 @@ export class MotorSupabase {
       escopo: linha.escopo as ConsentimentoResumo['escopo'],
       finalidade: linha.finalidade,
       versaoTermo: linha.versaoTermo,
-      concedidoEm: linha.concedidoEm,
-      revogadoEm: linha.revogadoEm,
+      concedidoEm: instante(linha.concedidoEm),
+      revogadoEm: instanteOuNulo(linha.revogadoEm),
       profissional: linha.profissional,
     };
   }
@@ -526,8 +530,8 @@ export class MotorSupabase {
       marcadorOrigem: a.marcadorOrigem,
       exameId: a.exameId,
       condicaoId: a.condicaoId,
-      criadoEm: a.criadoEm,
-      reconhecidoEm: a.reconhecidoEm,
+      criadoEm: instante(a.criadoEm),
+      reconhecidoEm: instanteOuNulo(a.reconhecidoEm),
       reconhecidoPor: a.reconhecidoPor,
     }));
   }
@@ -572,8 +576,8 @@ export class MotorSupabase {
       inicioEm: c.inicioEm,
       observacao: c.observacao,
       registradoPor: c.registradoPor,
-      criadoEm: c.criadoEm,
-      resolvidaEm: c.resolvidaEm,
+      criadoEm: instante(c.criadoEm),
+      resolvidaEm: instanteOuNulo(c.resolvidaEm),
       resolvidaPor: c.resolvidaPor,
     };
   }
@@ -783,8 +787,8 @@ export class MotorSupabase {
             ufRegistro: pro.ufRegistro as string,
             especialidades: (pro.especialidades as string[]) ?? [],
             bio: (pro.bio as string | null) ?? null,
-            verificadoEm: (pro.verificadoEm as string | null) ?? null,
-            recusadoEm: (pro.recusadoEm as string | null) ?? null,
+            verificadoEm: instanteOuNulo(pro.verificadoEm),
+            recusadoEm: instanteOuNulo(pro.recusadoEm),
             motivoRecusa: (pro.motivoRecusa as string | null) ?? null,
           }
         : null,
@@ -927,7 +931,7 @@ export class MotorSupabase {
         acao: r.acao as AcessoRegistrado['acao'],
         recursoTipo: r.recursoTipo,
         escopo: r.escopo as AcessoRegistrado['escopo'],
-        criadoEm: r.criadoEm,
+        criadoEm: instante(r.criadoEm),
         ator: r.ator,
       })),
       proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
@@ -950,7 +954,7 @@ export class MotorSupabase {
       teveDor: c.teveDor as boolean,
       localDor: (c.localDor as string | null) ?? null,
       observacao: (c.observacao as string | null) ?? null,
-      criadoEm: c.criadoEm as string,
+      criadoEm: instante(c.criadoEm),
     };
   }
 
@@ -1011,6 +1015,96 @@ export class MotorSupabase {
     ) as unknown as Record<string, unknown>;
     return this.paraCheckin(linha);
   }
+
+  // --- água ---------------------------------------------------------------
+
+  /**
+   * O copo do dia. A conta mora em `@vivio/contracts` — a mesma que a API
+   * chama enquanto ela existe.
+   *
+   * Duas consultas em paralelo, e não um embed: `MetaAgua` é uma linha por
+   * aluno e `RegistroAgua` são várias por dia; embutir uma na outra faria o
+   * PostgREST repetir a meta em cada gole.
+   */
+  async resumoDeAgua(alunoId: string, data?: string): Promise<ResumoDeAgua> {
+    const dia = data ?? new Date().toISOString().slice(0, 10);
+
+    const [meta, registros] = await Promise.all([
+      this.db.from('MetaAgua').select('metaMlDia').eq('alunoId', alunoId).maybeSingle(),
+      this.db
+        .from('RegistroAgua')
+        .select('id,volumeMl,registradoEm')
+        .eq('alunoId', alunoId)
+        .eq('data', dia)
+        .order('registradoEm', { ascending: false }),
+    ]);
+
+    return resumoDeAgua(
+      dia,
+      (this.ou(meta) as { metaMlDia: number } | null)?.metaMlDia ?? null,
+      (
+        this.ou(registros) as unknown as {
+          id: string;
+          volumeMl: number;
+          registradoEm: string;
+        }[]
+      ).map((r) => ({ ...r, registradoEm: instante(r.registradoEm) })),
+    );
+  }
+
+  async registrarAgua(alunoId: string, dados: RegistrarAguaInput): Promise<ResumoDeAgua> {
+    const dia =
+      dados.data instanceof Date
+        ? dados.data.toISOString().slice(0, 10)
+        : String(dados.data).slice(0, 10);
+    this.ou(
+      await this.db.from('RegistroAgua').insert({
+        id: `${alunoId}-${Date.now()}`,
+        alunoId,
+        data: dia,
+        volumeMl: dados.volumeMl,
+      }),
+    );
+    return this.resumoDeAgua(alunoId, dia);
+  }
+
+  /**
+   * Apagar é corrigir um toque errado — o app tem botões de volume rápido, e
+   * marcar 750 ml em vez de 200 acontece.
+   *
+   * O `alunoId` no filtro não é a defesa (a política é), mas evita uma ida ao
+   * banco que apagaria zero linhas e pareceria sucesso.
+   */
+  async removerAgua(alunoId: string, registroId: string): Promise<void> {
+    this.ou(
+      await this.db.from('RegistroAgua').delete().eq('id', registroId).eq('alunoId', alunoId),
+    );
+  }
+
+  async definirMetaAgua(
+    alunoId: string,
+    dados: DefinirMetaAguaInput,
+  ): Promise<{ metaMlDia: number; horaInicio: number; horaFim: number }> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('MetaAgua')
+        .upsert(
+          {
+            id: alunoId,
+            alunoId,
+            definidoPorId: eu,
+            metaMlDia: dados.metaMlDia,
+            horaInicio: dados.horaInicio,
+            horaFim: dados.horaFim,
+          },
+          { onConflict: 'alunoId' },
+        )
+        .select('metaMlDia,horaInicio,horaFim')
+        .single(),
+    ) as unknown as { metaMlDia: number; horaInicio: number; horaFim: number };
+    return linha;
+  }
 }
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
@@ -1062,6 +1156,39 @@ interface LinhaCondicao {
   resolvidaEm: string | null;
   registradoPor: { id: string; nome: string };
   resolvidaPor: { id: string; nome: string } | null;
+}
+
+/**
+ * Um instante do Postgres, em ISO com fuso.
+ *
+ * ## O defeito que isto fecha
+ *
+ * 142 colunas do schema são `timestamp WITHOUT time zone`. O Prisma sempre
+ * gravou UTC nelas e sabia lê-las de volta como UTC — a convenção vivia no
+ * cliente dele. O PostgREST devolve o texto cru: `"2026-03-10T15:00:00"`, sem
+ * o `Z`. E `new Date()` de uma string sem fuso a interpreta como hora LOCAL.
+ *
+ * No Brasil isso desloca tudo em três horas, e para o lado errado: um gole
+ * registrado agora mesmo aparecia como `-181` minutos atrás. "Último treino há
+ * 2 dias" vira 1 ou 3 conforme a hora; um alerta criado às 23h muda de dia.
+ *
+ * Nada disso dá erro. Só mostra a hora errada, e só para quem não vive em UTC.
+ *
+ * A conversão fica aqui, num lugar só, e não em cada `paraX`: espalhada, uma
+ * delas ficaria de fora e ninguém notaria.
+ */
+function instante(v: unknown): string {
+  if (typeof v !== 'string' || v === '') return v as string;
+  // Já tem fuso (`Z` ou `+03:00`)? Então veio pronto.
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(v)) return v;
+  // Data pura (`AAAA-MM-DD`) não é instante: fica como está.
+  if (!v.includes('T') && !v.includes(' ')) return v;
+  return `${v.replace(' ', 'T')}Z`;
+}
+
+/** Idem, para colunas que aceitam nulo. */
+function instanteOuNulo(v: unknown): string | null {
+  return v === null || v === undefined ? null : instante(v);
 }
 
 /**

@@ -1049,16 +1049,20 @@ export class VivioClient {
 
   readonly agua = {
     resumo: (alunoId: string, data?: string): Promise<ResumoDeAgua> =>
-      this.requisicao<ResumoDeAgua>(`/alunos/${alunoId}/agua`, { query: { data } }),
+      this.supabase.resumoDeAgua(alunoId, data),
 
     registrar: (alunoId: string, dados: RegistrarAguaInput): Promise<ResumoDeAgua> =>
-      this.requisicao<ResumoDeAgua>(`/alunos/${alunoId}/agua`, { metodo: 'POST', corpo: dados }),
+      this.supabase.registrarAgua(alunoId, dados),
 
+    /** Corrigir um toque errado: o app tem botao de volume rapido. */
     remover: (alunoId: string, registroId: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/agua/${registroId}`, { metodo: 'DELETE' }),
+      this.supabase.removerAgua(alunoId, registroId),
 
-    definirMeta: (alunoId: string, dados: DefinirMetaAguaInput): Promise<unknown> =>
-      this.requisicao(`/alunos/${alunoId}/agua/meta`, { metodo: 'PUT', corpo: dados }),
+    definirMeta: (
+      alunoId: string,
+      dados: DefinirMetaAguaInput,
+    ): Promise<{ metaMlDia: number; horaInicio: number; horaFim: number }> =>
+      this.supabase.definirMetaAgua(alunoId, dados),
   };
 
   // --- prescrições ----------------------------------------------------------

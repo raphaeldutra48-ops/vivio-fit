@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { resumoDeAgua } from '@vivio/contracts';
 import type {
   DefinirMetaAguaInput,
   RegistrarAguaInput,
   ResumoDeAgua,
 } from '@vivio/contracts';
 import { PrismaService } from '../../infra/prisma.service';
-
-/** Meta padrão enquanto o nutricionista não define uma. */
-const META_PADRAO_ML = 2000;
 
 @Injectable()
 export class AguaService {
@@ -57,6 +55,11 @@ export class AguaService {
     };
   }
 
+  /**
+   * O copo do dia. A conta mora em `@vivio/contracts` — a MESMA função que o
+   * SDK chama. É conta sobre linhas que quem pergunta já pode ler, e agregação
+   * assim não precisa de servidor: precisa de um lugar com teste.
+   */
   async resumoDoDia(alunoId: string, data = new Date(), agora = new Date()): Promise<ResumoDeAgua> {
     const dia = this.soData(data);
 
@@ -68,24 +71,16 @@ export class AguaService {
       }),
     ]);
 
-    const metaMlDia = meta?.metaMlDia ?? META_PADRAO_ML;
-    const consumidoMl = registros.reduce((soma, r) => soma + r.volumeMl, 0);
-    const ultimo = registros[0];
-
-    return {
-      data: dia.toISOString().slice(0, 10),
-      metaMlDia,
-      consumidoMl,
-      percentual: Math.min(100, Math.round((consumidoMl / metaMlDia) * 100)),
-      minutosDesdeUltimoRegistro: ultimo
-        ? Math.floor((agora.getTime() - ultimo.registradoEm.getTime()) / 60_000)
-        : null,
-      registros: registros.map((r) => ({
+    return resumoDeAgua(
+      dia.toISOString().slice(0, 10),
+      meta?.metaMlDia ?? null,
+      registros.map((r) => ({
         id: r.id,
         volumeMl: r.volumeMl,
         registradoEm: r.registradoEm.toISOString(),
       })),
-    };
+      agora,
+    );
   }
 
   /**
