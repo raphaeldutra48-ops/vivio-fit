@@ -392,11 +392,15 @@ export class VivioClient {
       return u;
     },
 
-    perfil: (): Promise<MeuPerfil> => this.requisicao<MeuPerfil>('/me/perfil'),
+    perfil: (): Promise<MeuPerfil> => this.supabase.meuPerfil(),
 
-    /** Trocar o registro no conselho revoga a verificação. */
+    /**
+     * Trocar o registro no conselho REVOGA a verificacao — e quem faz isso e o
+     * gatilho no banco, nao esta chamada. Se fosse o cliente a mandar
+     * `verificadoEm: null`, bastaria nao mandar.
+     */
     atualizarPerfil: (dados: AtualizarPerfilInput): Promise<MeuPerfil> =>
-      this.requisicao<MeuPerfil>('/me/perfil', { metodo: 'PATCH', corpo: dados }),
+      this.supabase.atualizarMeuPerfil(dados),
   };
 
   // --- vínculos -----------------------------------------------------------

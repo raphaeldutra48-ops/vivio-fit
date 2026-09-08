@@ -17,8 +17,10 @@ import type {
   RegistrarAlunoInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
+  AtualizarPerfilInput,
   MedidaParaSerie,
   MedidaResumo,
+  MeuPerfil,
   RegistrarCondicaoInput,
   RegistrarMedidaInput,
   ResolverCondicaoInput,
@@ -731,6 +733,124 @@ export class MotorSupabase {
 
     const linhas = this.ou(await q) as unknown as MedidaParaSerie[];
     return montarEvolucaoCorporal(linhas);
+  }
+
+  // --- meu cadastro -------------------------------------------------------
+
+  /*
+    A chave estrangeira vai NOMEADA porque `PerfilProfissional` aponta duas
+    vezes para `User` — o dono do perfil e o admin que o verificou. Sem o nome,
+    o PostgREST recusa a consulta com "more than one relationship was found",
+    que é o certo: adivinhar qual das duas ligações usar seria pior.
+  */
+  private static readonly CAMPOS_PERFIL =
+    'id,nome,email,telefone,papel,emailVerifEm,' +
+    'perfilProfissional:PerfilProfissional!PerfilProfissional_userId_fkey' +
+    '(tipo,registroConselho,ufRegistro,especialidades,bio,verificadoEm,recusadoEm,motivoRecusa),' +
+    'perfilAluno:PerfilAluno!PerfilAluno_userId_fkey(alturaCm,sexoBiologico,dataNascimento)';
+
+  private paraPerfil(u: Record<string, unknown>): MeuPerfil {
+    /*
+      O PostgREST devolve relação um-para-um ora como objeto, ora como arranjo
+      de um elemento, conforme consiga provar a unicidade pela chave. Aceitar
+      os dois evita um `undefined` que só aparece em produção, num perfil que
+      o teste não cobriu.
+    */
+    const um = <T>(v: unknown): T | null =>
+      Array.isArray(v) ? ((v[0] as T) ?? null) : ((v as T) ?? null);
+
+    const pro = um<Record<string, unknown>>(u.perfilProfissional);
+    const aluno = um<Record<string, unknown>>(u.perfilAluno);
+
+    return {
+      id: u.id as string,
+      nome: u.nome as string,
+      email: u.email as string,
+      telefone: (u.telefone as string | null) ?? null,
+      papel: u.papel as MeuPerfil['papel'],
+      emailVerificado: u.emailVerifEm !== null,
+      profissional: pro
+        ? {
+            tipo: pro.tipo as MeuPerfil['papel'],
+            registroConselho: pro.registroConselho as string,
+            ufRegistro: pro.ufRegistro as string,
+            especialidades: (pro.especialidades as string[]) ?? [],
+            bio: (pro.bio as string | null) ?? null,
+            verificadoEm: (pro.verificadoEm as string | null) ?? null,
+            recusadoEm: (pro.recusadoEm as string | null) ?? null,
+            motivoRecusa: (pro.motivoRecusa as string | null) ?? null,
+          }
+        : null,
+      aluno: aluno
+        ? {
+            alturaCm: n(aluno.alturaCm),
+            sexoBiologico: (aluno.sexoBiologico as MeuPerfil['aluno'] extends null
+              ? never
+              : NonNullable<MeuPerfil['aluno']>['sexoBiologico']) ?? null,
+            dataNascimento: String(aluno.dataNascimento).slice(0, 10),
+          }
+        : null,
+    };
+  }
+
+  async meuPerfil(): Promise<MeuPerfil> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db.from('User').select(MotorSupabase.CAMPOS_PERFIL).eq('id', eu).single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraPerfil(linha);
+  }
+
+  /**
+   * Salvar o cadastro. Até três escritas, porque são três tabelas.
+   *
+   * O que NÃO está aqui é tão importante quanto o que está: trocar o registro
+   * no conselho revoga a verificação, e quem faz isso é o gatilho no banco. Se
+   * fosse o cliente a mandar `verificadoEm: null`, bastaria não mandar.
+   */
+  async atualizarMeuPerfil(dados: AtualizarPerfilInput): Promise<MeuPerfil> {
+    const eu = await this.meuId();
+
+    this.ou(
+      await this.db
+        .from('User')
+        .update({ nome: dados.nome.trim(), telefone: dados.telefone ?? null })
+        .eq('id', eu),
+    );
+
+    const atual = await this.meuPerfil();
+
+    if (atual.profissional) {
+      this.ou(
+        await this.db
+          .from('PerfilProfissional')
+          .update({
+            bio: dados.bio ?? null,
+            especialidades: dados.especialidades.map((e) => e.trim()),
+            ...(dados.registroConselho
+              ? { registroConselho: dados.registroConselho.trim() }
+              : {}),
+            ...(dados.ufRegistro ? { ufRegistro: dados.ufRegistro.toUpperCase() } : {}),
+          })
+          .eq('userId', eu),
+      );
+    }
+
+    if (atual.aluno && (dados.alturaCm !== undefined || dados.sexoBiologico !== undefined)) {
+      this.ou(
+        await this.db
+          .from('PerfilAluno')
+          .update({
+            ...(dados.alturaCm !== undefined ? { alturaCm: dados.alturaCm } : {}),
+            ...(dados.sexoBiologico !== undefined
+              ? { sexoBiologico: dados.sexoBiologico }
+              : {}),
+          })
+          .eq('userId', eu),
+      );
+    }
+
+    return this.meuPerfil();
   }
 }
 
