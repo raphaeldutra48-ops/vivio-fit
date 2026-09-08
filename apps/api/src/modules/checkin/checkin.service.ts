@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { resumoDeCheckins } from '@vivio/contracts';
 import type {
   CheckinResumo,
   RegistrarCheckinInput,
@@ -99,36 +100,18 @@ export class CheckinService {
   /**
    * Os números que o painel do profissional mostra.
    *
-   * A decisão que importa aqui é o denominador da adesão: **dias com
-   * check-in**, não dias do período. Quem não registrou nada não "deixou de
-   * treinar" — apenas não contou. Usar o período inteiro daria 20% de adesão
-   * para alguém que treina certo e só esquece de marcar, e o personal ligaria
-   * cobrando a pessoa errada.
+   * A conta mora em `@vivio/contracts` — a MESMA função que o SDK chama. É
+   * conta sobre linhas que quem pergunta já pode ler, e agregação assim não
+   * precisa de servidor: precisa de um lugar com teste.
    *
-   * Para "sumiu" existe campo próprio: `diasSemCheckin`.
+   * A decisão que importa nela é o denominador da adesão: dias COM check-in, e
+   * não dias do período. Quem não registrou nada não deixou de treinar, apenas
+   * não contou — usar o período inteiro daria 20% de adesão a quem treina
+   * certo e só esquece de marcar, e o personal ligaria cobrando a pessoa
+   * errada.
    */
   async resumo(alunoId: string, dias: number): Promise<ResumoDeCheckins> {
-    const registros = await this.listar(alunoId, dias);
-
-    const comCheckin = registros.length;
-    const treinou = registros.filter((r) => r.treinou).length;
-    const diasComDor = registros.filter((r) => r.teveDor).length;
-
-    const somaEnergia = registros.reduce((s, r) => s + r.energia, 0);
-    const ultimo = registros[0] ?? null;
-
-    return {
-      dias,
-      comCheckin,
-      treinou,
-      aderencia: comCheckin === 0 ? null : Math.round((treinou / comCheckin) * 100),
-      energiaMedia: comCheckin === 0 ? null : Number((somaEnergia / comCheckin).toFixed(1)),
-      diasComDor,
-      diasSemCheckin: ultimo
-        ? Math.floor((this.hojeUtc().getTime() - new Date(`${ultimo.data}T00:00:00.000Z`).getTime()) / DIA_EM_MS)
-        : null,
-      ultimoEm: ultimo?.data ?? null,
-    };
+    return resumoDeCheckins(await this.listar(alunoId, dias), dias);
   }
 
   private paraResumo(r: {

@@ -2,10 +2,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   FINALIDADE_POR_ESCOPO,
   VERSAO_TERMO_ATUAL,
+  hojeUtc,
   montarEvolucaoCorporal,
+  resumoDeCheckins,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  CheckinResumo,
   AlertaResumo,
   ConsultaAuditoria,
   ConsultaEvolucao,
@@ -23,9 +26,11 @@ import type {
   MedidaParaSerie,
   MedidaResumo,
   MeuPerfil,
+  RegistrarCheckinInput,
   RegistrarCondicaoInput,
   RegistrarMedidaInput,
   ResolverCondicaoInput,
+  ResumoDeCheckins,
   RespostaRegistro,
   ResumoPessoa,
   UsuarioAutenticado,
@@ -927,6 +932,84 @@ export class MotorSupabase {
       })),
       proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
     };
+  }
+
+  // --- check-in diário ----------------------------------------------------
+
+  private static readonly CAMPOS_CHECKIN =
+    'id,data,treinou,energia,teveDor,localDor,observacao,criadoEm';
+
+  private paraCheckin(c: Record<string, unknown>): CheckinResumo {
+    return {
+      id: c.id as string,
+      // A coluna é DATE em UTC. Formatar pelo fuso local deslocaria o dia — e
+      // é justamente o dia que o check-in significa.
+      data: String(c.data).slice(0, 10),
+      treinou: c.treinou as boolean,
+      energia: c.energia as number,
+      teveDor: c.teveDor as boolean,
+      localDor: (c.localDor as string | null) ?? null,
+      observacao: (c.observacao as string | null) ?? null,
+      criadoEm: c.criadoEm as string,
+    };
+  }
+
+  async listarCheckins(alunoId: string, dias = 30): Promise<CheckinResumo[]> {
+    const de = new Date(hojeUtc().getTime() - (dias - 1) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const linhas = this.ou(
+      await this.db
+        .from('CheckinDiario')
+        .select(MotorSupabase.CAMPOS_CHECKIN)
+        .eq('alunoId', alunoId)
+        .gte('data', de)
+        .order('data', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((c) => this.paraCheckin(c));
+  }
+
+  /**
+   * O painel do profissional. A conta mora em `@vivio/contracts`, e a decisão
+   * que importa nela é o denominador da adesão: dias COM check-in, não dias do
+   * período — quem não registrou não deixou de treinar, apenas não contou.
+   */
+  async resumoDeCheckins(alunoId: string, dias = 30): Promise<ResumoDeCheckins> {
+    return resumoDeCheckins(await this.listarCheckins(alunoId, dias), dias);
+  }
+
+  /**
+   * Registrar de novo no mesmo dia CORRIGE o anterior, em vez de criar outro:
+   * quem marcou "não treinei" de manhã e treinou à noite precisa consertar.
+   *
+   * A janela retroativa e a limpeza de `localDor` sem dor ficam no gatilho, e
+   * não aqui: são regras que o cliente teria interesse em contornar.
+   */
+  async registrarCheckin(
+    alunoId: string,
+    dados: RegistrarCheckinInput,
+  ): Promise<CheckinResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('CheckinDiario')
+        .upsert(
+          {
+            id: `${alunoId}-${dados.data}`,
+            alunoId,
+            data: dados.data,
+            treinou: dados.treinou,
+            energia: dados.energia,
+            teveDor: dados.teveDor,
+            localDor: dados.localDor ?? null,
+            observacao: dados.observacao ?? null,
+            atualizadoEm: new Date().toISOString(),
+          },
+          { onConflict: 'alunoId,data' },
+        )
+        .select(MotorSupabase.CAMPOS_CHECKIN)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraCheckin(linha);
   }
 }
 

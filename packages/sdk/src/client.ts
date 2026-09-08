@@ -955,22 +955,24 @@ export class VivioClient {
   };
 
   readonly checkins = {
-    /** Mais recente primeiro — é a ordem que as telas usam. */
+    /** Mais recente primeiro — e a ordem que as telas usam. */
     listar: (alunoId: string, dias = 30): Promise<CheckinResumo[]> =>
-      this.requisicao<CheckinResumo[]>(`/alunos/${alunoId}/checkins`, { query: { dias } }),
+      this.supabase.listarCheckins(alunoId, dias),
 
-    /** Adesão, energia média e dias sem registro — alimenta o painel do profissional. */
+    /** Adesao, energia media e dias sem registro — alimenta o painel. */
     resumo: (alunoId: string, dias = 30): Promise<ResumoDeCheckins> =>
-      this.requisicao<ResumoDeCheckins>(`/alunos/${alunoId}/checkins/resumo`, {
-        query: { dias },
-      }),
+      this.supabase.resumoDeCheckins(alunoId, dias),
 
-    /** Só o próprio aluno registra. Repetir no mesmo dia corrige o anterior. */
+    /**
+     * Repetir no mesmo dia corrige o anterior.
+     *
+     * A janela retroativa de tres dias e imposta por GATILHO, nao por esta
+     * chamada: preencher tres meses de uma vez transformaria a adesao num
+     * numero que a pessoa escreve em vez de um que ela vive, e quem quer
+     * contornar isso e justamente quem escreve o pedido.
+     */
     registrar: (alunoId: string, dados: RegistrarCheckinInput): Promise<CheckinResumo> =>
-      this.requisicao<CheckinResumo>(`/alunos/${alunoId}/checkins`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarCheckin(alunoId, dados),
   };
 
   readonly medidas = {

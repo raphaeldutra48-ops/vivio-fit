@@ -88,3 +88,60 @@ export interface ResumoDeCheckins {
   diasSemCheckin: number | null;
   ultimoEm: string | null;
 }
+
+/** Quantos dias para trás dá para registrar. */
+export const DIAS_RETROATIVOS = 3;
+
+const DIA_EM_MS = 24 * 60 * 60 * 1000;
+
+/** Meia-noite UTC de hoje — é assim que a coluna `@db.Date` guarda o dia. */
+export function hojeUtc(agora: Date = new Date()): Date {
+  return new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()));
+}
+
+/**
+ * Os números que o painel do profissional mostra.
+ *
+ * ## A decisão que importa é o denominador
+ *
+ * A adesão é sobre **dias com check-in**, não dias do período. Quem não
+ * registrou nada não "deixou de treinar" — apenas não contou. Usar o período
+ * inteiro daria 20% de adesão a quem treina certo e só esquece de marcar, e o
+ * personal ligaria cobrando a pessoa errada.
+ *
+ * Para "sumiu" existe campo próprio: `diasSemCheckin`.
+ *
+ * Função pura, e mora aqui pelo mesmo motivo das séries de evolução: é conta
+ * sobre linhas que quem pergunta já pode ler. Os dois lados chamam esta mesma
+ * implementação enquanto a API existe.
+ *
+ * Espera os registros em ordem DECRESCENTE de data — o primeiro é o último
+ * check-in.
+ */
+export function resumoDeCheckins(
+  registros: CheckinResumo[],
+  dias: number,
+  agora: Date = new Date(),
+): ResumoDeCheckins {
+  const comCheckin = registros.length;
+  const treinou = registros.filter((r) => r.treinou).length;
+  const diasComDor = registros.filter((r) => r.teveDor).length;
+  const somaEnergia = registros.reduce((s, r) => s + r.energia, 0);
+  const ultimo = registros[0] ?? null;
+
+  return {
+    dias,
+    comCheckin,
+    treinou,
+    aderencia: comCheckin === 0 ? null : Math.round((treinou / comCheckin) * 100),
+    energiaMedia: comCheckin === 0 ? null : Number((somaEnergia / comCheckin).toFixed(1)),
+    diasComDor,
+    diasSemCheckin: ultimo
+      ? Math.floor(
+          (hojeUtc(agora).getTime() - new Date(`${ultimo.data}T00:00:00.000Z`).getTime()) /
+            DIA_EM_MS,
+        )
+      : null,
+    ultimoEm: ultimo?.data ?? null,
+  };
+}
