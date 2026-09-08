@@ -1,4 +1,4 @@
-import { VivioClient } from '@vivio/sdk';
+import { PROJETO_SUPABASE, VivioClient } from '@vivio/sdk';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
@@ -93,8 +93,15 @@ export const sdk = new VivioClient({
   // Enquanto os grupos de dados ainda não migraram, é para cá que eles vão.
   baseUrl: apiUrl,
   supabase: {
-    url: process.env.EXPO_PUBLIC_SUPABASE_URL ?? extra?.supabaseUrl ?? '',
-    chaveAnonima: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? extra?.supabaseAnonKey ?? '',
+    // O padrão vem do código pelo mesmo motivo da web: a chave `anon` é
+    // pública por desenho, e quem protege os dados é o RLS. Aqui pesa ainda
+    // mais — um build publicado na loja sem a variável não tem como ser
+    // corrigido por painel nenhum.
+    url: process.env.EXPO_PUBLIC_SUPABASE_URL ?? extra?.supabaseUrl ?? PROJETO_SUPABASE.url,
+    chaveAnonima:
+      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+      extra?.supabaseAnonKey ??
+      PROJETO_SUPABASE.chaveAnonima,
     armazenamento,
     urlDeRetorno: 'viviofit://redefinir-senha',
   },

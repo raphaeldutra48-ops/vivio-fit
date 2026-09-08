@@ -1,4 +1,4 @@
-import { VivioClient } from '@vivio/sdk';
+import { PROJETO_SUPABASE, VivioClient } from '@vivio/sdk';
 
 /**
  * Telas que existem justamente para quem ainda não tem sessão.
@@ -48,8 +48,20 @@ export const sdk = new VivioClient({
   // Enquanto os grupos de dados ainda não migraram, é para cá que eles vão.
   baseUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333',
   supabase: {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-    chaveAnonima: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    /*
+      O padrão vem do código, e não do painel de quem constrói.
+
+      `NEXT_PUBLIC_*` é variável de BUILD: o valor é embutido quando o
+      `next build` roda. Uma configuração a mais para esquecer, num valor que
+      não é segredo — a chave `anon` é pública por desenho, e quem protege os
+      dados é o RLS. Esquecê-la faria o app subir sem conseguir autenticar
+      ninguém.
+
+      A variável continua ganhando quando existe: apontar para uma cópia de
+      teste é só defini-la.
+    */
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? PROJETO_SUPABASE.url,
+    chaveAnonima: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? PROJETO_SUPABASE.chaveAnonima,
     // No servidor do Next não há onde guardar sessão, e nem deve haver: cada
     // requisição é de uma pessoa diferente.
     persistirSessao: typeof window !== 'undefined',
