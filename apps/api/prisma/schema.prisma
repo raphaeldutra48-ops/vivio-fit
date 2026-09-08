@@ -1905,3 +1905,24 @@ model MarcadorEscopo {
   /// proprio aluno leem todos.
   escopo   String
 }
+
+/// As faixas de referencia de cada marcador, por sexo.
+///
+/// A verdade mora em `REFERENCIAS`, em `@vivio/contracts`, e vem para ca pelo
+/// `exportar-regras.ts`. Existe porque a CLASSIFICACAO de um resultado nao pode
+/// ser calculada pelo cliente: e ela que dispara o alerta clinico, e um cliente
+/// adulterado marcaria "otimo" num valor critico para o aviso nunca nascer.
+///
+/// `null` num limite significa "sem borda desse lado" — colesterol nao tem
+/// minimo laboratorial, por exemplo.
+model FaixaMarcador {
+  marcador String
+  /// M ou F. A faixa de varios marcadores muda com o sexo.
+  sexo     String
+  labMin   Decimal? @db.Decimal(10, 3)
+  labMax   Decimal? @db.Decimal(10, 3)
+  funcMin  Decimal? @db.Decimal(10, 3)
+  funcMax  Decimal? @db.Decimal(10, 3)
+
+  @@id([marcador, sexo])
+}

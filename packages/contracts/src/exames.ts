@@ -538,3 +538,45 @@ export const registrarExameSchema = z.object({
   resultados: z.array(resultadoMarcadorSchema).min(1).max(MARCADORES.length),
 });
 export type RegistrarExameInput = z.infer<typeof registrarExameSchema>;
+
+/**
+ * Enriquece um resultado guardado com a referência que a tela mostra ao lado.
+ *
+ * A `classificacao` NÃO é recalculada: ela vem congelada do registro, porque a
+ * faixa usada não pode mudar se a referência do produto for revisada depois.
+ * Um exame de 2024 continua lido pela régua de 2024.
+ *
+ * Função pura, e mora aqui pelo mesmo motivo das outras agregações: é
+ * enriquecimento sobre linhas que quem pergunta já pode ler, e os dois lados
+ * chamam esta mesma implementação enquanto a API existe.
+ */
+export function enriquecerMarcador(
+  marcador: Marcador,
+  valor: number,
+  classificacao: Classificacao,
+  sexo: SexoBiologico,
+): MarcadorNoExame {
+  const ref = referenciaDe(marcador);
+  return {
+    marcador,
+    rotulo: ref.rotulo,
+    unidade: ref.unidade,
+    sistema: ref.sistema,
+    valor,
+    classificacao,
+    laboratorial: faixaPara(ref.laboratorial, sexo),
+    funcional: faixaPara(ref.funcional, sexo),
+    fonteLaboratorial: ref.fonteLaboratorial,
+    fonteFuncional: ref.fonteFuncional,
+    ...(ref.nota === undefined ? {} : { nota: ref.nota }),
+  };
+}
+
+/** Quantos de cada classificação — o resumo colorido no alto do exame. */
+export function contarClassificacoes(
+  resultados: { classificacao: Classificacao }[],
+): Record<Classificacao, number> {
+  const zero = { OTIMO: 0, ATENCAO: 0, CRITICO: 0 } as Record<Classificacao, number>;
+  for (const r of resultados) zero[r.classificacao] += 1;
+  return zero;
+}

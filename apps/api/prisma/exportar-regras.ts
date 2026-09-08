@@ -3,6 +3,7 @@ import {
   Classificacao,
   REFERENCIAS,
   SexoBiologico,
+  faixaPara,
   TipoCondicao,
   type Faixa,
   type Marcador,
@@ -175,6 +176,35 @@ async function principal(): Promise<void> {
       });
     }
     console.log(`marcadores com escopo: ${Object.keys(REFERENCIAS).length}`);
+
+    /*
+      As faixas, por sexo.
+
+      Vão junto porque a CLASSIFICAÇÃO de um resultado não pode ser calculada
+      pelo cliente: é ela que dispara o alerta clínico, e um cliente adulterado
+      marcaria "ótimo" num valor crítico para o aviso nunca nascer. O gatilho
+      recalcula na entrada, e para isso precisa das faixas aqui dentro.
+    */
+    let faixas = 0;
+    for (const [marcador, ref] of Object.entries(REFERENCIAS)) {
+      for (const sexo of ['M', 'F'] as SexoBiologico[]) {
+        const lab = faixaPara(ref.laboratorial, sexo);
+        const func = faixaPara(ref.funcional, sexo);
+        const dados = {
+          labMin: lab.min ?? null,
+          labMax: lab.max ?? null,
+          funcMin: func.min ?? null,
+          funcMax: func.max ?? null,
+        };
+        await prisma.faixaMarcador.upsert({
+          where: { marcador_sexo: { marcador, sexo } },
+          update: dados,
+          create: { marcador, sexo, ...dados },
+        });
+        faixas += 1;
+      }
+    }
+    console.log(`faixas de referência: ${faixas}`);
 
     /*
       O que sobrou na tabela e não existe mais no TypeScript é desligado, não

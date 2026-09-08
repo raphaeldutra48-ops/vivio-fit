@@ -4,11 +4,15 @@ import {
   VERSAO_TERMO_ATUAL,
   hojeUtc,
   montarEvolucaoCorporal,
+  contarClassificacoes,
+  enriquecerMarcador,
   resumoDeAgua,
   resumoDeCheckins,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  Classificacao,
+  ExameResumo,
   CheckinResumo,
   AlertaResumo,
   ConsultaAuditoria,
@@ -24,17 +28,20 @@ import type {
   RegistrarProfissionalInput,
   RespostaAutenticacao,
   AtualizarPerfilInput,
+  Marcador,
   MedidaParaSerie,
   MedidaResumo,
   MeuPerfil,
   DefinirMetaAguaInput,
   RegistrarAguaInput,
   RegistrarCheckinInput,
+  RegistrarExameInput,
   RegistrarCondicaoInput,
   RegistrarMedidaInput,
   ResolverCondicaoInput,
   ResumoDeAgua,
   ResumoDeCheckins,
+  SexoBiologico,
   RespostaRegistro,
   ResumoPessoa,
   UsuarioAutenticado,
@@ -1104,6 +1111,125 @@ export class MotorSupabase {
         .single(),
     ) as unknown as { metaMlDia: number; horaInicio: number; horaFim: number };
     return linha;
+  }
+
+  // --- exame ---------------------------------------------------------------
+
+  /*
+    `chaveArquivo` NÃO entra na lista de colunas — o `grant` do banco nem a
+    deixaria sair. O arquivo é do médico e do aluno, e chega por URL assinada
+    de quem confere o papel; a chave crua não precisa sair do banco.
+  */
+  private static readonly CAMPOS_EXAME =
+    'id,laboratorio,dataColeta,sexo,observacao,mimeType,criadoEm,' +
+    'registradoPor:User!Exame_registradoPorId_fkey(id,nome),' +
+    'resultados:ResultadoMarcador(marcador,valor,classificacao)';
+
+  private paraExame(e: Record<string, unknown>): ExameResumo {
+    const sexo = e.sexo as SexoBiologico;
+    /*
+      Os resultados já chegam filtrados pelo escopo de quem perguntou — a
+      política de `ResultadoMarcador` cuida disso. Por isso `contagem` conta o
+      que ELE vê: dizer "45 marcadores" e listar 16 seria pior que não dizer
+      nada.
+    */
+    const resultados = ((e.resultados ?? []) as Array<Record<string, unknown>>).map((r) =>
+      enriquecerMarcador(
+        r.marcador as Marcador,
+        n(r.valor) ?? 0,
+        r.classificacao as Classificacao,
+        sexo,
+      ),
+    );
+
+    return {
+      id: e.id as string,
+      laboratorio: e.laboratorio as string,
+      dataColeta: String(e.dataColeta).slice(0, 10),
+      sexo,
+      observacao: (e.observacao as string | null) ?? null,
+      registradoPor: e.registradoPor as { id: string; nome: string },
+      resultados,
+      contagem: contarClassificacoes(resultados),
+      /*
+        Sempre nulo por enquanto: assinar a URL depende do armazenamento, que
+        ainda vive fora daqui. `anexarLaudo` e o link continuam na API até a
+        mídia migrar — e a tela já trata `null` como "sem arquivo para abrir".
+      */
+      arquivoUrl: null,
+      temArquivo: e.mimeType !== null && e.mimeType !== undefined,
+    };
+  }
+
+  async listarExames(alunoId: string): Promise<ExameResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('Exame')
+        .select(MotorSupabase.CAMPOS_EXAME)
+        .eq('alunoId', alunoId)
+        .order('dataColeta', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((e) => this.paraExame(e));
+  }
+
+  async obterExame(alunoId: string, exameId: string): Promise<ExameResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('Exame')
+        .select(MotorSupabase.CAMPOS_EXAME)
+        .eq('id', exameId)
+        .eq('alunoId', alunoId)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraExame(linha);
+  }
+
+  /**
+   * Lança o exame e os resultados.
+   *
+   * A `classificacao` NÃO é mandada: o gatilho a calcula na entrada. Se viesse
+   * daqui, um cliente adulterado gravaria "OTIMO" numa glicemia de 300 e o
+   * alerta clínico nunca nasceria.
+   *
+   * Duas escritas, e não uma transação: o PostgREST não abre transação entre
+   * requisições. Se a segunda falhar, sobra um exame sem resultado — visível e
+   * corrigível, ao contrário de um resultado órfão. A política de
+   * `ResultadoMarcador` também barra o marcador fora do escopo de quem lança,
+   * então a segunda falha é sempre a que carrega a mensagem útil.
+   */
+  async registrarExame(alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> {
+    const eu = await this.meuId();
+    const id = `${alunoId}-${Date.now()}`;
+    const dia = (dados.dataColeta instanceof Date ? dados.dataColeta : new Date(dados.dataColeta))
+      .toISOString()
+      .slice(0, 10);
+
+    this.ou(
+      await this.db.from('Exame').insert({
+        id,
+        alunoId,
+        registradoPorId: eu,
+        laboratorio: dados.laboratorio.trim(),
+        dataColeta: dia,
+        sexo: dados.sexo,
+        observacao: dados.observacao ?? null,
+      }),
+    );
+
+    this.ou(
+      await this.db.from('ResultadoMarcador').insert(
+        dados.resultados.map((r, i) => ({
+          id: `${id}-${i}`,
+          exameId: id,
+          marcador: r.marcador,
+          valor: r.valor,
+          // Ignorada pelo gatilho, e mandada só porque a coluna é NOT NULL.
+          classificacao: 'ATENCAO',
+        })),
+      ),
+    );
+
+    return this.obterExame(alunoId, id);
   }
 }
 

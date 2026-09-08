@@ -727,19 +727,26 @@ export class VivioClient {
    * decide isso na tela.
    */
   readonly exames = {
-    listar: (alunoId: string): Promise<ExameResumo[]> =>
-      this.requisicao<ExameResumo[]>(`/alunos/${alunoId}/exames`),
+    listar: (alunoId: string): Promise<ExameResumo[]> => this.supabase.listarExames(alunoId),
 
     obter: (alunoId: string, exameId: string): Promise<ExameResumo> =>
-      this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames/${exameId}`),
+      this.supabase.obterExame(alunoId, exameId),
 
+    /**
+     * A classificacao de cada resultado e calculada pelo BANCO, na entrada.
+     *
+     * Se viesse daqui, um cliente adulterado gravaria "OTIMO" numa glicemia de
+     * 300 e o alerta clinico nunca nasceria — o medico veria o numero e o
+     * personal nao receberia conduta nenhuma.
+     */
     registrar: (alunoId: string, dados: RegistrarExameInput): Promise<ExameResumo> =>
-      this.requisicao<ExameResumo>(`/alunos/${alunoId}/exames`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarExame(alunoId, dados),
 
-    /** Só médico e aluno. O arquivo sobe antes, por `midia.autorizarUpload`. */
+    /**
+     * Ainda na API: anexar o laudo depende do armazenamento, que nao migrou.
+     * Sai daqui quando a midia sair — junto com `arquivoUrl`, que por enquanto
+     * volta nulo.
+     */
     anexarLaudo: (
       alunoId: string,
       exameId: string,
