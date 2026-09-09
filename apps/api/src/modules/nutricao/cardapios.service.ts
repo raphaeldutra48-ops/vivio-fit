@@ -11,7 +11,8 @@ import type {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { DietasService } from './dietas.service';
-import { macrosDaPorcao, somarMacros } from './macros';
+import { montarModeloCardapioCompleto, planoAPartirDoModelo } from '@vivio/contracts';
+import { paraResumoAlimento } from './alimentos.service';
 
 const INCLUDE_MODELO = {
   refeicoes: {
@@ -142,25 +143,13 @@ export class CardapiosService {
   ): Promise<PlanoDietaCompleto> {
     const modelo = await this.obter(nutricionistaId, modeloId);
 
-    return this.dietas.criar(alunoId, nutricionistaId, {
-      nome: dados.nome ?? modelo.nome,
-      kcalAlvo: modelo.kcalAlvo ?? undefined,
-      proteinaAlvoG: modelo.proteinaAlvoG ?? undefined,
-      carboAlvoG: modelo.carboAlvoG ?? undefined,
-      gorduraAlvoG: modelo.gorduraAlvoG ?? undefined,
-      ativar: dados.ativar,
-      refeicoes: modelo.refeicoes.map((r) => ({
-        nome: r.nome,
-        horarioSugerido: r.horarioSugerido ?? undefined,
-        itens: r.itens.map((i) => ({
-          alimentoId: i.alimento.id,
-          quantidadeG: i.quantidadeG,
-          observacao: i.observacao ?? undefined,
-        })),
-      })),
-    });
+    /*
+      O payload do plano sai do molde em `@vivio/contracts`: o SDK aplica o
+      mesmo molde falando direto com o Postgres, e duas cópias da cópia
+      divergiriam no primeiro campo novo.
+    */
+    return this.dietas.criar(alunoId, nutricionistaId, planoAPartirDoModelo(modelo, dados));
   }
-
   async remover(nutricionistaId: string, modeloId: string): Promise<void> {
     await this.obter(nutricionistaId, modeloId);
     await this.prisma.modeloCardapio.update({
@@ -178,32 +167,9 @@ export class CardapiosService {
     if (achados.length !== unicos.length) throw ErroDominio.naoEncontrado('Alimento');
   }
 
+  /** A montagem mora no contrato: o total é a soma dos itens, dos dois lados. */
   private paraCompleto(m: ModeloComTudo): ModeloCardapioCompleto {
-    const refeicoes = m.refeicoes.map((r) => {
-      const itens = r.itens.map((i) => ({
-        id: i.id,
-        quantidadeG: Number(i.quantidadeG),
-        observacao: i.observacao,
-        macros: macrosDaPorcao(i.alimento, i.quantidadeG),
-        alimento: {
-          id: i.alimento.id,
-          nome: i.alimento.nome,
-          grupo: i.alimento.grupo,
-          medidaCaseira: i.alimento.medidaCaseira,
-        },
-      }));
-
-      return {
-        id: r.id,
-        nome: r.nome,
-        horarioSugerido: r.horarioSugerido,
-        ordem: r.ordem,
-        itens,
-        macros: somarMacros(itens.map((i) => i.macros)),
-      };
-    });
-
-    return {
+    return montarModeloCardapioCompleto({
       id: m.id,
       nome: m.nome,
       descricao: m.descricao,
@@ -211,10 +177,21 @@ export class CardapiosService {
       proteinaAlvoG: m.proteinaAlvoG,
       carboAlvoG: m.carboAlvoG,
       gorduraAlvoG: m.gorduraAlvoG,
-      totalRefeicoes: refeicoes.length,
-      macrosTotais: somarMacros(refeicoes.map((r) => r.macros)),
       criadoEm: m.criadoEm.toISOString(),
-      refeicoes,
-    };
+      refeicoes: m.refeicoes.map((r) => ({
+        id: r.id,
+        nome: r.nome,
+        horarioSugerido: r.horarioSugerido,
+        ordem: r.ordem,
+        itens: r.itens.map((i) => ({
+          id: i.id,
+          ordem: i.ordem,
+          quantidadeG: Number(i.quantidadeG),
+          observacao: i.observacao,
+          alimento: paraResumoAlimento(i.alimento),
+        })),
+      })),
+    });
   }
 }
+

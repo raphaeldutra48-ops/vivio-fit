@@ -774,35 +774,26 @@ export class VivioClient {
   // --- cardápios e lista de compras ------------------------------------------
 
   readonly cardapios = {
-    listar: (): Promise<ModeloCardapioResumo[]> =>
-      this.requisicao<ModeloCardapioResumo[]>('/cardapios'),
+    listar: (): Promise<ModeloCardapioResumo[]> => this.supabase.listarModelosDeCardapio(),
 
     obter: (id: string): Promise<ModeloCardapioCompleto> =>
-      this.requisicao<ModeloCardapioCompleto>(`/cardapios/${id}`),
+      this.supabase.obterModeloDeCardapio(id),
 
     criar: (dados: CriarModeloCardapioInput): Promise<ModeloCardapioCompleto> =>
-      this.requisicao<ModeloCardapioCompleto>('/cardapios', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarModeloDeCardapio(dados),
 
     /** Transforma um plano já entregue a um paciente em molde reutilizável. */
     salvarDoPlano: (dados: SalvarComoModeloInput): Promise<ModeloCardapioCompleto> =>
-      this.requisicao<ModeloCardapioCompleto>('/cardapios/do-plano', {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.salvarPlanoComoModelo(dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/cardapios/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerModeloDeCardapio(id),
 
     /** Cria o plano do paciente a partir do molde — os dois ficam independentes. */
     aplicar: (
       alunoId: string,
       modeloId: string,
       dados: AplicarModeloInput,
-    ): Promise<PlanoDietaCompleto> =>
-      this.requisicao<PlanoDietaCompleto>(
-        `/alunos/${alunoId}/planos-dieta/do-modelo/${modeloId}`,
-        { metodo: 'POST', corpo: dados },
-      ),
+    ): Promise<PlanoDietaCompleto> => this.supabase.aplicarModelo(alunoId, modeloId, dados),
   };
 
   readonly listaDeCompras = {

@@ -37,6 +37,8 @@ import {
   montarPlanoDietaCompleto,
   montarSubstitutos,
   ordenarPorStatusDoPlano,
+  montarModeloCardapioCompleto,
+  planoAPartirDoModelo,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -54,6 +56,12 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  AplicarModeloInput,
+  CriarModeloCardapioInput,
+  LinhaDeModeloCardapio,
+  ModeloCardapioCompleto,
+  ModeloCardapioResumo,
+  SalvarComoModeloInput,
   BuscarSubstitutosQuery,
   CriarPlanoDietaInput,
   LinhaDePlanoDieta,
@@ -2663,6 +2671,157 @@ export class MotorSupabase {
       status: r.status as StatusRefeicao,
       comentario: (r.comentario as string | null) ?? null,
     }));
+  }
+
+  // --- modelo de cardápio ---------------------------------------------------
+
+  private static readonly CAMPOS_MODELO =
+    'id,nome,descricao,kcalAlvo,proteinaAlvoG,carboAlvoG,gorduraAlvoG,criadoEm,' +
+    'refeicoes:RefeicaoModelo(id,nome,horarioSugerido,ordem,' +
+    `itens:ItemModelo(id,ordem,quantidadeG,observacao,alimento:Alimento(${MotorSupabase.CAMPOS_ALIMENTO})))`;
+
+  private paraLinhaDeModelo(m: Record<string, unknown>): LinhaDeModeloCardapio {
+    const inteiro = (v: unknown): number | null =>
+      v === null || v === undefined ? null : Number(v);
+    return {
+      id: m.id as string,
+      nome: m.nome as string,
+      descricao: (m.descricao as string | null) ?? null,
+      kcalAlvo: inteiro(m.kcalAlvo),
+      proteinaAlvoG: inteiro(m.proteinaAlvoG),
+      carboAlvoG: inteiro(m.carboAlvoG),
+      gorduraAlvoG: inteiro(m.gorduraAlvoG),
+      criadoEm: instante(m.criadoEm),
+      refeicoes: ((m.refeicoes ?? []) as Record<string, unknown>[]).map((r) => ({
+        id: r.id as string,
+        nome: r.nome as string,
+        horarioSugerido: (r.horarioSugerido as string | null) ?? null,
+        ordem: Number(r.ordem),
+        itens: ((r.itens ?? []) as Record<string, unknown>[]).map((i) => ({
+          id: i.id as string,
+          ordem: Number(i.ordem),
+          quantidadeG: n(i.quantidadeG) ?? 0,
+          observacao: (i.observacao as string | null) ?? null,
+          alimento: this.paraAlimento((i.alimento ?? {}) as Record<string, unknown>),
+        })),
+      })),
+    };
+  }
+
+  async listarModelosDeCardapio(): Promise<ModeloCardapioResumo[]> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloCardapio')
+        .select(MotorSupabase.CAMPOS_MODELO)
+        .eq('nutricionistaId', eu)
+        .is('deletadoEm', null)
+        .order('atualizadoEm', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+
+    // O resumo é o completo sem as refeições: `macrosTotais` é a soma dos
+    // itens, então a lista precisa deles de qualquer jeito.
+    return linhas.map((m) => {
+      const { refeicoes: _r, ...resumo } = montarModeloCardapioCompleto(
+        this.paraLinhaDeModelo(m),
+      );
+      return resumo;
+    });
+  }
+
+  async obterModeloDeCardapio(modeloId: string): Promise<ModeloCardapioCompleto> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('ModeloCardapio')
+        .select(MotorSupabase.CAMPOS_MODELO)
+        .eq('id', modeloId)
+        .eq('nutricionistaId', eu)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de cardápio não encontrado.', 404);
+    }
+    return montarModeloCardapioCompleto(this.paraLinhaDeModelo(linha));
+  }
+
+  async criarModeloDeCardapio(
+    dados: CriarModeloCardapioInput,
+  ): Promise<ModeloCardapioCompleto> {
+    const id = await this.rpc<string>('criar_modelo_cardapio', { p_modelo: dados });
+    return this.obterModeloDeCardapio(id);
+  }
+
+  /**
+   * Transforma um plano já entregue a um paciente em molde reutilizável.
+   *
+   * Só o plano que ELE escreveu: a dieta de um aluno em comum com outro
+   * nutricionista é leitura, não matéria-prima. É a mesma regra que a API
+   * aplicava, e aqui ela é o filtro da consulta.
+   */
+  async salvarPlanoComoModelo(dados: SalvarComoModeloInput): Promise<ModeloCardapioCompleto> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('PlanoDieta')
+        .select(MotorSupabase.CAMPOS_DIETA)
+        .eq('id', dados.planoDietaId)
+        .eq('nutricionistaId', eu)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Plano alimentar não encontrado.', 404);
+    }
+
+    const plano = montarPlanoDietaCompleto(this.paraLinhaDeDieta(linha));
+    return this.criarModeloDeCardapio({
+      nome: dados.nome,
+      descricao: dados.descricao,
+      kcalAlvo: plano.kcalAlvo ?? undefined,
+      proteinaAlvoG: plano.proteinaAlvoG ?? undefined,
+      carboAlvoG: plano.carboAlvoG ?? undefined,
+      gorduraAlvoG: plano.gorduraAlvoG ?? undefined,
+      refeicoes: plano.refeicoes.map((r) => ({
+        nome: r.nome,
+        horarioSugerido: r.horarioSugerido ?? undefined,
+        itens: r.itens.map((i) => ({
+          alimentoId: i.alimento.id,
+          quantidadeG: i.quantidadeG,
+          observacao: i.observacao ?? undefined,
+        })),
+      })),
+    });
+  }
+
+  /** Soft delete: o molde pode ter virado dieta que está valendo. */
+  async removerModeloDeCardapio(modeloId: string): Promise<void> {
+    await this.obterModeloDeCardapio(modeloId);
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('ModeloCardapio')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', modeloId)
+        .select('id'),
+    );
+  }
+
+  /**
+   * Aplica o molde num paciente.
+   *
+   * A dieta criada é INDEPENDENTE: ajustar a dieta dele depois não mexe no
+   * molde, e editar o molde não altera dietas já entregues. É o ponto de
+   * existir um molde — ele é ponto de partida, não vínculo.
+   */
+  async aplicarModelo(
+    alunoId: string,
+    modeloId: string,
+    dados: AplicarModeloInput,
+  ): Promise<PlanoDietaCompleto> {
+    const modelo = await this.obterModeloDeCardapio(modeloId);
+    return this.criarDieta(alunoId, planoAPartirDoModelo(modelo, dados));
   }
 
   // --- financeiro -----------------------------------------------------------
