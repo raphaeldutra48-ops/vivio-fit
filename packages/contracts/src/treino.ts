@@ -234,3 +234,18 @@ export function ordenarPlanosDeTreino<T extends PlanoTreinoResumo>(planos: reado
       b.id.localeCompare(a.id),
   );
 }
+
+/**
+ * A mesma ordem, para quem já recebeu a lista ordenada por data.
+ *
+ * `Array.prototype.sort` é estável, então uma lista que já veio do banco com
+ * `criadoEm desc, versao desc, id desc` mantém essa ordem dentro de cada
+ * grupo. Serve ao plano alimentar, que tem os mesmos três estados e a mesma
+ * leitura de cima para baixo — e que ordenava por `status: 'asc'`, ou seja,
+ * pela ordem em que o enum foi declarado: rascunho acima do que está valendo.
+ */
+export function ordenarPorStatusDoPlano<
+  T extends { status: 'RASCUNHO' | 'ATIVO' | 'ARQUIVADO' },
+>(planos: readonly T[]): T[] {
+  return [...planos].sort((a, b) => PESO_DO_STATUS[a.status] - PESO_DO_STATUS[b.status]);
+}

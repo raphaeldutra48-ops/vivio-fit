@@ -212,3 +212,206 @@ export function resumoDeAgua(
     registros,
   };
 }
+
+// --- cálculo nutricional ----------------------------------------------------
+
+/**
+ * Todo o cálculo nutricional do app passa por aqui.
+ *
+ * A tabela guarda os valores por 100 g, então prescrever 150 g de frango é uma
+ * regra de três. Centralizar isso num lugar só é o que faz o total da dieta
+ * bater com a soma dos itens — e é por isso que vive no contrato, e não em
+ * quem consulta: com a API e o SDK montando a mesma tela, duas versões do
+ * arredondamento dariam dois totais para o mesmo cardápio.
+ */
+
+/** Duas casas, para o erro de ponto flutuante não se acumular item a item. */
+const arredondar = (v: number): number => Math.round(v * 100) / 100;
+
+export function macrosDaPorcao(por100g: Macros, quantidadeG: number): Macros {
+  const fator = quantidadeG / 100;
+  return {
+    kcal: arredondar(por100g.kcal * fator),
+    proteinaG: arredondar(por100g.proteinaG * fator),
+    carboidratoG: arredondar(por100g.carboidratoG * fator),
+    gorduraG: arredondar(por100g.gorduraG * fator),
+    fibraG: arredondar(por100g.fibraG * fator),
+  };
+}
+
+export function somarMacros(lista: Macros[]): Macros {
+  const total = lista.reduce(
+    (soma, m) => ({
+      kcal: soma.kcal + m.kcal,
+      proteinaG: soma.proteinaG + m.proteinaG,
+      carboidratoG: soma.carboidratoG + m.carboidratoG,
+      gorduraG: soma.gorduraG + m.gorduraG,
+      fibraG: soma.fibraG + m.fibraG,
+    }),
+    { ...MACROS_ZERADOS },
+  );
+
+  return {
+    kcal: arredondar(total.kcal),
+    proteinaG: arredondar(total.proteinaG),
+    carboidratoG: arredondar(total.carboidratoG),
+    gorduraG: arredondar(total.gorduraG),
+    fibraG: arredondar(total.fibraG),
+  };
+}
+
+/**
+ * Quantidade do substituto que entrega as mesmas calorias do item original.
+ * Alimento sem caloria (água, chá) não tem equivalente calórico.
+ */
+export function quantidadeEquivalentePorKcal(
+  kcalAlvo: number,
+  kcalPor100gDoSubstituto: number,
+): number | null {
+  if (kcalPor100gDoSubstituto <= 0) return null;
+  return arredondar((kcalAlvo / kcalPor100gDoSubstituto) * 100);
+}
+
+export interface EntradaDosSubstitutos {
+  /** Macros do item que está sendo substituído, na quantidade prescrita. */
+  original: Macros;
+  /** Alimentos do mesmo grupo, sem o próprio original. */
+  candidatos: AlimentoResumo[];
+  tolerancia: number;
+  limit: number;
+}
+
+/**
+ * Substituições com equivalência nutricional.
+ *
+ * Iso-calórico primeiro, porque é o que o aluno percebe; depois filtrando pelo
+ * desvio de proteína. Trocar frango por arroz "bate as calorias" e destrói a
+ * dieta — é exatamente isso que a tolerância evita.
+ */
+export function montarSubstitutos({
+  original,
+  candidatos,
+  tolerancia,
+  limit,
+}: EntradaDosSubstitutos): SubstitutoSugerido[] {
+  if (original.kcal <= 0) return [];
+
+  const sugestoes: SubstitutoSugerido[] = [];
+
+  for (const candidato of candidatos) {
+    const quantidade = quantidadeEquivalentePorKcal(original.kcal, candidato.porcao100g.kcal);
+    /*
+      Acima de 2 kg a equivalência deixa de ser conselho: alface para bater as
+      calorias de um bife é uma sugestão que ninguém consegue comer.
+    */
+    if (quantidade === null || quantidade > 2000) continue;
+
+    const macros = macrosDaPorcao(candidato.porcao100g, quantidade);
+    const desvioProteina =
+      original.proteinaG > 0
+        ? (macros.proteinaG - original.proteinaG) / original.proteinaG
+        : macros.proteinaG > 0
+          ? 1
+          : 0;
+
+    if (Math.abs(desvioProteina) > tolerancia) continue;
+
+    sugestoes.push({
+      alimento: candidato,
+      quantidadeEquivalenteG: quantidade,
+      macros,
+      desvioProteina: Math.round(desvioProteina * 1000) / 1000,
+    });
+  }
+
+  // Mais parecido primeiro.
+  sugestoes.sort((a, b) => Math.abs(a.desvioProteina) - Math.abs(b.desvioProteina));
+  return sugestoes.slice(0, limit);
+}
+
+/** A dieta como está no banco, com os números já convertidos. */
+export interface LinhaDePlanoDieta {
+  id: string;
+  nome: string;
+  observacao: string | null;
+  versao: number;
+  status: PlanoDietaResumo['status'];
+  kcalAlvo: number | null;
+  proteinaAlvoG: number | null;
+  carboAlvoG: number | null;
+  gorduraAlvoG: number | null;
+  nutricionista: { id: string; nome: string };
+  refeicoes: {
+    id: string;
+    nome: string;
+    horarioSugerido: string | null;
+    ordem: number;
+    itens: {
+      id: string;
+      ordem: number;
+      quantidadeG: number;
+      observacao: string | null;
+      alimento: AlimentoResumo;
+    }[];
+  }[];
+}
+
+/**
+ * A dieta como a tela lê, com os macros calculados na leitura.
+ *
+ * O total NUNCA é um número digitado à parte: é a soma dos itens. Guardado,
+ * ele envelheceria no primeiro ajuste de quantidade, e o nutricionista veria
+ * um alvo batendo com um cardápio que já não bate.
+ */
+export function montarPlanoDietaCompleto(plano: LinhaDePlanoDieta): PlanoDietaCompleto {
+  const refeicoes: RefeicaoResumo[] = [...plano.refeicoes]
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((r) => {
+      const itens = [...r.itens]
+        .sort((a, b) => a.ordem - b.ordem)
+        .map((i) => ({
+          id: i.id,
+          ordem: i.ordem,
+          quantidadeG: i.quantidadeG,
+          observacao: i.observacao,
+          alimento: i.alimento,
+          macros: macrosDaPorcao(i.alimento.porcao100g, i.quantidadeG),
+        }));
+
+      return {
+        id: r.id,
+        nome: r.nome,
+        horarioSugerido: r.horarioSugerido,
+        ordem: r.ordem,
+        itens,
+        macros: somarMacros(itens.map((i) => i.macros)),
+      };
+    });
+
+  return {
+    id: plano.id,
+    nome: plano.nome,
+    observacao: plano.observacao,
+    versao: plano.versao,
+    status: plano.status,
+    kcalAlvo: plano.kcalAlvo,
+    proteinaAlvoG: plano.proteinaAlvoG,
+    carboAlvoG: plano.carboAlvoG,
+    gorduraAlvoG: plano.gorduraAlvoG,
+    macrosTotais: somarMacros(refeicoes.map((r) => r.macros)),
+    totalRefeicoes: refeicoes.length,
+    nutricionista: plano.nutricionista,
+    refeicoes,
+  };
+}
+
+/** O que o aluno marcou num dia: feita, parcial ou pulada. */
+export interface RegistroDeRefeicao {
+  id: string;
+  refeicaoId: string;
+  refeicaoNome: string;
+  /** `AAAA-MM-DD`. */
+  data: string;
+  status: StatusRefeicao;
+  comentario: string | null;
+}

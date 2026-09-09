@@ -33,6 +33,10 @@ import {
   somarMeses,
   validarChavePix,
   vencimentosDaSerie,
+  macrosDaPorcao,
+  montarPlanoDietaCompleto,
+  montarSubstitutos,
+  ordenarPorStatusDoPlano,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -50,6 +54,15 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  BuscarSubstitutosQuery,
+  CriarPlanoDietaInput,
+  LinhaDePlanoDieta,
+  PlanoDietaCompleto,
+  PlanoDietaResumo,
+  RegistrarRefeicaoInput,
+  RegistroDeRefeicao,
+  StatusRefeicao,
+  SubstitutoSugerido,
   CobrancaComPix,
   CobrancaResumo,
   ConsultaFinanceiro,
@@ -2421,6 +2434,235 @@ export class MotorSupabase {
   async definirDisponibilidade(dados: DefinirDisponibilidadeInput): Promise<JanelaDisponivel[]> {
     await this.rpc<null>('definir_disponibilidade', { p_janelas: dados.janelas });
     return this.listarDisponibilidade();
+  }
+
+  // --- plano alimentar ------------------------------------------------------
+
+  private static readonly CAMPOS_ALIMENTO =
+    'id,nome,grupo,kcal,proteinaG,carboidratoG,gorduraG,fibraG,medidaCaseira,medidaGramas';
+
+  private paraAlimento(a: Record<string, unknown>): AlimentoResumo {
+    return {
+      id: a.id as string,
+      nome: a.nome as string,
+      grupo: a.grupo as string,
+      porcao100g: {
+        kcal: n(a.kcal) ?? 0,
+        proteinaG: n(a.proteinaG) ?? 0,
+        carboidratoG: n(a.carboidratoG) ?? 0,
+        gorduraG: n(a.gorduraG) ?? 0,
+        // Fibra ausente conta como zero: a soma da dieta não pode virar `NaN`
+        // por causa de um alimento sem o campo preenchido.
+        fibraG: n(a.fibraG) ?? 0,
+      },
+      medidaCaseira: (a.medidaCaseira as string | null) ?? null,
+      medidaGramas: n(a.medidaGramas),
+    };
+  }
+
+  private static readonly CAMPOS_DIETA =
+    'id,nome,observacao,versao,status,kcalAlvo,proteinaAlvoG,carboAlvoG,gorduraAlvoG,criadoEm,' +
+    'nutricionista:User!PlanoDieta_nutricionistaId_fkey(id,nome),' +
+    'refeicoes:Refeicao(id,nome,horarioSugerido,ordem,' +
+    `itens:ItemRefeicao(id,ordem,quantidadeG,observacao,alimento:Alimento(${MotorSupabase.CAMPOS_ALIMENTO})))`;
+
+  private paraLinhaDeDieta(p: Record<string, unknown>): LinhaDePlanoDieta {
+    return {
+      id: p.id as string,
+      nome: p.nome as string,
+      observacao: (p.observacao as string | null) ?? null,
+      versao: Number(p.versao),
+      status: p.status as LinhaDePlanoDieta['status'],
+      kcalAlvo: p.kcalAlvo === null || p.kcalAlvo === undefined ? null : Number(p.kcalAlvo),
+      proteinaAlvoG:
+        p.proteinaAlvoG === null || p.proteinaAlvoG === undefined ? null : Number(p.proteinaAlvoG),
+      carboAlvoG:
+        p.carboAlvoG === null || p.carboAlvoG === undefined ? null : Number(p.carboAlvoG),
+      gorduraAlvoG:
+        p.gorduraAlvoG === null || p.gorduraAlvoG === undefined ? null : Number(p.gorduraAlvoG),
+      nutricionista: umSo(p.nutricionista) as unknown as { id: string; nome: string },
+      refeicoes: ((p.refeicoes ?? []) as Record<string, unknown>[]).map((r) => ({
+        id: r.id as string,
+        nome: r.nome as string,
+        horarioSugerido: (r.horarioSugerido as string | null) ?? null,
+        ordem: Number(r.ordem),
+        itens: ((r.itens ?? []) as Record<string, unknown>[]).map((i) => ({
+          id: i.id as string,
+          ordem: Number(i.ordem),
+          quantidadeG: n(i.quantidadeG) ?? 0,
+          observacao: (i.observacao as string | null) ?? null,
+          alimento: this.paraAlimento((i.alimento ?? {}) as Record<string, unknown>),
+        })),
+      })),
+    };
+  }
+
+  async listarDietas(alunoId: string): Promise<PlanoDietaResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('PlanoDieta')
+        .select(MotorSupabase.CAMPOS_DIETA)
+        .eq('alunoId', alunoId)
+        /*
+          A ordem por data vem do banco, e com desempate: versionar uma dieta
+          cria a nova no mesmo milissegundo em que arquiva a antiga, e
+          empatadas o Postgres devolve em ordem arbitrária.
+        */
+        .order('criadoEm', { ascending: false })
+        .order('versao', { ascending: false })
+        .order('id', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+
+    /*
+      O resumo é o completo sem as refeições — e não uma consulta mais magra.
+      `macrosTotais` é a soma dos itens, então a lista precisa dos itens de
+      qualquer jeito: o número que a tela mostra ao lado do alvo é o real.
+    */
+    return ordenarPorStatusDoPlano(
+      linhas.map((p) => {
+        const { refeicoes: _r, ...resumo } = montarPlanoDietaCompleto(this.paraLinhaDeDieta(p));
+        return resumo;
+      }),
+    );
+  }
+
+  async dietaAtiva(alunoId: string): Promise<PlanoDietaCompleto> {
+    const linha = this.ou(
+      await this.db
+        .from('PlanoDieta')
+        .select(MotorSupabase.CAMPOS_DIETA)
+        .eq('alunoId', alunoId)
+        .eq('status', 'ATIVO')
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Plano alimentar ativo não encontrado.', 404);
+    }
+    return montarPlanoDietaCompleto(this.paraLinhaDeDieta(linha));
+  }
+
+  async obterDieta(alunoId: string, planoId: string): Promise<PlanoDietaCompleto> {
+    const linha = this.ou(
+      await this.db
+        .from('PlanoDieta')
+        .select(MotorSupabase.CAMPOS_DIETA)
+        .eq('id', planoId)
+        .eq('alunoId', alunoId)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return montarPlanoDietaCompleto(this.paraLinhaDeDieta(linha));
+  }
+
+  /**
+   * Cria a dieta inteira numa chamada.
+   *
+   * Mesma forma do plano de treino, e pelo mesmo motivo: dieta, refeições e
+   * itens nascem juntos. Metade do cardápio gravado é o aluno abrindo o almoço
+   * e não encontrando o jantar, sem nada avisando que faltou.
+   */
+  async criarDieta(
+    alunoId: string,
+    dados: CriarPlanoDietaInput,
+    versaoDe?: string,
+  ): Promise<PlanoDietaCompleto> {
+    const id = await this.rpc<string>('criar_plano_dieta', {
+      p_aluno_id: alunoId,
+      p_plano: dados,
+      p_versao_de: versaoDe ?? null,
+    });
+    return this.obterDieta(alunoId, id);
+  }
+
+  async ativarDieta(alunoId: string, planoId: string): Promise<PlanoDietaCompleto> {
+    await this.rpc<null>('ativar_plano_dieta', { p_plano_id: planoId });
+    return this.obterDieta(alunoId, planoId);
+  }
+
+  /**
+   * Substituições equivalentes para um item da refeição.
+   *
+   * Os candidatos vêm do mesmo grupo do alimento original — trocar arroz por
+   * outro carboidrato é substituição; trocar por peito de frango é outra dieta.
+   */
+  async substitutosPara(
+    itemRefeicaoId: string,
+    consulta: Partial<BuscarSubstitutosQuery> = {},
+  ): Promise<SubstitutoSugerido[]> {
+    const item = this.ou(
+      await this.db
+        .from('ItemRefeicao')
+        .select(`id,quantidadeG,alimentoId,alimento:Alimento(${MotorSupabase.CAMPOS_ALIMENTO})`)
+        .eq('id', itemRefeicaoId)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    if (!item) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Item da refeição não encontrado.', 404);
+
+    const original = this.paraAlimento((item.alimento ?? {}) as Record<string, unknown>);
+    const candidatos = this.ou(
+      await this.db
+        .from('Alimento')
+        .select(MotorSupabase.CAMPOS_ALIMENTO)
+        .eq('grupo', original.grupo)
+        .neq('id', original.id)
+        .gt('kcal', 0)
+        .limit(60),
+    ) as unknown as Record<string, unknown>[];
+
+    return montarSubstitutos({
+      original: macrosDaPorcao(original.porcao100g, n(item.quantidadeG) ?? 0),
+      candidatos: candidatos.map((a) => this.paraAlimento(a)),
+      tolerancia: consulta.tolerancia ?? 0.1,
+      limit: consulta.limit ?? 8,
+    });
+  }
+
+  /** Marcar a mesma refeição no mesmo dia atualiza — o aluno pode corrigir. */
+  async registrarRefeicao(
+    alunoId: string,
+    dados: RegistrarRefeicaoInput,
+  ): Promise<RegistroDeRefeicao> {
+    const dia = soData(dados.data);
+    this.ou(
+      await this.db.from('RegistroRefeicao').upsert(
+        {
+          id: `${alunoId}-${dados.refeicaoId}-${dia}`,
+          alunoId,
+          refeicaoId: dados.refeicaoId,
+          data: dia,
+          status: dados.status,
+          comentario: dados.comentario ?? null,
+        },
+        { onConflict: 'alunoId,refeicaoId,data' },
+      ),
+    );
+
+    const registros = await this.registrosDoDia(alunoId, dia);
+    const salvo = registros.find((r) => r.refeicaoId === dados.refeicaoId);
+    if (!salvo) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Refeição não encontrada.', 404);
+    return salvo;
+  }
+
+  async registrosDoDia(alunoId: string, data?: string): Promise<RegistroDeRefeicao[]> {
+    const dia = data ?? hojeUtc().toISOString().slice(0, 10);
+    const linhas = this.ou(
+      await this.db
+        .from('RegistroRefeicao')
+        .select('id,refeicaoId,data,status,comentario,refeicao:Refeicao(nome)')
+        .eq('alunoId', alunoId)
+        .eq('data', dia)
+        .order('criadoEm', { ascending: true }),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((r) => ({
+      id: r.id as string,
+      refeicaoId: r.refeicaoId as string,
+      refeicaoNome: (umSo(r.refeicao)?.nome as string | undefined) ?? '',
+      data: String(r.data).slice(0, 10),
+      status: r.status as StatusRefeicao,
+      comentario: (r.comentario as string | null) ?? null,
+    }));
   }
 
   // --- financeiro -----------------------------------------------------------

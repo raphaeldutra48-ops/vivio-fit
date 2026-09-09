@@ -61,6 +61,7 @@ import type {
   PlanoDietaResumo,
   RegistrarAguaInput,
   RegistrarRefeicaoInput,
+  RegistroDeRefeicao,
   ResumoDeAgua,
   SubstitutoSugerido,
   LembreteResumo,
@@ -974,44 +975,34 @@ export class VivioClient {
 
   readonly dietas = {
     listar: (alunoId: string): Promise<PlanoDietaResumo[]> =>
-      this.requisicao<PlanoDietaResumo[]>(`/alunos/${alunoId}/planos-dieta`),
+      this.supabase.listarDietas(alunoId),
 
     obterAtiva: (alunoId: string): Promise<PlanoDietaCompleto> =>
-      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta/ativo`),
+      this.supabase.dietaAtiva(alunoId),
 
     criar: (alunoId: string, dados: CriarPlanoDietaInput): Promise<PlanoDietaCompleto> =>
-      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.criarDieta(alunoId, dados),
 
+    /** Gera uma versão nova e arquiva a anterior — não sobrescreve. */
     novaVersao: (
       alunoId: string,
       planoId: string,
       dados: CriarPlanoDietaInput,
-    ): Promise<PlanoDietaCompleto> =>
-      this.requisicao<PlanoDietaCompleto>(`/alunos/${alunoId}/planos-dieta/${planoId}`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+    ): Promise<PlanoDietaCompleto> => this.supabase.criarDieta(alunoId, dados, planoId),
 
     substitutos: (
       alunoId: string,
       itemId: string,
       tolerancia?: number,
-    ): Promise<SubstitutoSugerido[]> =>
-      this.requisicao<SubstitutoSugerido[]>(
-        `/alunos/${alunoId}/itens-refeicao/${itemId}/substitutos`,
-        { query: { tolerancia } },
-      ),
+    ): Promise<SubstitutoSugerido[]> => this.supabase.substitutosPara(itemId, { tolerancia }),
 
-    registrarRefeicao: (alunoId: string, dados: RegistrarRefeicaoInput): Promise<unknown> =>
-      this.requisicao(`/alunos/${alunoId}/registros-refeicao`, { metodo: 'POST', corpo: dados }),
+    registrarRefeicao: (
+      alunoId: string,
+      dados: RegistrarRefeicaoInput,
+    ): Promise<RegistroDeRefeicao> => this.supabase.registrarRefeicao(alunoId, dados),
 
-    registrosDoDia: (alunoId: string, data?: string): Promise<
-      { id: string; refeicaoId: string; refeicaoNome: string; data: string; status: string }[]
-    > =>
-      this.requisicao(`/alunos/${alunoId}/registros-refeicao`, { query: { data } }),
+    registrosDoDia: (alunoId: string, data?: string): Promise<RegistroDeRefeicao[]> =>
+      this.supabase.registrosDoDia(alunoId, data),
   };
 
   readonly agua = {

@@ -8,7 +8,8 @@ import type {
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
-import { macrosDaPorcao, quantidadeEquivalentePorKcal } from './macros';
+import { montarSubstitutos } from '@vivio/contracts';
+import { macrosDaPorcao } from './macros';
 
 type LinhaAlimento = Prisma.AlimentoGetPayload<Record<string, never>>;
 
@@ -76,37 +77,21 @@ export class AlimentosService {
     const original = macrosDaPorcao(item.alimento, item.quantidadeG);
     if (original.kcal <= 0) return [];
 
+    /*
+      Candidatos do MESMO grupo: trocar arroz por outro carboidrato é
+      substituição; trocar por peito de frango é outra dieta.
+    */
     const candidatos = await this.prisma.alimento.findMany({
       where: { grupo: item.alimento.grupo, NOT: { id: item.alimentoId }, kcal: { gt: 0 } },
       take: 60,
     });
 
-    const sugestoes: SubstitutoSugerido[] = [];
-
-    for (const candidato of candidatos) {
-      const quantidade = quantidadeEquivalentePorKcal(original.kcal, Number(candidato.kcal));
-      if (quantidade === null || quantidade > 2000) continue;
-
-      const macros = macrosDaPorcao(candidato, quantidade);
-      const desvioProteina =
-        original.proteinaG > 0
-          ? (macros.proteinaG - original.proteinaG) / original.proteinaG
-          : macros.proteinaG > 0
-            ? 1
-            : 0;
-
-      if (Math.abs(desvioProteina) > consulta.tolerancia) continue;
-
-      sugestoes.push({
-        alimento: paraResumoAlimento(candidato),
-        quantidadeEquivalenteG: quantidade,
-        macros,
-        desvioProteina: Math.round(desvioProteina * 1000) / 1000,
-      });
-    }
-
-    // Mais parecido primeiro.
-    sugestoes.sort((a, b) => Math.abs(a.desvioProteina) - Math.abs(b.desvioProteina));
-    return sugestoes.slice(0, consulta.limit);
+    // A escolha e a ordenação moram no contrato: o SDK sugere a mesma troca.
+    return montarSubstitutos({
+      original,
+      candidatos: candidatos.map((c) => paraResumoAlimento(c)),
+      tolerancia: consulta.tolerancia,
+      limit: consulta.limit,
+    });
   }
 }

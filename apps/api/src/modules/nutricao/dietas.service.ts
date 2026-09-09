@@ -9,7 +9,7 @@ import type {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { paraResumoAlimento } from './alimentos.service';
-import { macrosDaPorcao, somarMacros } from './macros';
+import { montarPlanoDietaCompleto, ordenarPorStatusDoPlano } from '@vivio/contracts';
 
 type DietaComTudo = Prisma.PlanoDietaGetPayload<{
   include: {
@@ -38,12 +38,27 @@ export class DietasService {
     const planos = await this.prisma.planoDieta.findMany({
       where: { alunoId },
       include: INCLUDE_COMPLETO,
-      orderBy: [{ status: 'asc' }, { criadoEm: 'desc' }],
+      /*
+        Desempate explícito: versionar uma dieta cria a nova no mesmo
+        milissegundo em que arquiva a antiga, e empatadas o Postgres devolve
+        em ordem arbitrária.
+      */
+      orderBy: [{ criadoEm: 'desc' }, { versao: 'desc' }, { id: 'desc' }],
     });
-    return planos.map((p) => {
-      const { refeicoes: _r, ...resumo } = this.paraCompleto(p);
-      return resumo;
-    });
+
+    /*
+      A ordem final é a do contrato: o que está valendo primeiro. O
+      `status: 'asc'` que morava aqui seguia a ordem em que o enum foi
+      declarado — RASCUNHO, ATIVO, ARQUIVADO — e punha rascunho acima da
+      dieta que o aluno está seguindo hoje. É a mesma correção que o plano
+      de treino recebeu.
+    */
+    return ordenarPorStatusDoPlano(
+      planos.map((p) => {
+        const { refeicoes: _r, ...resumo } = this.paraCompleto(p);
+        return resumo;
+      }),
+    );
   }
 
   async obterAtiva(alunoId: string): Promise<PlanoDietaCompleto> {
@@ -189,28 +204,15 @@ export class DietasService {
     }
   }
 
+  /**
+   * A montagem mora em `@vivio/contracts`: o SDK desenha a mesma dieta.
+   *
+   * O total NUNCA é um número digitado à parte — é a soma dos itens —, e
+   * duas implementações do arredondamento dariam dois totais para o mesmo
+   * cardápio.
+   */
   private paraCompleto(plano: DietaComTudo): PlanoDietaCompleto {
-    const refeicoes: RefeicaoResumo[] = plano.refeicoes.map((r) => {
-      const itens = r.itens.map((i) => ({
-        id: i.id,
-        ordem: i.ordem,
-        quantidadeG: Number(i.quantidadeG),
-        observacao: i.observacao,
-        alimento: paraResumoAlimento(i.alimento),
-        macros: macrosDaPorcao(i.alimento, i.quantidadeG),
-      }));
-
-      return {
-        id: r.id,
-        nome: r.nome,
-        horarioSugerido: r.horarioSugerido,
-        ordem: r.ordem,
-        itens,
-        macros: somarMacros(itens.map((i) => i.macros)),
-      };
-    });
-
-    return {
+    return montarPlanoDietaCompleto({
       id: plano.id,
       nome: plano.nome,
       observacao: plano.observacao,
@@ -220,11 +222,21 @@ export class DietasService {
       proteinaAlvoG: plano.proteinaAlvoG,
       carboAlvoG: plano.carboAlvoG,
       gorduraAlvoG: plano.gorduraAlvoG,
-      // Total real = soma dos itens. Nunca um número digitado à parte.
-      macrosTotais: somarMacros(refeicoes.map((r) => r.macros)),
-      totalRefeicoes: refeicoes.length,
       nutricionista: plano.nutricionista,
-      refeicoes,
-    };
+      refeicoes: plano.refeicoes.map((r) => ({
+        id: r.id,
+        nome: r.nome,
+        horarioSugerido: r.horarioSugerido,
+        ordem: r.ordem,
+        itens: r.itens.map((i) => ({
+          id: i.id,
+          ordem: i.ordem,
+          quantidadeG: Number(i.quantidadeG),
+          observacao: i.observacao,
+          alimento: paraResumoAlimento(i.alimento),
+        })),
+      })),
+    });
   }
 }
+
