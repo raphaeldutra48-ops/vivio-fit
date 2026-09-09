@@ -1,3 +1,5 @@
+import { estimar1rm, seriesDeTrabalho } from './metricas-treino';
+
 /**
  * As marcas pessoais do aluno — "meus recordes".
  *
@@ -68,4 +70,69 @@ export function ordenarMarcas(marcas: MarcaPessoal[]): MarcaPessoal[] {
     const porData = b.cargaMaximaEm.localeCompare(a.cargaMaximaEm);
     return porData !== 0 ? porData : b.cargaMaximaKg - a.cargaMaximaKg;
   });
+}
+
+// --- montagem ---------------------------------------------------------------
+
+/** Uma série já registrada, com o nome do exercício e o dia em que foi feita. */
+export interface SerieParaMarca {
+  exercicioId: string;
+  exercicioNome: string;
+  cargaKg: number;
+  repsFeitas: number;
+  tipo: string;
+  /** Dia da execução, em `AAAA-MM-DD`. */
+  dia: string;
+}
+
+/**
+ * Derruba todas as séries do aluno em uma marca por exercício.
+ *
+ * Mora no contrato porque roda dos dois lados — a API e o SDK falando direto
+ * com o Postgres. E porque nada aqui decide acesso: são as séries que quem
+ * pergunta já lê uma a uma, lidas juntas.
+ */
+export function montarMeusRecordes(series: SerieParaMarca[]): MeusRecordes {
+  const porExercicio = new Map<string, SerieParaMarca[]>();
+  for (const s of series) {
+    const lista = porExercicio.get(s.exercicioId);
+    if (lista) lista.push(s);
+    else porExercicio.set(s.exercicioId, [s]);
+  }
+
+  const marcas: MarcaPessoal[] = [];
+  for (const [exercicioId, todas] of porExercicio) {
+    // Mesma regra do resto do app: aquecimento não vira recorde, a não ser que
+    // seja tudo o que existe.
+    const consideradas = seriesDeTrabalho(todas);
+    if (consideradas.length === 0) continue;
+
+    /*
+      A série da carga máxima, e a MAIS ANTIGA em caso de empate: a data que
+      interessa é a da conquista, não a da última vez que a pessoa repetiu o
+      mesmo peso. Dizer "seu recorde é de ontem" quando ele foi batido há três
+      meses e só repetido ontem tira o sentido do número.
+    */
+    const cargaMaxima = Math.max(...consideradas.map((s) => s.cargaKg));
+    const diaDaCargaMaxima = consideradas
+      .filter((s) => s.cargaKg === cargaMaxima)
+      .map((s) => s.dia)
+      .sort()[0]!;
+
+    marcas.push({
+      exercicioId,
+      exercicioNome: consideradas[0]!.exercicioNome,
+      cargaMaximaKg: cargaMaxima,
+      cargaMaximaEm: diaDaCargaMaxima,
+      melhor1rmKg: Math.max(...consideradas.map((s) => estimar1rm(s.cargaKg, s.repsFeitas))),
+      volumeMaximoSerieKg: Math.max(...consideradas.map((s) => s.cargaKg * s.repsFeitas)),
+      diasTreinados: new Set(consideradas.map((s) => s.dia)).size,
+      ultimaEm: consideradas
+        .map((s) => s.dia)
+        .sort()
+        .at(-1)!,
+    });
+  }
+
+  return { total: marcas.length, marcas: ordenarMarcas(marcas) };
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DIAS_MARCA_RECENTE, ehMarcaRecente, ordenarMarcas, type MarcaPessoal } from './recordes';
+import {
+  DIAS_MARCA_RECENTE,
+  ehMarcaRecente,
+  montarMeusRecordes,
+  ordenarMarcas,
+  type MarcaPessoal,
+  type SerieParaMarca,
+} from './recordes';
 
 const marca = (parcial: Partial<MarcaPessoal> = {}): MarcaPessoal => ({
   exercicioId: 'e1',
@@ -84,5 +91,69 @@ describe('ehMarcaRecente', () => {
 
   it('data quebrada não vira conquista', () => {
     expect(ehMarcaRecente(marca({ cargaMaximaEm: 'ontem' }), agora)).toBe(false);
+  });
+});
+
+describe('montarMeusRecordes', () => {
+  const serie = (
+    dia: string,
+    cargaKg: number,
+    repsFeitas: number,
+    tipo = 'NORMAL',
+    exercicioId = 'e1',
+  ): SerieParaMarca => ({
+    exercicioId,
+    exercicioNome: exercicioId === 'e1' ? 'Supino' : 'Remada',
+    cargaKg,
+    repsFeitas,
+    tipo,
+    dia,
+  });
+
+  it('a data do recorde é a da conquista, não a da última repetição', () => {
+    /*
+      Levantou 80 kg em julho e repetiu em setembro. Dizer "seu recorde é de
+      setembro" tira o sentido do número: o que a pessoa conquistou foi em
+      julho, e é essa data que mede o quanto ela andou desde então.
+    */
+    const r = montarMeusRecordes([
+      serie('2026-07-01', 80, 5),
+      serie('2026-08-01', 70, 10),
+      serie('2026-09-01', 80, 5),
+    ]);
+    expect(r.marcas[0]!.cargaMaximaEm).toBe('2026-07-01');
+    expect(r.marcas[0]!.ultimaEm).toBe('2026-09-01');
+    expect(r.marcas[0]!.diasTreinados).toBe(3);
+  });
+
+  it('aquecimento não vira recorde — a menos que seja tudo o que existe', () => {
+    const comTrabalho = montarMeusRecordes([
+      serie('2026-08-01', 20, 15, 'AQUECIMENTO'),
+      serie('2026-08-01', 60, 10),
+    ]);
+    expect(comTrabalho.marcas[0]!.cargaMaximaKg).toBe(60);
+
+    /*
+      Só aquecimento é um treino leve registrado, e um zero ali parece falha de
+      registro. Melhor a marca modesta que a lista vazia.
+    */
+    const soAquecimento = montarMeusRecordes([serie('2026-08-01', 20, 15, 'AQUECIMENTO')]);
+    expect(soAquecimento.marcas[0]!.cargaMaximaKg).toBe(20);
+  });
+
+  it('uma marca por exercício, e o total confere', () => {
+    const r = montarMeusRecordes([
+      serie('2026-08-01', 60, 10),
+      serie('2026-08-01', 40, 10, 'NORMAL', 'e2'),
+      serie('2026-08-02', 65, 10),
+    ]);
+    expect(r.total).toBe(2);
+    expect(r.marcas).toHaveLength(2);
+  });
+
+  it('sem série nenhuma, lista vazia — e não erro', () => {
+    // É o estado de quem acabou de entrar. Erro aqui faria a tela de boas-vindas
+    // parecer defeito.
+    expect(montarMeusRecordes([])).toEqual({ total: 0, marcas: [] });
   });
 });

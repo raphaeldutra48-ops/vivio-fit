@@ -907,13 +907,12 @@ export class VivioClient {
   readonly progresso = {
     /** Frequência, volume, tempo, adesão e evolução de carga, numa chamada só. */
     painel: (alunoId: string, dias = 30): Promise<PainelDeProgresso> =>
-      this.requisicao<PainelDeProgresso>(`/alunos/${alunoId}/progresso`, { query: { dias } }),
+      this.supabase.painelDeProgresso(alunoId, dias),
   };
 
   readonly recordes = {
     /** Marcas pessoais do aluno, conquista mais recente primeiro. */
-    meus: (alunoId: string): Promise<MeusRecordes> =>
-      this.requisicao<MeusRecordes>(`/alunos/${alunoId}/recordes`),
+    meus: (alunoId: string): Promise<MeusRecordes> => this.supabase.meusRecordes(alunoId),
   };
 
   readonly calorimetrias = {

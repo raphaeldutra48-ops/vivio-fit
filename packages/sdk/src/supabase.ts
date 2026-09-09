@@ -14,12 +14,17 @@ import {
   montarAnterioresDaSessao,
   montarHistoricoDeCarga,
   apurarRecordes,
+  montarMeusRecordes,
+  resumoDeTreinoNoPeriodo,
+  montarEvolucaoDeCarga,
+  variacaoDePeso,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
   AnterioresDaSessao,
   ExecucaoResumo,
   HistoricoCarga,
+  MeusRecordes,
   MomentoDaDor,
   RecordeBatido,
   RegistrarExecucaoInput,
@@ -43,6 +48,7 @@ import type {
   ExercicioResumo,
   GrupoMuscular,
   LoginInput,
+  PainelDeProgresso,
   Papel,
   PlanoTreinoCompleto,
   PlanoTreinoResumo,
@@ -1770,6 +1776,136 @@ export class MotorSupabase {
         ((nomes.data ?? []) as { id: string; nome: string }[]).map((e) => [e.id, e.nome]),
       ),
     });
+  }
+
+  // --- marcas pessoais e painel de progresso --------------------------------
+
+  /**
+   * O instante como o `timestamp` do banco o guarda: hora de UTC, sem `Z`.
+   *
+   * As colunas de data-e-hora são `timestamp without time zone` com valor em
+   * UTC. Mandar o `Z` faria o Postgres descartá-lo em silêncio na comparação —
+   * funciona, mas por acidente. Sem ele, o que se compara é o que está lá.
+   */
+  private static horaDoBanco(quando: Date): string {
+    return quando.toISOString().slice(0, 19);
+  }
+
+  /**
+   * Todas as séries do aluno, com nome do exercício e dia.
+   *
+   * Traz o histórico inteiro, e é o preço de a marca pessoal ser DERIVADA: uma
+   * tabela de recordes envelheceria no dia em que uma execução fosse
+   * corrigida, e passaria a dizer que a pessoa levantou um peso que ela apagou.
+   * Para quem tem dois anos de casa são alguns milhares de linhas de cinco
+   * campos curtos — e é a tela de "meus recordes", que se abre de vez em
+   * quando, não a de treinar.
+   */
+  async meusRecordes(alunoId: string): Promise<MeusRecordes> {
+    const linhas = this.ou(
+      await this.db
+        .from('SerieExecutada')
+        .select(
+          'exercicioId,cargaKg,repsFeitas,tipo,' +
+            'exercicio:Exercicio(nome),execucao:ExecucaoTreino!inner(alunoId,iniciadoEm)',
+        )
+        .eq('execucao.alunoId', alunoId),
+    ) as unknown as Record<string, unknown>[];
+
+    return montarMeusRecordes(
+      linhas.map((s) => ({
+        exercicioId: s.exercicioId as string,
+        exercicioNome: (umSo(s.exercicio)?.nome as string | undefined) ?? 'Exercício',
+        cargaKg: n(s.cargaKg) ?? 0,
+        repsFeitas: Number(s.repsFeitas),
+        tipo: s.tipo as string,
+        dia: instante((umSo(s.execucao) ?? {}).iniciadoEm).slice(0, 10),
+      })),
+    );
+  }
+
+  async painelDeProgresso(alunoId: string, dias = 30): Promise<PainelDeProgresso> {
+    const de = MotorSupabase.horaDoBanco(new Date(Date.now() - dias * 86_400_000));
+
+    const [execucoes, series, checkins, medidas] = await Promise.all([
+      this.db
+        .from('ExecucaoTreino')
+        .select('iniciadoEm,duracaoSeg,series:SerieExecutada(cargaKg,repsFeitas,tipo)')
+        .eq('alunoId', alunoId)
+        .gte('iniciadoEm', de),
+      this.db
+        .from('SerieExecutada')
+        .select(
+          'exercicioId,cargaKg,repsFeitas,tipo,execucao:ExecucaoTreino!inner(alunoId,iniciadoEm)',
+        )
+        .eq('execucao.alunoId', alunoId)
+        .gte('execucao.iniciadoEm', de),
+      this.resumoDeCheckins(alunoId, dias),
+      this.db
+        .from('Medida')
+        .select('pesoKg,data')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .not('pesoKg', 'is', null)
+        .gte('data', de.slice(0, 10))
+        .order('data', { ascending: true }),
+    ]);
+
+    const linhasDeSerie = this.ou(series) as unknown as Record<string, unknown>[];
+    const exercicioIds = [...new Set(linhasDeSerie.map((s) => s.exercicioId as string))];
+    const nomes =
+      exercicioIds.length === 0
+        ? []
+        : ((
+            await this.db.from('Exercicio').select('id,nome').in('id', exercicioIds)
+          ).data as { id: string; nome: string }[] | null) ?? [];
+
+    return {
+      dias,
+      treino: resumoDeTreinoNoPeriodo(
+        (this.ou(execucoes) as unknown as Record<string, unknown>[]).map((e) => ({
+          iniciadoEm: instante(e.iniciadoEm),
+          duracaoSeg:
+            e.duracaoSeg === null || e.duracaoSeg === undefined ? null : Number(e.duracaoSeg),
+          series: ((e.series ?? []) as Record<string, unknown>[]).map((s) => ({
+            cargaKg: n(s.cargaKg) ?? 0,
+            repsFeitas: Number(s.repsFeitas),
+            tipo: s.tipo as string,
+          })),
+        })),
+        dias,
+      ),
+      /*
+        `null` quando o aluno nunca registrou check-in — diferente de zero, que
+        significaria "registrou e não treinou". A tela precisa distinguir "sem
+        dado" de "dado ruim" para não cobrar quem só não conhece o recurso.
+      */
+      checkins:
+        checkins.comCheckin === 0
+          ? null
+          : {
+              comCheckin: checkins.comCheckin,
+              aderencia: checkins.aderencia,
+              energiaMedia: checkins.energiaMedia,
+              diasComDor: checkins.diasComDor,
+              diasSemCheckin: checkins.diasSemCheckin,
+            },
+      cargas: montarEvolucaoDeCarga(
+        linhasDeSerie.map((s) => ({
+          exercicioId: s.exercicioId as string,
+          quando: instante((umSo(s.execucao) ?? {}).iniciadoEm),
+          cargaKg: n(s.cargaKg) ?? 0,
+          repsFeitas: Number(s.repsFeitas),
+          tipo: s.tipo as string,
+        })),
+        Object.fromEntries(nomes.map((e) => [e.id, e.nome])),
+      ),
+      variacaoPesoKg: variacaoDePeso(
+        ((this.ou(medidas) as unknown as Record<string, unknown>[]) ?? []).map(
+          (m) => n(m.pesoKg) ?? 0,
+        ),
+      ),
+    };
   }
 }
 
