@@ -18,6 +18,7 @@ export * from './historico-treino';
 export * from './execucoes';
 export * from './checkin';
 export * from './progresso';
+export * from './aferir-meta';
 export * from './metas';
 export * from './comparativo';
 export * from './feedback';

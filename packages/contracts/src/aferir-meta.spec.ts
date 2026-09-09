@@ -1,6 +1,6 @@
-import { TipoMeta } from '@vivio/contracts';
+import { TipoMeta } from './metas';
 import { describe, expect, it } from 'vitest';
-import { calcularProgresso, estaAtrasada } from './aferir';
+import { calcularProgresso, estaAtrasada } from './aferir-meta';
 
 const peso = (alvo: number | null, inicial: number | null, atual: number | null) =>
   calcularProgresso({ tipo: TipoMeta.PESO_CORPORAL, alvo, inicial, atual });

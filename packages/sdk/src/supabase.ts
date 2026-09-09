@@ -18,12 +18,17 @@ import {
   resumoDeTreinoNoPeriodo,
   montarEvolucaoDeCarga,
   variacaoDePeso,
+  TipoMeta,
+  montarMetaResumo,
+  ordenarMetas,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
   AnterioresDaSessao,
   ExecucaoResumo,
   HistoricoCarga,
+  LinhaDeMeta,
+  MetaResumo,
   MeusRecordes,
   MomentoDaDor,
   RecordeBatido,
@@ -38,6 +43,7 @@ import type {
   CheckinResumo,
   AlertaResumo,
   ConsultaAuditoria,
+  CriarMetaInput,
   CriarPlanoTreinoInput,
   ConsultaEvolucao,
   EvolucaoCorporal,
@@ -386,6 +392,25 @@ export class MotorSupabase {
   private ou<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
     if (r.error) throw erroDoSupabase(r.error);
     return r.data as T;
+  }
+
+  /**
+   * UPDATE que não pegou nenhuma linha é recusa, e precisa doer.
+   *
+   * INSERT sem política ERRA; UPDATE sem política afeta ZERO linhas e
+   * responde 200. Do lado de fora isso chega como sucesso: a tela diz
+   * "salvo" sobre coisa nenhuma, e a pessoa descobre na próxima vez que
+   * abrir. Com `.select()` a resposta traz o que mudou — vazio quer dizer
+   * que a política não deixou, e aí é a mesma recusa de sempre.
+   */
+  private async exigirLinhaAlterada(
+    consulta: PromiseLike<{ data: unknown[] | null; error: { message?: string; code?: string } | null }>,
+  ): Promise<void> {
+    const r = await consulta;
+    if (r.error) throw erroDoSupabase(r.error);
+    if ((r.data ?? []).length === 0) {
+      throw new ErroApi('ACESSO_NEGADO', 'Você não tem acesso a este conteúdo.', 403);
+    }
   }
 
   /** Chama uma função do banco. */
@@ -1907,7 +1932,243 @@ export class MotorSupabase {
       ),
     };
   }
+
+  // --- metas ----------------------------------------------------------------
+
+  private static readonly CAMPOS_META =
+    'id,tipo,titulo,alvo,exercicioId,valorInicial,prazo,observacao,criadoEm,concluidaEm,' +
+    'exercicio:Exercicio(nome)';
+
+  private paraLinhaDeMeta(m: Record<string, unknown>): LinhaDeMeta {
+    return {
+      id: m.id as string,
+      tipo: m.tipo as string,
+      titulo: m.titulo as string,
+      alvo: n(m.alvo),
+      exercicioId: (m.exercicioId as string | null) ?? null,
+      exercicioNome: (umSo(m.exercicio)?.nome as string | undefined) ?? null,
+      valorInicial: n(m.valorInicial),
+      prazo: m.prazo === null || m.prazo === undefined ? null : String(m.prazo).slice(0, 10),
+      observacao: (m.observacao as string | null) ?? null,
+      criadoEm: instante(m.criadoEm),
+      concluidaEm: instanteOuNulo(m.concluidaEm),
+    };
+  }
+
+  /**
+   * O valor de agora de cada meta, tirado do que já existe no sistema.
+   *
+   * Uma consulta por TIPO, e não uma por meta: quem tem seis metas de carga em
+   * exercícios diferentes faria seis idas à rede para desenhar uma tela só.
+   *
+   * `null` significa "ainda não há medição", e é diferente de zero — quem
+   * nunca se pesou não pesa zero, e a barra tem de ficar vazia em vez de
+   * dizer que a pessoa está no começo do caminho.
+   */
+  private async aferirMetas(
+    alunoId: string,
+    metas: LinhaDeMeta[],
+  ): Promise<Map<string, number | null>> {
+    const tipos = new Set(metas.map((m) => m.tipo));
+    const exercicioIds = [
+      ...new Set(
+        metas
+          .filter((m) => m.tipo === TipoMeta.CARGA_EXERCICIO && m.exercicioId)
+          .map((m) => m.exercicioId!),
+      ),
+    ];
+
+    const ultimaMedida = async (campo: 'pesoKg' | 'cinturaCm'): Promise<number | null> => {
+      const r = await this.db
+        .from('Medida')
+        .select(campo)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .not(campo, 'is', null)
+        .order('data', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return r.data ? n((r.data as Record<string, unknown>)[campo]) : null;
+    };
+
+    const [peso, cintura, series, frequencia] = await Promise.all([
+      tipos.has(TipoMeta.PESO_CORPORAL) ? ultimaMedida('pesoKg') : Promise.resolve(null),
+      tipos.has(TipoMeta.MEDIDA_CINTURA) ? ultimaMedida('cinturaCm') : Promise.resolve(null),
+      exercicioIds.length === 0
+        ? Promise.resolve(null)
+        : this.db
+            .from('SerieExecutada')
+            .select('exercicioId,cargaKg,repsFeitas,tipo,execucao:ExecucaoTreino!inner(alunoId)')
+            .eq('execucao.alunoId', alunoId)
+            .in('exercicioId', exercicioIds),
+      tipos.has(TipoMeta.FREQUENCIA_SEMANAL)
+        ? this.db
+            .from('ExecucaoTreino')
+            .select('id', { count: 'exact', head: true })
+            .eq('alunoId', alunoId)
+            .gte(
+              'iniciadoEm',
+              MotorSupabase.horaDoBanco(new Date(Date.now() - JANELA_FREQUENCIA_DIAS * 86_400_000)),
+            )
+        : Promise.resolve(null),
+    ]);
+
+    /*
+      Maior carga numa SÉRIE DE TRABALHO. Sem isso a meta de carga seria batida
+      por quem aqueceu pesado uma vez — e o aquecimento entra de volta quando é
+      tudo o que existe, que é a regra do resto do app.
+    */
+    const cargaPorExercicio = new Map<string, number>();
+    for (const id of exercicioIds) {
+      const doExercicio = ((series?.data ?? []) as Record<string, unknown>[])
+        .filter((s) => s.exercicioId === id)
+        .map((s) => ({
+          cargaKg: n(s.cargaKg) ?? 0,
+          repsFeitas: Number(s.repsFeitas),
+          tipo: s.tipo as string,
+        }));
+      if (doExercicio.length === 0) continue;
+      cargaPorExercicio.set(id, Math.max(...seriesDeTrabalho(doExercicio).map((s) => s.cargaKg)));
+    }
+
+    /*
+      Média das últimas quatro semanas, e não da última: uma semana ruim
+      (viagem, gripe) jogaria a meta a zero e a seguinte a devolveria — o número
+      ficaria pulando sem dizer nada.
+    */
+    const total = frequencia?.count ?? 0;
+    const porSemana =
+      total === 0 ? null : Number(((total / JANELA_FREQUENCIA_DIAS) * 7).toFixed(1));
+
+    const valores = new Map<string, number | null>();
+    for (const m of metas) {
+      switch (m.tipo) {
+        case TipoMeta.PESO_CORPORAL:
+          valores.set(m.id, peso);
+          break;
+        case TipoMeta.MEDIDA_CINTURA:
+          valores.set(m.id, cintura);
+          break;
+        case TipoMeta.CARGA_EXERCICIO:
+          valores.set(m.id, m.exercicioId ? cargaPorExercicio.get(m.exercicioId) ?? null : null);
+          break;
+        case TipoMeta.FREQUENCIA_SEMANAL:
+          valores.set(m.id, porSemana);
+          break;
+        default:
+          // LIVRE não tem número, e é isso que a torna LIVRE.
+          valores.set(m.id, null);
+      }
+    }
+    return valores;
+  }
+
+  async listarMetas(alunoId: string): Promise<MetaResumo[]> {
+    const linhas = (
+      this.ou(
+        await this.db
+          .from('Meta')
+          .select(MotorSupabase.CAMPOS_META)
+          .eq('alunoId', alunoId)
+          .is('deletadoEm', null),
+      ) as unknown as Record<string, unknown>[]
+    ).map((m) => this.paraLinhaDeMeta(m));
+
+    const valores = await this.aferirMetas(alunoId, linhas);
+    return ordenarMetas(linhas.map((m) => montarMetaResumo(m, valores.get(m.id) ?? null)));
+  }
+
+  private async obterMeta(alunoId: string, metaId: string): Promise<MetaResumo> {
+    const linha = this.paraLinhaDeMeta(
+      this.ou(
+        await this.db
+          .from('Meta')
+          .select(MotorSupabase.CAMPOS_META)
+          .eq('id', metaId)
+          .eq('alunoId', alunoId)
+          .is('deletadoEm', null)
+          .single(),
+      ) as unknown as Record<string, unknown>,
+    );
+    const valores = await this.aferirMetas(alunoId, [linha]);
+    return montarMetaResumo(linha, valores.get(linha.id) ?? null);
+  }
+
+  /**
+   * Cria a meta e congela o valor inicial no mesmo instante.
+   *
+   * Sem isso não há régua: "faltam 3 kg" não diz se a pessoa andou 10% ou 90%
+   * do caminho. O valor é aferido AQUI porque a aferição de carga precisa da
+   * regra de série de trabalho, que já existe testada no contrato — reescrevê-la
+   * em SQL é como as regras de alerta divergiram da fonte. O que o banco
+   * garante é que ninguém o reescreve depois.
+   */
+  async criarMeta(alunoId: string, dados: CriarMetaInput): Promise<MetaResumo> {
+    const id = `${alunoId}-meta-${Date.now()}`;
+    const eu = await this.meuId();
+
+    const provisoria: LinhaDeMeta = {
+      id,
+      tipo: dados.tipo,
+      titulo: dados.titulo,
+      alvo: dados.alvo ?? null,
+      exercicioId: dados.exercicioId ?? null,
+      exercicioNome: null,
+      valorInicial: null,
+      prazo: dados.prazo ?? null,
+      observacao: dados.observacao ?? null,
+      criadoEm: new Date().toISOString(),
+      concluidaEm: null,
+    };
+    const valorInicial = (await this.aferirMetas(alunoId, [provisoria])).get(id) ?? null;
+
+    this.ou(
+      await this.db.from('Meta').insert({
+        id,
+        alunoId,
+        // O gatilho reescreve com quem está pedindo; vai porque a coluna é
+        // NOT NULL.
+        criadoPorId: eu,
+        tipo: dados.tipo,
+        titulo: dados.titulo.trim(),
+        alvo: dados.alvo ?? null,
+        exercicioId: dados.exercicioId ?? null,
+        valorInicial,
+        prazo: dados.prazo ?? null,
+        observacao: dados.observacao ?? null,
+      }),
+    );
+
+    return this.obterMeta(alunoId, id);
+  }
+
+  async concluirMeta(alunoId: string, metaId: string, concluida: boolean): Promise<MetaResumo> {
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Meta')
+        .update({ concluidaEm: concluida ? new Date().toISOString() : null })
+        .eq('id', metaId)
+        .eq('alunoId', alunoId)
+        .select('id'),
+    );
+    return this.obterMeta(alunoId, metaId);
+  }
+
+  /** Soft delete: a meta pode estar citada num relatório já enviado. */
+  async removerMeta(alunoId: string, metaId: string): Promise<void> {
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Meta')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', metaId)
+        .eq('alunoId', alunoId)
+        .select('id'),
+    );
+  }
 }
+
+/** Janela usada para aferir frequência semanal, em dias. */
+const JANELA_FREQUENCIA_DIAS = 28;
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
 interface LinhaVinculo {

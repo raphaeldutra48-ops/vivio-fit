@@ -871,25 +871,20 @@ export class VivioClient {
 
   readonly metas = {
     /** O progresso vem aferido na hora, a partir de medidas e execuções. */
-    listar: (alunoId: string): Promise<MetaResumo[]> =>
-      this.requisicao<MetaResumo[]>(`/alunos/${alunoId}/metas`),
+    listar: (alunoId: string): Promise<MetaResumo[]> => this.supabase.listarMetas(alunoId),
 
     criar: (alunoId: string, dados: CriarMetaInput): Promise<MetaResumo> =>
-      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas`, { metodo: 'POST', corpo: dados }),
+      this.supabase.criarMeta(alunoId, dados),
 
     /** Único caminho da meta LIVRE; nas demais, a aferição já basta. */
     concluir: (alunoId: string, metaId: string): Promise<MetaResumo> =>
-      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas/${metaId}/concluir`, {
-        metodo: 'PATCH',
-      }),
+      this.supabase.concluirMeta(alunoId, metaId, true),
 
     reabrir: (alunoId: string, metaId: string): Promise<MetaResumo> =>
-      this.requisicao<MetaResumo>(`/alunos/${alunoId}/metas/${metaId}/reabrir`, {
-        metodo: 'PATCH',
-      }),
+      this.supabase.concluirMeta(alunoId, metaId, false),
 
     remover: (alunoId: string, metaId: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/metas/${metaId}`, { metodo: 'DELETE' }),
+      this.supabase.removerMeta(alunoId, metaId),
   };
 
   readonly resumo = {

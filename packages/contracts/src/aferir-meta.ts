@@ -1,4 +1,4 @@
-import { TipoMeta } from '@vivio/contracts';
+import { TipoMeta, type MetaResumo } from './metas';
 
 /**
  * Cálculo de progresso de meta.
@@ -92,4 +92,84 @@ function atingiuSemRegua(alvo: number, atual: number): boolean {
 export function estaAtrasada(prazo: Date | null, atingida: boolean, agora = new Date()): boolean {
   if (!prazo || atingida) return false;
   return prazo.getTime() < agora.getTime();
+}
+
+// --- montagem ---------------------------------------------------------------
+
+/** A linha da meta como ela está no banco, já com os números convertidos. */
+export interface LinhaDeMeta {
+  id: string;
+  tipo: string;
+  titulo: string;
+  alvo: number | null;
+  exercicioId: string | null;
+  exercicioNome: string | null;
+  valorInicial: number | null;
+  /** `AAAA-MM-DD`, ou `null`. */
+  prazo: string | null;
+  observacao: string | null;
+  /** ISO com fuso. */
+  criadoEm: string;
+  /** ISO com fuso, ou `null` enquanto aberta. */
+  concluidaEm: string | null;
+}
+
+/**
+ * A meta como a tela lê, com o progresso aferido na hora.
+ *
+ * Mora no contrato porque roda dos dois lados. E o progresso não é gravado de
+ * propósito: um número guardado envelheceria na primeira pesagem nova, e a
+ * diferença entre a barra e a origem apareceria como bug sem causa.
+ */
+export function montarMetaResumo(
+  m: LinhaDeMeta,
+  valorAtual: number | null,
+  agora: Date = new Date(),
+): MetaResumo {
+  const { progresso, atingida } = calcularProgresso({
+    tipo: m.tipo as TipoMeta,
+    alvo: m.alvo,
+    inicial: m.valorInicial,
+    atual: valorAtual,
+  });
+
+  /*
+    Concluída à mão vence a aferição. O profissional pode encerrar uma meta que
+    deixou de fazer sentido — lesão, mudança de objetivo — e o sistema não deve
+    reabri-la só porque o número ainda não bateu.
+  */
+  const concluida = m.concluidaEm !== null || atingida;
+
+  return {
+    id: m.id,
+    tipo: m.tipo as TipoMeta,
+    titulo: m.titulo,
+    alvo: m.alvo,
+    exercicioId: m.exercicioId,
+    exercicioNome: m.exercicioNome,
+    prazo: m.prazo,
+    observacao: m.observacao,
+    criadoEm: m.criadoEm,
+    valorInicial: m.valorInicial,
+    valorAtual,
+    progresso,
+    atingida: concluida,
+    concluidaEm: m.concluidaEm,
+    atrasada: estaAtrasada(m.prazo === null ? null : new Date(`${m.prazo}T00:00:00.000Z`), concluida, agora),
+  };
+}
+
+/**
+ * A ordem da lista: aberta antes de concluída, e mais recente antes de antiga.
+ *
+ * Meta concluída é registro; meta aberta é trabalho. Misturar as duas faria o
+ * profissional caçar o que falta no meio do que já foi.
+ */
+export function ordenarMetas(metas: readonly MetaResumo[]): MetaResumo[] {
+  return [...metas].sort(
+    (a, b) =>
+      Number(a.atingida) - Number(b.atingida) ||
+      b.criadoEm.localeCompare(a.criadoEm) ||
+      b.id.localeCompare(a.id),
+  );
 }

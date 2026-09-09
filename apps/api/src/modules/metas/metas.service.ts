@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { TipoMeta, type CriarMetaInput, type MetaResumo } from '@vivio/contracts';
+import {
+  TipoMeta,
+  montarMetaResumo,
+  ordenarMetas,
+  seriesDeTrabalho,
+  type CriarMetaInput,
+  type MetaResumo,
+} from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
-import { seriesDeTrabalho } from '@vivio/contracts';
-import { calcularProgresso, estaAtrasada } from './aferir';
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;
 
@@ -66,15 +71,24 @@ export class MetasService {
     const metas = await this.prisma.meta.findMany({
       where: { alunoId, deletadoEm: null },
       include: { exercicio: { select: { nome: true } } },
-      // Abertas primeiro: meta concluída é registro, meta aberta é trabalho.
-      orderBy: [{ concluidaEm: 'asc' }, { criadoEm: 'desc' }],
+      orderBy: [{ criadoEm: 'desc' }],
     });
 
-    return Promise.all(
-      metas.map(async (m) => {
-        const atual = await this.aferir(alunoId, m.tipo as TipoMeta, m.exercicioId);
-        return this.paraResumo(m, atual);
-      }),
+    /*
+      A ordem é a do contrato: aberta antes de concluída. O `orderBy` do
+      banco não conseguia dizer isso — `concluidaEm asc` põe NULL por
+      último no Postgres, então a lista saía com as metas TERMINADAS no
+      topo, ao contrário do que este arquivo dizia desde sempre. E ele
+      também não enxerga a meta atingida pelo número, que continua com
+      `concluidaEm` nulo.
+    */
+    return ordenarMetas(
+      await Promise.all(
+        metas.map(async (m) => {
+          const atual = await this.aferir(alunoId, m.tipo as TipoMeta, m.exercicioId);
+          return this.paraResumo(m, atual);
+        }),
+      ),
     );
   }
 
@@ -188,40 +202,23 @@ export class MetasService {
     return Number(((total / JANELA_FREQUENCIA_DIAS) * 7).toFixed(1));
   }
 
+  /** A montagem mora em `@vivio/contracts`: o SDK monta a mesma tela. */
   private paraResumo(m: LinhaMeta, valorAtual: number | null): MetaResumo {
-    const alvo = m.alvo === null ? null : Number(m.alvo);
-    const valorInicial = m.valorInicial === null ? null : Number(m.valorInicial);
-
-    const { progresso, atingida } = calcularProgresso({
-      tipo: m.tipo as TipoMeta,
-      alvo,
-      inicial: valorInicial,
-      atual: valorAtual,
-    });
-
-    /*
-      Concluída à mão vence a aferição. O profissional pode encerrar uma meta
-      que deixou de fazer sentido — lesão, mudança de objetivo — e o sistema
-      não deve reabri-la só porque o número ainda não bateu.
-    */
-    const concluida = m.concluidaEm !== null || atingida;
-
-    return {
-      id: m.id,
-      tipo: m.tipo as TipoMeta,
-      titulo: m.titulo,
-      alvo,
-      exercicioId: m.exercicioId,
-      exercicioNome: m.exercicio?.nome ?? null,
-      prazo: m.prazo ? m.prazo.toISOString().slice(0, 10) : null,
-      observacao: m.observacao,
-      criadoEm: m.criadoEm.toISOString(),
-      valorInicial,
+    return montarMetaResumo(
+      {
+        id: m.id,
+        tipo: m.tipo,
+        titulo: m.titulo,
+        alvo: m.alvo === null ? null : Number(m.alvo),
+        exercicioId: m.exercicioId,
+        exercicioNome: m.exercicio?.nome ?? null,
+        valorInicial: m.valorInicial === null ? null : Number(m.valorInicial),
+        prazo: m.prazo ? m.prazo.toISOString().slice(0, 10) : null,
+        observacao: m.observacao,
+        criadoEm: m.criadoEm.toISOString(),
+        concluidaEm: m.concluidaEm?.toISOString() ?? null,
+      },
       valorAtual,
-      progresso,
-      atingida: concluida,
-      concluidaEm: m.concluidaEm?.toISOString() ?? null,
-      atrasada: estaAtrasada(m.prazo, concluida),
-    };
+    );
   }
 }
