@@ -8,6 +8,7 @@ import {
   enriquecerMarcador,
   resumoDeAgua,
   resumoDeCheckins,
+  ordenarPlanosDeTreino,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -17,14 +18,19 @@ import type {
   CheckinResumo,
   AlertaResumo,
   ConsultaAuditoria,
+  CriarPlanoTreinoInput,
   ConsultaEvolucao,
   EvolucaoCorporal,
   CondicaoResumo,
   ConcederConsentimentoInput,
   ConsentimentoResumo,
   EsqueciSenhaInput,
+  ExercicioResumo,
+  GrupoMuscular,
   LoginInput,
   Papel,
+  PlanoTreinoCompleto,
+  PlanoTreinoResumo,
   RegistrarAlunoInput,
   RegistrarProfissionalInput,
   RespostaAutenticacao,
@@ -43,6 +49,7 @@ import type {
   ResolverCondicaoInput,
   ResumoDeAgua,
   ResumoDeCheckins,
+  SessaoTreinoResumo,
   SexoBiologico,
   RespostaRegistro,
   ResumoPessoa,
@@ -132,8 +139,38 @@ export function erroDoSupabase(e: { message?: string; status?: number; code?: st
   if (e.code === '42501' || status === 403) {
     return new ErroApi('ACESSO_NEGADO', 'Você não tem acesso a este conteúdo.', 403);
   }
+
+  /*
+    `PGRST116` é o `.single()` que não achou linha; `P0002` é o
+    `raise ... using errcode = 'P0002'` das nossas funções. Os dois são "não
+    existe", e sem esta linha chegavam às telas como ERRO_INTERNO 400 — que faz
+    a tela mostrar "erro inesperado" onde deveria mostrar "não encontrado", e
+    manda o app tentar de novo por ser um 4xx que parece falha nossa.
+
+    No `P0002` a mensagem do banco passa inteira: ela foi escrita para ser lida
+    ("Exercício (abc) não encontrado."), ao contrário da do PostgREST.
+  */
+  if (e.code === 'PGRST116') {
+    return new ErroApi('RECURSO_NAO_ENCONTRADO', 'Recurso não encontrado.', 404);
+  }
+  if (e.code === 'P0002') {
+    return new ErroApi('RECURSO_NAO_ENCONTRADO', bruto || 'Recurso não encontrado.', 404);
+  }
+
   if (e.code === '23505') {
-    return new ErroApi('CONFLITO', 'Esse registro já existe.', 409);
+    /*
+      Conflito escrito por nós tem frase de tela — "Este plano já está ativo.",
+      "Este aluno já possui um profissional ativo do tipo PERSONAL". Trocá-la
+      pela genérica era jogar fora a única parte útil. Já a do Postgres cru
+      ("duplicate key value violates unique constraint \"Vinculo_pkey\"") não
+      se mostra a ninguém.
+    */
+    const nossa = bruto !== '' && !/duplicate key|unique constraint/i.test(bruto);
+    return new ErroApi('CONFLITO', nossa ? bruto : 'Esse registro já existe.', 409);
+  }
+  if (e.code === '23514') {
+    // `check_violation`: a função recusou o conteúdo, e disse por quê.
+    return new ErroApi('DADOS_INVALIDOS', bruto || 'Dados inválidos.', 422);
   }
 
   return new ErroApi('ERRO_INTERNO', bruto || 'Erro inesperado.', status, { causa: e.code });
@@ -1275,6 +1312,188 @@ export class MotorSupabase {
    */
   async gruposDeAlimento(): Promise<string[]> {
     return this.rpc<string[]>('grupos_de_alimento');
+  }
+
+  // --- plano de treino ------------------------------------------------------
+
+  /*
+    `videoChave` está na lista, e a chave do laudo de exame não estava.
+
+    A diferença não é o tipo do campo: é de quem é o arquivo. O laudo é do
+    médico e do aluno por especificação, e a chave dele era uma coisa a mais
+    para vazar para o personal. O vídeo do exercício é conteúdo que quem lê a
+    linha já pode assistir — a política de `Exercicio` só devolve o que é
+    GLOBAL ou dele mesmo. Sai daqui como `temVideo`, que é o que a tela usa.
+  */
+  private static readonly CAMPOS_EXERCICIO_DO_ITEM =
+    'id,nome,grupoMuscular,equipamento,instrucoes,passos,escopo,videoChave,' +
+    'criadoPorId,imagemCredito,videoCredito';
+
+  /*
+    `!PlanoTreino_personalId_fkey` porque o plano aponta DUAS vezes para `User`
+    — aluno e personal. Sem dizer por qual caminho, o PostgREST recusa o embed
+    por ambiguidade, e a tela ficaria sem o nome de quem prescreveu.
+  */
+  private static readonly CAMPOS_PLANO =
+    'id,nome,objetivo,versao,status,criadoEm,inicioEm,fimEm,' +
+    'personal:User!PlanoTreino_personalId_fkey(id,nome)';
+
+  private static readonly CAMPOS_PLANO_COMPLETO =
+    `${MotorSupabase.CAMPOS_PLANO},` +
+    'sessoes:SessaoTreino(id,nome,ordem,diaSugerido,' +
+    'itens:ItemTreino(id,ordem,series,repsAlvo,cargaSugeridaKg,descansoSeg,' +
+    `tecnica,observacao,supersetGrupo,exercicio:Exercicio(${MotorSupabase.CAMPOS_EXERCICIO_DO_ITEM})))`;
+
+  private paraPlano(p: Record<string, unknown>, totalSessoes: number): PlanoTreinoResumo {
+    return {
+      id: p.id as string,
+      nome: p.nome as string,
+      objetivo: (p.objetivo as string | null) ?? null,
+      versao: Number(p.versao),
+      status: p.status as PlanoTreinoResumo['status'],
+      criadoEm: instante(p.criadoEm),
+      inicioEm: instanteOuNulo(p.inicioEm),
+      fimEm: instanteOuNulo(p.fimEm),
+      totalSessoes,
+      personal: p.personal as { id: string; nome: string },
+    };
+  }
+
+  /**
+   * Sessões e itens saem ordenados por `ordem`.
+   *
+   * A ordenação é feita aqui e não no pedido: o PostgREST ordena embutido só
+   * no primeiro nível, e a ordem dos ITENS é a que importa de verdade — ela é
+   * a sequência do treino. Um plano que chega embaralhado manda a pessoa fazer
+   * agachamento depois de terminar a perna.
+   *
+   * São no máximo 10 sessões de 30 itens, pelo contrato: ordenar isso no
+   * cliente não se mede.
+   */
+  private paraPlanoCompleto(p: Record<string, unknown>): PlanoTreinoCompleto {
+    const sessoes: SessaoTreinoResumo[] = ((p.sessoes ?? []) as Record<string, unknown>[])
+      .map((s) => ({
+        id: s.id as string,
+        nome: s.nome as string,
+        ordem: Number(s.ordem),
+        diaSugerido: s.diaSugerido === null || s.diaSugerido === undefined ? null : Number(s.diaSugerido),
+        itens: ((s.itens ?? []) as Record<string, unknown>[])
+          .map((i) => {
+            const e = (i.exercicio ?? {}) as Record<string, unknown>;
+            return {
+              id: i.id as string,
+              ordem: Number(i.ordem),
+              series: Number(i.series),
+              repsAlvo: i.repsAlvo as string,
+              cargaSugeridaKg: n(i.cargaSugeridaKg),
+              descansoSeg: i.descansoSeg === null || i.descansoSeg === undefined ? null : Number(i.descansoSeg),
+              tecnica: (i.tecnica as string | null) ?? null,
+              observacao: (i.observacao as string | null) ?? null,
+              supersetGrupo: (i.supersetGrupo as string | null) ?? null,
+              exercicio: {
+                id: e.id as string,
+                nome: e.nome as string,
+                grupoMuscular: e.grupoMuscular as GrupoMuscular,
+                equipamento: (e.equipamento as string | null) ?? null,
+                instrucoes: (e.instrucoes as string | null) ?? null,
+                passos: (e.passos as string[] | null) ?? [],
+                escopo: e.escopo as 'GLOBAL' | 'PRIVADO',
+                temVideo: e.videoChave !== null && e.videoChave !== undefined,
+                criadoPorId: (e.criadoPorId as string | null) ?? null,
+                /*
+                  Sem link assinado, como na API: o plano tem dezenas de itens,
+                  a assinatura vale poucos minutos e o mobile guarda isto em
+                  cache para treinar sem rede — o link chegaria morto. A tela
+                  pede a mídia na hora de treinar, pela biblioteca.
+                */
+                imagemUrl: null,
+                /* Pelo mesmo motivo: não perguntamos, então não afirmamos. */
+                temDemonstracao: null,
+                imagemCredito: (e.imagemCredito as string | null) ?? null,
+                videoCredito: (e.videoCredito as string | null) ?? null,
+              } satisfies ExercicioResumo,
+            };
+          })
+          .sort((a, b) => a.ordem - b.ordem),
+      }))
+      .sort((a, b) => a.ordem - b.ordem);
+
+    return { ...this.paraPlano(p, sessoes.length), sessoes };
+  }
+
+  async listarPlanos(alunoId: string): Promise<PlanoTreinoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('PlanoTreino')
+        // `sessoes:SessaoTreino(count)` conta no banco. Trazer as sessões só
+        // para medir o tamanho delas seria puxar o plano inteiro por um número.
+        .select(`${MotorSupabase.CAMPOS_PLANO},sessoes:SessaoTreino(count)`)
+        .eq('alunoId', alunoId),
+    ) as unknown as Record<string, unknown>[];
+
+    return ordenarPlanosDeTreino(
+      linhas.map((p) =>
+        this.paraPlano(p, (p.sessoes as Array<{ count: number }> | null)?.[0]?.count ?? 0),
+      ),
+    );
+  }
+
+  async planoAtivo(alunoId: string): Promise<PlanoTreinoCompleto> {
+    const linha = this.ou(
+      await this.db
+        .from('PlanoTreino')
+        .select(MotorSupabase.CAMPOS_PLANO_COMPLETO)
+        .eq('alunoId', alunoId)
+        .eq('status', 'ATIVO')
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    // Mensagem própria, e não a genérica do `single()`: "nenhum plano ativo" é
+    // o estado normal de quem acabou de contratar o personal, e a tela usa
+    // este texto para oferecer montar o primeiro.
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Plano de treino ativo não encontrado.', 404);
+    }
+    return this.paraPlanoCompleto(linha);
+  }
+
+  async obterPlano(alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> {
+    const linha = this.ou(
+      await this.db
+        .from('PlanoTreino')
+        .select(MotorSupabase.CAMPOS_PLANO_COMPLETO)
+        .eq('id', planoId)
+        .eq('alunoId', alunoId)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraPlanoCompleto(linha);
+  }
+
+  /**
+   * Cria o plano inteiro numa chamada só.
+   *
+   * `p_versao_de` nulo é plano novo; preenchido, é a versão seguinte daquele —
+   * e se a anterior estava valendo, a nova assume o lugar dela. A função do
+   * banco é uma transação: ou plano, sessões e itens entram juntos, ou nada
+   * entra. É a diferença para o exame, que aceita duas escritas — aqui um
+   * plano com metade das sessões manda a pessoa embora da academia no meio.
+   */
+  async criarPlano(
+    alunoId: string,
+    dados: CriarPlanoTreinoInput,
+    versaoDe?: string,
+  ): Promise<PlanoTreinoCompleto> {
+    const id = await this.rpc<string>('criar_plano_treino', {
+      p_aluno_id: alunoId,
+      p_plano: dados,
+      p_versao_de: versaoDe ?? null,
+    });
+    return this.obterPlano(alunoId, id);
+  }
+
+  async ativarPlano(alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> {
+    await this.rpc<null>('ativar_plano_treino', { p_plano_id: planoId });
+    return this.obterPlano(alunoId, planoId);
   }
 }
 

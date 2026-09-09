@@ -200,3 +200,37 @@ export type MidiaDeExercicios = Record<
   string,
   { imagemUrl: string | null; videoUrl: string | null }
 >;
+
+/**
+ * A ordem em que a lista de planos se lê.
+ *
+ * Vive aqui, e não em quem consulta, porque agora são dois consumidores — a
+ * API e o SDK sobre o Postgres — e a mesma tela mostra os dois. Duas
+ * implementações da mesma ordenação divergiriam calada: o personal veria uma
+ * lista no navegador e outra no celular, sem nada quebrando.
+ *
+ * O que está valendo primeiro, o que ainda não vale depois, o que já passou por
+ * último. Não é `status` em ordem alfabética nem na ordem do enum — aquela
+ * punha rascunhos acima do plano que o aluno está treinando hoje. Numa lista
+ * que se lê de cima para baixo, o topo tem de ser o que está valendo.
+ *
+ * Dentro de cada grupo vale a ordem que veio: mais recente primeiro, com
+ * `versao` e `id` desempatando. `criadoEm` sozinho não define ordem total —
+ * versionar um plano cria a versão nova no mesmo milissegundo em que arquiva a
+ * antiga, e empatados o banco devolve em ordem arbitrária.
+ */
+const PESO_DO_STATUS: Record<PlanoTreinoResumo['status'], number> = {
+  ATIVO: 0,
+  RASCUNHO: 1,
+  ARQUIVADO: 2,
+};
+
+export function ordenarPlanosDeTreino<T extends PlanoTreinoResumo>(planos: readonly T[]): T[] {
+  return [...planos].sort(
+    (a, b) =>
+      PESO_DO_STATUS[a.status] - PESO_DO_STATUS[b.status] ||
+      b.criadoEm.localeCompare(a.criadoEm) ||
+      b.versao - a.versao ||
+      b.id.localeCompare(a.id),
+  );
+}

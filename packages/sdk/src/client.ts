@@ -528,37 +528,27 @@ export class VivioClient {
   // --- planos de treino ---------------------------------------------------
 
   readonly treinos = {
-    listar: (alunoId: string): Promise<PlanoTreinoResumo[]> =>
-      this.requisicao<PlanoTreinoResumo[]>(`/alunos/${alunoId}/planos-treino`),
+    listar: (alunoId: string): Promise<PlanoTreinoResumo[]> => this.supabase.listarPlanos(alunoId),
 
     /** Payload completo do plano ativo — é o que o mobile guarda para o modo offline. */
     obterAtivo: (alunoId: string): Promise<PlanoTreinoCompleto> =>
-      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/ativo`),
+      this.supabase.planoAtivo(alunoId),
 
     obter: (alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> =>
-      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}`),
+      this.supabase.obterPlano(alunoId, planoId),
 
     criar: (alunoId: string, dados: CriarPlanoTreinoInput): Promise<PlanoTreinoCompleto> =>
-      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.criarPlano(alunoId, dados),
 
     /** Gera uma versão nova e arquiva a anterior — não sobrescreve. */
     novaVersao: (
       alunoId: string,
       planoId: string,
       dados: CriarPlanoTreinoInput,
-    ): Promise<PlanoTreinoCompleto> =>
-      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+    ): Promise<PlanoTreinoCompleto> => this.supabase.criarPlano(alunoId, dados, planoId),
 
     ativar: (alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> =>
-      this.requisicao<PlanoTreinoCompleto>(`/alunos/${alunoId}/planos-treino/${planoId}/ativar`, {
-        metodo: 'POST',
-      }),
+      this.supabase.ativarPlano(alunoId, planoId),
   };
 
   // --- execuções ----------------------------------------------------------
