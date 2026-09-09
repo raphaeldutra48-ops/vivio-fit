@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, StatusCobranca, StatusVinculo } from '@prisma/client';
 import {
   gerarBrCode,
+  hojeSemHora,
+  montarCobrancaResumo,
+  montarResumoFinanceiro,
   normalizarChavePix,
+  soData,
+  somarMeses,
   validarChavePix,
   type CobrancaComPix,
   type CobrancaResumo,
@@ -22,58 +27,36 @@ import { PrismaService } from '../../infra/prisma.service';
 const INCLUDE = { aluno: { select: { id: true, nome: true } } } as const;
 type LinhaCobranca = Prisma.CobrancaGetPayload<{ include: typeof INCLUDE }>;
 
-const DIA_EM_MS = 24 * 60 * 60 * 1000;
-const soData = (d: Date): string => d.toISOString().slice(0, 10);
-
-/** Hoje à meia-noite UTC: o vencimento é DATE, sem hora. */
-function hojeSemHora(): Date {
-  return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
-}
-
-/**
- * Mesmo dia nos meses seguintes.
- *
- * Dia 31 em fevereiro não existe: o `Date` do JS viraria 3 de março. Aqui a
- * data é presa ao último dia do mês, que é como boleto e mensalidade se
- * comportam na vida real.
- */
-function somarMeses(base: Date, meses: number): Date {
-  const ano = base.getUTCFullYear();
-  const mes = base.getUTCMonth() + meses;
-  const dia = base.getUTCDate();
-  const ultimoDiaDoMes = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(ano, mes, Math.min(dia, ultimoDiaDoMes)));
-}
+/*
+  `soData`, `hojeSemHora` e `somarMeses` moravam aqui e foram para
+  `@vivio/contracts`: o SDK monta o mesmo painel falando direto com o
+  Postgres, e duas versões de "dia 31 em fevereiro" gerariam a parcela em
+  meses diferentes conforme quem criou a cobrança.
+*/
 
 @Injectable()
 export class FinanceiroService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private situacaoDe(c: LinhaCobranca, hoje: Date): SituacaoCobranca {
-    if (c.status === StatusCobranca.PAGA) return 'PAGA';
-    if (c.status === StatusCobranca.CANCELADA) return 'CANCELADA';
-    return c.vencimento < hoje ? 'ATRASADA' : 'PENDENTE';
+
+  /** A montagem mora no contrato: o SDK desenha a mesma linha. */
+  private paraResumo(c: LinhaCobranca, hoje: Date): CobrancaResumo {
+    return montarCobrancaResumo(this.paraLinha(c), hoje);
   }
 
-  private paraResumo(c: LinhaCobranca, hoje: Date): CobrancaResumo {
-    const situacao = this.situacaoDe(c, hoje);
+  private paraLinha(c: LinhaCobranca) {
     return {
       id: c.id,
       aluno: c.aluno,
       descricao: c.descricao,
       valorCentavos: c.valorCentavos,
       vencimento: soData(c.vencimento),
-      situacao,
+      status: c.status as string,
       pagaEm: c.pagaEm ? soData(c.pagaEm) : null,
       formaPagamento: c.formaPagamento,
       observacao: c.observacao,
-      diasDeAtraso:
-        situacao === 'ATRASADA'
-          ? Math.floor((hoje.getTime() - c.vencimento.getTime()) / DIA_EM_MS)
-          : null,
     };
   }
-
   async resumo(profissionalId: string, consulta: ConsultaFinanceiro): Promise<ResumoFinanceiro> {
     const hoje = hojeSemHora();
     const mes = consulta.mes ?? new Date().toISOString().slice(0, 7);
@@ -90,28 +73,17 @@ export class FinanceiroService {
       orderBy: [{ vencimento: 'asc' }, { aluno: { nome: 'asc' } }],
     });
 
-    const resumos = cobrancas.map((c) => this.paraResumo(c, hoje));
-    const filtradas = consulta.situacao
-      ? resumos.filter((c) => c.situacao === consulta.situacao)
-      : resumos;
-
-    // Os totais consideram o mês inteiro, não o filtro: filtrar por "atrasada"
-    // não pode zerar o que já foi recebido.
-    const somar = (situacoes: SituacaoCobranca[]) =>
-      resumos
-        .filter((c) => situacoes.includes(c.situacao))
-        .reduce((s, c) => s + c.valorCentavos, 0);
-
-    const emAtraso = resumos.filter((c) => c.situacao === 'ATRASADA');
-
-    return {
+    /*
+      Os totais consideram o mês inteiro, e não o filtro — filtrar por
+      "atrasada" não pode zerar o que já foi recebido. Quem faz essa conta é o
+      contrato, porque o SDK desenha o mesmo painel.
+    */
+    return montarResumoFinanceiro({
       mes,
-      recebidoCentavos: somar(['PAGA']),
-      aReceberCentavos: somar(['PENDENTE']),
-      atrasadoCentavos: somar(['ATRASADA']),
-      alunosEmAtraso: new Set(emAtraso.map((c) => c.aluno.id)).size,
-      cobrancas: filtradas,
-    };
+      cobrancas: cobrancas.map((c) => this.paraLinha(c)),
+      situacao: consulta.situacao,
+      hoje,
+    });
   }
 
   /**

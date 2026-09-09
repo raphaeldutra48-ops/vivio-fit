@@ -1154,41 +1154,30 @@ export class VivioClient {
 
   readonly financeiro = {
     resumo: (consulta: Partial<ConsultaFinanceiro> = {}): Promise<ResumoFinanceiro> =>
-      this.requisicao<ResumoFinanceiro>('/financeiro', {
-        query: { mes: consulta.mes, alunoId: consulta.alunoId, situacao: consulta.situacao },
-      }),
+      this.supabase.resumoFinanceiro(consulta),
 
     /** Devolve a cobrança e as parcelas geradas junto. */
     criar: (dados: CriarCobrancaInput): Promise<CobrancaResumo[]> =>
-      this.requisicao<CobrancaResumo[]>('/financeiro/cobrancas', {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.criarCobranca(dados),
 
     registrarPagamento: (id: string, dados: RegistrarPagamentoInput): Promise<CobrancaResumo> =>
-      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/pagar`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.registrarPagamento(id, dados),
 
-    estornar: (id: string): Promise<CobrancaResumo> =>
-      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/estornar`, { metodo: 'PATCH' }),
+    estornar: (id: string): Promise<CobrancaResumo> => this.supabase.estornarCobranca(id),
 
-    cancelar: (id: string): Promise<CobrancaResumo> =>
-      this.requisicao<CobrancaResumo>(`/financeiro/cobrancas/${id}/cancelar`, { metodo: 'PATCH' }),
+    cancelar: (id: string): Promise<CobrancaResumo> => this.supabase.cancelarCobranca(id),
 
     remover: (id: string): Promise<{ removidas: number }> =>
-      this.requisicao<{ removidas: number }>(`/financeiro/cobrancas/${id}`, { metodo: 'DELETE' }),
+      this.supabase.removerCobranca(id),
 
     /** Chave PIX usada para montar o código das cobranças. */
     obterPagamento: (): Promise<DadosDePagamento | null> =>
-      this.requisicao<DadosDePagamento | null>('/financeiro/pagamento'),
+      this.supabase.obterDadosDePagamento(),
 
     salvarPagamento: (dados: SalvarPagamentoInput): Promise<DadosDePagamento> =>
-      this.requisicao<DadosDePagamento>('/financeiro/pagamento', { metodo: 'PUT', corpo: dados }),
+      this.supabase.salvarDadosDePagamento(dados),
 
-    gerarPix: (id: string): Promise<CobrancaComPix> =>
-      this.requisicao<CobrancaComPix>(`/financeiro/cobrancas/${id}/pix`),
+    gerarPix: (id: string): Promise<CobrancaComPix> => this.supabase.gerarPix(id),
   };
 
   // --- materiais ------------------------------------------------------------

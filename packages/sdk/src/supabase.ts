@@ -24,6 +24,15 @@ import {
   STATUS_ATIVOS,
   fimDoCompromisso,
   montarHorariosLivres,
+  gerarBrCode,
+  hojeSemHora,
+  montarCobrancaResumo,
+  montarResumoFinanceiro,
+  normalizarChavePix,
+  soData,
+  somarMeses,
+  validarChavePix,
+  vencimentosDaSerie,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -41,6 +50,16 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  CobrancaComPix,
+  CobrancaResumo,
+  ConsultaFinanceiro,
+  CriarCobrancaInput,
+  DadosDePagamento,
+  FormaPagamento,
+  LinhaDeCobranca,
+  RegistrarPagamentoInput,
+  ResumoFinanceiro,
+  SalvarPagamentoInput,
   CompromissoResumo,
   ConsultaAgenda,
   CriarBloqueioInput,
@@ -2402,6 +2421,252 @@ export class MotorSupabase {
   async definirDisponibilidade(dados: DefinirDisponibilidadeInput): Promise<JanelaDisponivel[]> {
     await this.rpc<null>('definir_disponibilidade', { p_janelas: dados.janelas });
     return this.listarDisponibilidade();
+  }
+
+  // --- financeiro -----------------------------------------------------------
+
+  private static readonly CAMPOS_COBRANCA =
+    'id,descricao,valorCentavos,vencimento,status,pagaEm,formaPagamento,observacao,loteId,' +
+    'aluno:User!Cobranca_alunoId_fkey(id,nome)';
+
+  private paraLinhaDeCobranca(c: Record<string, unknown>): LinhaDeCobranca {
+    return {
+      id: c.id as string,
+      aluno: umSo(c.aluno) as unknown as { id: string; nome: string },
+      descricao: c.descricao as string,
+      valorCentavos: Number(c.valorCentavos),
+      vencimento: String(c.vencimento).slice(0, 10),
+      status: c.status as string,
+      // `pagaEm` é um instante no banco e uma data na tela: a hora de quando
+      // alguém digitou a baixa não diz nada a ninguém.
+      pagaEm: c.pagaEm === null || c.pagaEm === undefined ? null : instante(c.pagaEm).slice(0, 10),
+      formaPagamento: (c.formaPagamento as FormaPagamento | null) ?? null,
+      observacao: (c.observacao as string | null) ?? null,
+    };
+  }
+
+  async resumoFinanceiro(consulta: Partial<ConsultaFinanceiro> = {}): Promise<ResumoFinanceiro> {
+    const eu = await this.meuId();
+    const mes = consulta.mes ?? new Date().toISOString().slice(0, 7);
+    const inicio = `${mes}-01`;
+    const fim = soData(somarMeses(new Date(`${inicio}T00:00:00.000Z`), 1));
+
+    let q = this.db
+      .from('Cobranca')
+      .select(MotorSupabase.CAMPOS_COBRANCA)
+      .eq('profissionalId', eu)
+      .gte('vencimento', inicio)
+      .lt('vencimento', fim)
+      .order('vencimento', { ascending: true });
+    if (consulta.alunoId) q = q.eq('alunoId', consulta.alunoId);
+
+    const linhas = (this.ou(await q) as unknown as Record<string, unknown>[]).map((c) =>
+      this.paraLinhaDeCobranca(c),
+    );
+    /*
+      O filtro de situação é aplicado DEPOIS, na função do contrato: ATRASADA
+      não existe como coluna — é PENDENTE que passou do vencimento —, e os
+      totais precisam do mês inteiro mesmo quando a lista é filtrada.
+    */
+    return montarResumoFinanceiro({
+      mes,
+      cobrancas: linhas.sort(
+        (a, b) => a.vencimento.localeCompare(b.vencimento) || a.aluno.nome.localeCompare(b.aluno.nome),
+      ),
+      situacao: consulta.situacao,
+    });
+  }
+
+  private async obterCobranca(id: string): Promise<CobrancaResumo> {
+    return montarCobrancaResumo(
+      this.paraLinhaDeCobranca(
+        this.ou(
+          await this.db
+            .from('Cobranca')
+            .select(MotorSupabase.CAMPOS_COBRANCA)
+            .eq('id', id)
+            .single(),
+        ) as unknown as Record<string, unknown>,
+      ),
+      hojeSemHora(),
+    );
+  }
+
+  /**
+   * Cria a cobrança e, se pedido, as parcelas seguintes.
+   *
+   * As parcelas nascem juntas em vez de saírem de um job mensal: o profissional
+   * vê o ano inteiro de uma vez, e não existe mês que "não gerou" porque o
+   * agendador falhou.
+   */
+  async criarCobranca(dados: CriarCobrancaInput): Promise<CobrancaResumo[]> {
+    const eu = await this.meuId();
+    const carimbo = Date.now();
+    // Um lote só quando há mais de uma parcela: é o que liga a série para
+    // apagá-la inteira depois.
+    const loteId = dados.repetirMeses > 1 ? `${eu}-lote-${carimbo}` : null;
+    const vencimentos = vencimentosDaSerie(dados.vencimento, dados.repetirMeses);
+
+    this.ou(
+      await this.db.from('Cobranca').insert(
+        vencimentos.map((vencimento, i) => ({
+          id: `${eu}-cobranca-${carimbo}-${i}`,
+          // O gatilho reescreve com quem está pedindo; vai porque é NOT NULL.
+          profissionalId: eu,
+          alunoId: dados.alunoId,
+          descricao: dados.descricao.trim(),
+          valorCentavos: dados.valorCentavos,
+          vencimento,
+          observacao: dados.observacao ?? null,
+          loteId,
+        })),
+      ),
+    );
+
+    const hoje = hojeSemHora();
+    return (
+      this.ou(
+        await this.db
+          .from('Cobranca')
+          .select(MotorSupabase.CAMPOS_COBRANCA)
+          .in(
+            'id',
+            vencimentos.map((_, i) => `${eu}-cobranca-${carimbo}-${i}`),
+          )
+          .order('vencimento', { ascending: true }),
+      ) as unknown as Record<string, unknown>[]
+    ).map((c) => montarCobrancaResumo(this.paraLinhaDeCobranca(c), hoje));
+  }
+
+  async registrarPagamento(
+    id: string,
+    dados: RegistrarPagamentoInput,
+  ): Promise<CobrancaResumo> {
+    const atual = await this.obterCobranca(id);
+    if (atual.situacao === 'PAGA') {
+      throw new ErroApi('CONFLITO', 'Esta cobrança já está paga.', 409);
+    }
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Cobranca')
+        .update({
+          status: 'PAGA',
+          pagaEm: `${soData(dados.pagaEm)}T00:00:00.000Z`,
+          formaPagamento: dados.formaPagamento,
+          ...(dados.observacao ? { observacao: dados.observacao } : {}),
+        })
+        .eq('id', id)
+        .select('id'),
+    );
+    return this.obterCobranca(id);
+  }
+
+  /** Desfaz o pagamento — erro de digitação acontece. */
+  async estornarCobranca(id: string): Promise<CobrancaResumo> {
+    // `pagaEm` e `formaPagamento` são limpos pelo gatilho: uma cobrança
+    // pendente que ainda diz "recebido no PIX" é pior que uma sem informação.
+    await this.exigirLinhaAlterada(
+      this.db.from('Cobranca').update({ status: 'PENDENTE' }).eq('id', id).select('id'),
+    );
+    return this.obterCobranca(id);
+  }
+
+  async cancelarCobranca(id: string): Promise<CobrancaResumo> {
+    await this.exigirLinhaAlterada(
+      this.db.from('Cobranca').update({ status: 'CANCELADA' }).eq('id', id).select('id'),
+    );
+    return this.obterCobranca(id);
+  }
+
+  /**
+   * Remove a série inteira de parcelas — só as que ainda não foram pagas.
+   *
+   * O `status <> 'PAGA'` está na política, e não só neste filtro: quem apagar
+   * pelo caminho de fora esbarra na mesma regra.
+   */
+  async removerCobranca(id: string): Promise<{ removidas: number }> {
+    const linha = this.ou(
+      await this.db.from('Cobranca').select('id,loteId').eq('id', id).single(),
+    ) as unknown as { id: string; loteId: string | null };
+
+    const alvo = linha.loteId
+      ? this.db.from('Cobranca').delete().eq('loteId', linha.loteId)
+      : this.db.from('Cobranca').delete().eq('id', id);
+
+    const apagadas = this.ou(await alvo.select('id')) as unknown as { id: string }[];
+    return { removidas: apagadas.length };
+  }
+
+  async obterDadosDePagamento(): Promise<DadosDePagamento | null> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('DadosDePagamento')
+        .select('tipoChave,chave,recebedor,cidade')
+        .eq('profissionalId', eu)
+        .maybeSingle(),
+    ) as unknown as DadosDePagamento | null;
+    return linha ?? null;
+  }
+
+  async salvarDadosDePagamento(dados: SalvarPagamentoInput): Promise<DadosDePagamento> {
+    const problema = validarChavePix(dados.tipoChave, dados.chave);
+    if (problema) throw new ErroApi('CONFLITO', problema, 409);
+
+    const eu = await this.meuId();
+    this.ou(
+      await this.db.from('DadosDePagamento').upsert(
+        {
+          profissionalId: eu,
+          tipoChave: dados.tipoChave,
+          // Guarda já normalizada: o código é montado a partir daqui, e
+          // formatar na hora de gerar espalharia a regra por dois lugares.
+          chave: normalizarChavePix(dados.tipoChave, dados.chave),
+          recebedor: dados.recebedor.trim(),
+          cidade: dados.cidade.trim(),
+        },
+        { onConflict: 'profissionalId' },
+      ),
+    );
+
+    return (await this.obterDadosDePagamento())!;
+  }
+
+  /**
+   * Gera o "copia e cola" de uma cobrança.
+   *
+   * O identificador leva o id curto da cobrança, então o profissional
+   * reconhece o depósito no extrato — é a única conciliação possível sem
+   * gateway.
+   */
+  async gerarPix(cobrancaId: string): Promise<CobrancaComPix> {
+    const cobranca = await this.obterCobranca(cobrancaId);
+    if (cobranca.situacao === 'PAGA') {
+      throw new ErroApi('CONFLITO', 'Esta cobrança já está paga.', 409);
+    }
+
+    const dados = await this.obterDadosDePagamento();
+    if (!dados) {
+      throw new ErroApi(
+        'CONFLITO',
+        'Cadastre sua chave PIX em Receba Fácil antes de gerar o código.',
+        409,
+      );
+    }
+
+    return {
+      cobrancaId: cobranca.id,
+      valorCentavos: cobranca.valorCentavos,
+      descricao: cobranca.descricao,
+      aluno: cobranca.aluno.nome,
+      brCode: gerarBrCode({
+        chave: dados.chave,
+        recebedor: dados.recebedor,
+        cidade: dados.cidade,
+        valorCentavos: cobranca.valorCentavos,
+        identificador: cobranca.id.slice(-10),
+      }),
+    };
   }
 
   async criarBloqueio(dados: CriarBloqueioInput): Promise<void> {
