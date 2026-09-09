@@ -56,6 +56,12 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  ConversaResumo,
+  EnviarMensagemInput,
+  ListarMensagensQuery,
+  MensagemResumo,
+  TipoConversa,
+  TipoMensagem,
   AplicarModeloInput,
   CriarModeloCardapioInput,
   LinhaDeModeloCardapio,
@@ -2671,6 +2677,214 @@ export class MotorSupabase {
       status: r.status as StatusRefeicao,
       comentario: (r.comentario as string | null) ?? null,
     }));
+  }
+
+  // --- conversa -------------------------------------------------------------
+
+  private static readonly CAMPOS_MENSAGEM =
+    'id,clienteUuid,conversaId,tipo,corpo,enviadaEm,removidaEm,autorId,' +
+    'autor:User!Mensagem_autorId_fkey(id,nome,papel)';
+
+  private paraMensagem(m: Record<string, unknown>, eu: string): MensagemResumo {
+    const removidaEm = instanteOuNulo(m.removidaEm);
+    return {
+      id: m.id as string,
+      clienteUuid: m.clienteUuid as string,
+      conversaId: m.conversaId as string,
+      tipo: m.tipo as TipoMensagem,
+      // Mensagem removida não mostra o corpo — mas continua na lista, no lugar
+      // dela, para a conversa não perder o fio.
+      corpo: removidaEm ? null : ((m.corpo as string | null) ?? null),
+      enviadaEm: instante(m.enviadaEm),
+      removidaEm,
+      autor: umSo(m.autor) as unknown as MensagemResumo['autor'],
+      minha: m.autorId === eu,
+    };
+  }
+
+  /**
+   * As conversas de quem pergunta, com a última mensagem e as não lidas.
+   *
+   * Duas consultas: uma traz as conversas e quem está do outro lado; a outra é
+   * a função `minhas_conversas`, que faz as duas contas que o PostgREST não
+   * sabe fazer — "a última de cada conversa" e "quantas não lidas". Trazer as
+   * mensagens para contá-las aqui seria baixar o histórico inteiro para
+   * desenhar uma lista.
+   */
+  async listarConversas(): Promise<ConversaResumo[]> {
+    const eu = await this.meuId();
+
+    const [participacoes, agregados] = await Promise.all([
+      this.db
+        .from('ParticipanteConversa')
+        .select(
+          'conversaId,conversa:Conversa!inner(id,tipo,alunoId,' +
+            'participantes:ParticipanteConversa(userId,saiuEm,user:User(id,nome,papel,avatarUrl)))',
+        )
+        .eq('userId', eu)
+        .is('saiuEm', null),
+      this.rpc<
+        {
+          conversaId: string;
+          naoLidas: number;
+          ultimaCorpo: string | null;
+          ultimaEnviadaEm: string | null;
+          ultimaAutorId: string | null;
+          ultimaRemovidaEm: string | null;
+        }[]
+      >('minhas_conversas'),
+    ]);
+
+    const porConversa = new Map(agregados.map((a) => [a.conversaId, a]));
+
+    const resumos = (this.ou(participacoes) as unknown as Record<string, unknown>[]).map((p) => {
+      const c = umSo(p.conversa) as Record<string, unknown>;
+      const participantes = (c.participantes ?? []) as Record<string, unknown>[];
+      const outro = participantes.find((x) => x.userId !== eu && x.saiuEm === null);
+      const agregado = porConversa.get(c.id as string);
+
+      return {
+        id: c.id as string,
+        tipo: c.tipo as TipoConversa,
+        alunoId: c.alunoId as string,
+        contraparte: outro
+          ? (umSo(outro.user) as unknown as ConversaResumo['contraparte'])
+          : null,
+        ultimaMensagem:
+          agregado && agregado.ultimaEnviadaEm
+            ? {
+                corpo: agregado.ultimaRemovidaEm ? null : agregado.ultimaCorpo,
+                enviadaEm: instante(agregado.ultimaEnviadaEm),
+                autorId: agregado.ultimaAutorId!,
+              }
+            : null,
+        naoLidas: Number(agregado?.naoLidas ?? 0),
+      } satisfies ConversaResumo;
+    });
+
+    // Conversa com movimento primeiro; sem mensagem nenhuma vai para o fim.
+    return resumos.sort((a, b) => {
+      const ta = a.ultimaMensagem ? Date.parse(a.ultimaMensagem.enviadaEm) : 0;
+      const tb = b.ultimaMensagem ? Date.parse(b.ultimaMensagem.enviadaEm) : 0;
+      return tb - ta;
+    });
+  }
+
+  private async conversaPorId(conversaId: string): Promise<ConversaResumo> {
+    const encontrada = (await this.listarConversas()).find((c) => c.id === conversaId);
+    // 404 e não 403: quem não participa não precisa saber que a conversa existe.
+    if (!encontrada) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Conversa não encontrada.', 404);
+    }
+    return encontrada;
+  }
+
+  async abrirConversa(comUsuarioId: string): Promise<ConversaResumo> {
+    return this.conversaPorId(await this.rpc<string>('abrir_conversa', {
+      p_com_usuario_id: comUsuarioId,
+    }));
+  }
+
+  /**
+   * As mensagens, da mais recente para a mais antiga.
+   *
+   * A paginação é por CURSOR e não por página: numa conversa que recebe
+   * mensagem enquanto se rola, a página 2 traria de novo o que já apareceu na
+   * 1. O cursor é a última mensagem lida, e o que veio depois dela não
+   * desloca nada.
+   */
+  async listarMensagens(
+    conversaId: string,
+    consulta: Partial<ListarMensagensQuery> = {},
+  ): Promise<{ dados: MensagemResumo[]; proximoCursor: string | null }> {
+    const eu = await this.meuId();
+    const limite = consulta.limit ?? 40;
+
+    let q = this.db
+      .from('Mensagem')
+      .select(MotorSupabase.CAMPOS_MENSAGEM)
+      .eq('conversaId', conversaId)
+      .order('enviadaEm', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limite + 1);
+
+    if (consulta.cursor) {
+      /*
+        O cursor é o id da última já mostrada; o corte é pelo instante dela.
+        Com o `id` como segundo critério de ordem, duas mensagens do mesmo
+        milissegundo não se atropelam entre páginas.
+      */
+      const marco = this.ou(
+        await this.db
+          .from('Mensagem')
+          .select('enviadaEm')
+          .eq('id', consulta.cursor)
+          .maybeSingle(),
+      ) as unknown as { enviadaEm: string } | null;
+      if (marco) q = q.lt('enviadaEm', marco.enviadaEm);
+    }
+
+    const linhas = this.ou(await q) as unknown as Record<string, unknown>[];
+    const temMais = linhas.length > limite;
+    const pagina = temMais ? linhas.slice(0, limite) : linhas;
+
+    return {
+      dados: pagina.map((m) => this.paraMensagem(m, eu)),
+      proximoCursor: temMais ? ((pagina[pagina.length - 1]?.id as string) ?? null) : null,
+    };
+  }
+
+  /**
+   * Envia. Idempotente por `clienteUuid`: a mesma mensagem reenviada — toque
+   * duplo, rede oscilando, fila offline — não vira duas bolhas na tela.
+   */
+  async enviarMensagem(
+    conversaId: string,
+    dados: EnviarMensagemInput,
+  ): Promise<MensagemResumo> {
+    const eu = await this.meuId();
+
+    const existente = this.ou(
+      await this.db
+        .from('Mensagem')
+        .select(MotorSupabase.CAMPOS_MENSAGEM)
+        .eq('clienteUuid', dados.clienteUuid)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (existente) return this.paraMensagem(existente, eu);
+
+    this.ou(
+      await this.db.from('Mensagem').insert({
+        id: `${conversaId}-${dados.clienteUuid}`,
+        conversaId,
+        // O gatilho reescreve com quem está pedindo; vai porque é NOT NULL.
+        autorId: eu,
+        corpo: dados.corpo.trim(),
+        clienteUuid: dados.clienteUuid,
+      }),
+    );
+
+    const salva = this.ou(
+      await this.db
+        .from('Mensagem')
+        .select(MotorSupabase.CAMPOS_MENSAGEM)
+        .eq('clienteUuid', dados.clienteUuid)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraMensagem(salva, eu);
+  }
+
+  /** Marca "vi até agora". O contador de não lidas é derivado deste carimbo. */
+  async marcarConversaVista(conversaId: string): Promise<void> {
+    const eu = await this.meuId();
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('ParticipanteConversa')
+        .update({ vistoEm: new Date().toISOString() })
+        .eq('conversaId', conversaId)
+        .eq('userId', eu)
+        .select('userId'),
+    );
   }
 
   // --- modelo de cardápio ---------------------------------------------------
