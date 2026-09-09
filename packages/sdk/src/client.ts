@@ -646,46 +646,31 @@ export class VivioClient {
 
   readonly agenda = {
     listar: (consulta: ConsultaAgenda): Promise<CompromissoResumo[]> =>
-      this.requisicao<CompromissoResumo[]>('/agenda', {
-        query: {
-          de: consulta.de,
-          ate: consulta.ate,
-          incluirCancelados: consulta.incluirCancelados ? 'true' : undefined,
-        },
-      }),
+      this.supabase.listarAgenda(consulta),
 
     /** Visão do aluno: os compromissos dele com qualquer profissional. */
     meus: (de: string, ate: string): Promise<CompromissoResumo[]> =>
-      this.requisicao<CompromissoResumo[]>('/agenda/meus', { query: { de, ate } }),
+      this.supabase.meusCompromissos(de, ate),
 
     horariosLivres: (data: string, duracaoMin?: number): Promise<HorarioLivre[]> =>
-      this.requisicao<HorarioLivre[]>('/agenda/horarios-livres', { query: { data, duracaoMin } }),
+      this.supabase.horariosLivres(data, duracaoMin),
 
     marcar: (dados: CriarCompromissoInput): Promise<CompromissoResumo> =>
-      this.requisicao<CompromissoResumo>('/agenda', { metodo: 'POST', corpo: dados }),
+      this.supabase.marcarCompromisso(dados),
 
     remarcar: (id: string, dados: RemarcarCompromissoInput): Promise<CompromissoResumo> =>
-      this.requisicao<CompromissoResumo>(`/agenda/${id}`, { metodo: 'PATCH', corpo: dados }),
+      this.supabase.remarcarCompromisso(id, dados),
 
     mudarStatus: (id: string, dados: MudarStatusInput): Promise<CompromissoResumo> =>
-      this.requisicao<CompromissoResumo>(`/agenda/${id}/status`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.mudarStatusCompromisso(id, dados),
 
     listarDisponibilidade: (): Promise<JanelaDisponivel[]> =>
-      this.requisicao<JanelaDisponivel[]>('/agenda/disponibilidade'),
+      this.supabase.listarDisponibilidade(),
 
-    definirDisponibilidade: (
-      dados: DefinirDisponibilidadeInput,
-    ): Promise<JanelaDisponivel[]> =>
-      this.requisicao<JanelaDisponivel[]>('/agenda/disponibilidade', {
-        metodo: 'PUT',
-        corpo: dados,
-      }),
+    definirDisponibilidade: (dados: DefinirDisponibilidadeInput): Promise<JanelaDisponivel[]> =>
+      this.supabase.definirDisponibilidade(dados),
 
-    bloquear: (dados: CriarBloqueioInput): Promise<unknown> =>
-      this.requisicao('/agenda/bloqueios', { metodo: 'POST', corpo: dados }),
+    bloquear: (dados: CriarBloqueioInput): Promise<void> => this.supabase.criarBloqueio(dados),
   };
 
   // --- avaliação física -----------------------------------------------------

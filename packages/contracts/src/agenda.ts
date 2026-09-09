@@ -165,3 +165,92 @@ export const DIAS_DA_SEMANA = [
   { numero: 6, curto: 'Sáb', longo: 'Sábado' },
   { numero: 7, curto: 'Dom', longo: 'Domingo' },
 ] as const;
+
+// --- montagem ---------------------------------------------------------------
+
+/** Um intervalo já ocupado: compromisso vivo ou bloqueio. */
+export interface IntervaloOcupado {
+  /** ISO com fuso. */
+  inicioEm: string;
+  fimEm: string;
+}
+
+export interface EntradaDosHorariosLivres {
+  /** O dia, em `AAAA-MM-DD`. */
+  dataISO: string;
+  /** As janelas de atendimento daquele dia da semana. */
+  janelas: JanelaDisponivel[];
+  ocupados: IntervaloOcupado[];
+  /** Sobrepõe a duração da janela, quando o atendimento é mais curto ou longo. */
+  duracaoMin?: number;
+}
+
+/**
+ * As vagas de um dia: parte das janelas de atendimento e remove o que já está
+ * ocupado por compromisso vivo ou por bloqueio.
+ *
+ * Mora no contrato porque roda dos dois lados — a API e o SDK falando direto
+ * com o Postgres — e porque não decide acesso nenhum: quem pergunta é o dono
+ * da agenda, e tanto os compromissos dele quanto os bloqueios dele já são
+ * dados que ele lê um a um. Aqui eles só são lidos juntos.
+ *
+ * Tudo em UTC. Os horários da janela são `HH:MM` sem fuso, e é assim que o
+ * banco os guarda — somar o fuso de quem consulta faria a agenda do
+ * profissional mudar de hora conforme onde o aluno abriu o app.
+ */
+export function montarHorariosLivres({
+  dataISO,
+  janelas,
+  ocupados,
+  duracaoMin,
+}: EntradaDosHorariosLivres): HorarioLivre[] {
+  const emMs = (iso: string): number => new Date(iso).getTime();
+  const intervalos = ocupados.map((o) => ({ de: emMs(o.inicioEm), ate: emMs(o.fimEm) }));
+
+  const livres: HorarioLivre[] = [];
+
+  for (const janela of janelas) {
+    const passo = (duracaoMin ?? janela.duracaoMin) * 60_000;
+    if (passo <= 0) continue;
+
+    const inicioJanela = emMs(`${dataISO}T${janela.horaInicio}:00.000Z`);
+    const fimJanela = emMs(`${dataISO}T${janela.horaFim}:00.000Z`);
+
+    for (let t = inicioJanela; t + passo <= fimJanela; t += passo) {
+      const fim = t + passo;
+      // Sobreposição é interseção aberta: um atendimento que termina às 10h e
+      // outro que começa às 10h não colidem.
+      const colide = intervalos.some((o) => t < o.ate && fim > o.de);
+      if (!colide) {
+        livres.push({
+          inicioEm: new Date(t).toISOString(),
+          fimEm: new Date(fim).toISOString(),
+        });
+      }
+    }
+  }
+
+  /*
+    Duas janelas no mesmo dia (manhã e tarde) saem intercaladas se a ordem for
+    a das janelas. A tela lê de cima para baixo como uma linha do tempo.
+  */
+  return livres.sort((a, b) => a.inicioEm.localeCompare(b.inicioEm));
+}
+
+/**
+ * O fim do compromisso, quando quem marca não disse.
+ *
+ * Cada tipo tem uma duração que o profissional espera sem precisar digitar —
+ * avaliação física é uma hora, retorno é meia. Ele pode mudar, e é o que
+ * `duracaoMin` faz.
+ */
+export function fimDoCompromisso(dados: {
+  tipo: TipoCompromisso;
+  inicioEm: Date | string;
+  fimEm?: Date | string;
+  duracaoMin?: number;
+}): Date {
+  if (dados.fimEm) return new Date(dados.fimEm);
+  const inicio = new Date(dados.inicioEm);
+  return new Date(inicio.getTime() + (dados.duracaoMin ?? DURACAO_PADRAO_MIN[dados.tipo]) * 60_000);
+}

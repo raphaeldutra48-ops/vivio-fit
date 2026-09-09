@@ -21,6 +21,9 @@ import {
   TipoMeta,
   montarMetaResumo,
   ordenarMetas,
+  STATUS_ATIVOS,
+  fimDoCompromisso,
+  montarHorariosLivres,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -38,6 +41,17 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  CompromissoResumo,
+  ConsultaAgenda,
+  CriarBloqueioInput,
+  CriarCompromissoInput,
+  DefinirDisponibilidadeInput,
+  HorarioLivre,
+  JanelaDisponivel,
+  MudarStatusInput,
+  RemarcarCompromissoInput,
+  StatusCompromisso,
+  TipoCompromisso,
   Classificacao,
   ExameResumo,
   CheckinResumo,
@@ -198,6 +212,14 @@ export function erroDoSupabase(e: { message?: string; status?: number; code?: st
   if (e.code === '23514') {
     // `check_violation`: a função recusou o conteúdo, e disse por quê.
     return new ErroApi('DADOS_INVALIDOS', bruto || 'Dados inválidos.', 422);
+  }
+  if (e.code === '23P01') {
+    /*
+      `exclusion_violation`: a restrição `EXCLUDE` da agenda. Ela é o que
+      impede dois atendimentos no mesmo horário, e a mensagem crua do Postgres
+      cita o nome da restrição — o profissional precisa da frase, não do nome.
+    */
+    return new ErroApi('CONFLITO', 'Você já tem um compromisso neste horário.', 409);
   }
 
   return new ErroApi('ERRO_INTERNO', bruto || 'Erro inesperado.', status, { causa: e.code });
@@ -2165,6 +2187,235 @@ export class MotorSupabase {
         .select('id'),
     );
   }
+
+  // --- agenda ---------------------------------------------------------------
+
+  /*
+    Dois embeds para `User` na mesma linha — aluno e profissional —, e o
+    PostgREST recusa por ambiguidade sem o nome da chave. Sem eles a agenda
+    voltaria sem os nomes, que é a única coisa que a tela mostra em cada bloco.
+  */
+  private static readonly CAMPOS_COMPROMISSO =
+    'id,tipo,titulo,inicioEm,fimEm,local,observacao,status,motivoCancelamento,' +
+    'aluno:User!Compromisso_alunoId_fkey(id,nome,email),' +
+    'profissional:User!Compromisso_profissionalId_fkey(id,nome,papel)';
+
+  private paraCompromisso(c: Record<string, unknown>): CompromissoResumo {
+    const inicioEm = instante(c.inicioEm);
+    const fimEm = instante(c.fimEm);
+    return {
+      id: c.id as string,
+      tipo: c.tipo as TipoCompromisso,
+      titulo: (c.titulo as string | null) ?? null,
+      inicioEm,
+      fimEm,
+      duracaoMin: Math.round(
+        (new Date(fimEm).getTime() - new Date(inicioEm).getTime()) / 60_000,
+      ),
+      local: (c.local as string | null) ?? null,
+      observacao: (c.observacao as string | null) ?? null,
+      status: c.status as StatusCompromisso,
+      motivoCancelamento: (c.motivoCancelamento as string | null) ?? null,
+      aluno: umSo(c.aluno) as unknown as CompromissoResumo['aluno'],
+      profissional: umSo(c.profissional) as unknown as CompromissoResumo['profissional'],
+    };
+  }
+
+  private async compromissosNoPeriodo(
+    coluna: 'profissionalId' | 'alunoId',
+    de: string,
+    ate: string,
+    incluirCancelados: boolean,
+  ): Promise<CompromissoResumo[]> {
+    const eu = await this.meuId();
+    let q = this.db
+      .from('Compromisso')
+      .select(MotorSupabase.CAMPOS_COMPROMISSO)
+      .eq(coluna, eu)
+      .gte('inicioEm', MotorSupabase.horaDoBanco(new Date(de)))
+      .lte('inicioEm', MotorSupabase.horaDoBanco(new Date(ate)))
+      .order('inicioEm', { ascending: true });
+    if (!incluirCancelados) q = q.neq('status', 'CANCELADO');
+
+    return (this.ou(await q) as unknown as Record<string, unknown>[]).map((c) =>
+      this.paraCompromisso(c),
+    );
+  }
+
+  async listarAgenda(consulta: ConsultaAgenda): Promise<CompromissoResumo[]> {
+    return this.compromissosNoPeriodo(
+      'profissionalId',
+      consulta.de,
+      consulta.ate,
+      consulta.incluirCancelados,
+    );
+  }
+
+  /** O que o aluno vê: os compromissos dele com qualquer profissional. */
+  async meusCompromissos(de: string, ate: string): Promise<CompromissoResumo[]> {
+    return this.compromissosNoPeriodo('alunoId', de, ate, false);
+  }
+
+  /**
+   * As vagas do dia.
+   *
+   * Quem pergunta é o dono da agenda, e por isso a conta pode ser feita aqui:
+   * os compromissos e os bloqueios dele já são dados que ele lê um a um. Para
+   * o aluno seria outra história — ele não enxerga o compromisso de terceiros,
+   * e uma lista de vagas montada só com o que ele vê ofereceria horário
+   * ocupado.
+   */
+  async horariosLivres(dataISO: string, duracaoMin?: number): Promise<HorarioLivre[]> {
+    const eu = await this.meuId();
+    const dia = `${dataISO}T00:00:00`;
+    const fimDoDia = `${dataISO}T23:59:59`;
+    // `getUTCDay` devolve 0 para domingo; o app usa 1=segunda...7=domingo.
+    const numeroDoDia = new Date(`${dataISO}T00:00:00.000Z`).getUTCDay();
+
+    const [janelas, ocupados, bloqueios] = await Promise.all([
+      this.db
+        .from('DisponibilidadeSlot')
+        .select('id,diaSemana,horaInicio,horaFim,duracaoMin')
+        .eq('profissionalId', eu)
+        .eq('diaSemana', numeroDoDia === 0 ? 7 : numeroDoDia),
+      this.db
+        .from('Compromisso')
+        .select('inicioEm,fimEm')
+        .eq('profissionalId', eu)
+        .in('status', [...STATUS_ATIVOS])
+        .lte('inicioEm', fimDoDia)
+        .gte('fimEm', dia),
+      this.db
+        .from('BloqueioAgenda')
+        .select('inicioEm,fimEm')
+        .eq('profissionalId', eu)
+        .lte('inicioEm', fimDoDia)
+        .gte('fimEm', dia),
+    ]);
+
+    const intervalos = [
+      ...(this.ou(ocupados) as unknown as Record<string, unknown>[]),
+      ...(this.ou(bloqueios) as unknown as Record<string, unknown>[]),
+    ].map((o) => ({ inicioEm: instante(o.inicioEm), fimEm: instante(o.fimEm) }));
+
+    return montarHorariosLivres({
+      dataISO,
+      janelas: this.ou(janelas) as unknown as JanelaDisponivel[],
+      ocupados: intervalos,
+      duracaoMin,
+    });
+  }
+
+  private async obterCompromisso(id: string): Promise<CompromissoResumo> {
+    return this.paraCompromisso(
+      this.ou(
+        await this.db
+          .from('Compromisso')
+          .select(MotorSupabase.CAMPOS_COMPROMISSO)
+          .eq('id', id)
+          .single(),
+      ) as unknown as Record<string, unknown>,
+    );
+  }
+
+  async marcarCompromisso(dados: CriarCompromissoInput): Promise<CompromissoResumo> {
+    const eu = await this.meuId();
+    const id = `${eu}-agenda-${Date.now()}`;
+    // O fim sai do tipo quando não é dito: avaliação física é uma hora, retorno
+    // é meia. É a mesma tabela que a tela usa para sugerir.
+    const fimEm = fimDoCompromisso(dados);
+
+    this.ou(
+      await this.db.from('Compromisso').insert({
+        id,
+        // O gatilho reescreve os dois com quem está pedindo; vão porque as
+        // colunas são NOT NULL.
+        profissionalId: eu,
+        criadoPorId: eu,
+        alunoId: dados.alunoId,
+        tipo: dados.tipo,
+        titulo: dados.titulo ?? null,
+        inicioEm: paraIso(dados.inicioEm),
+        fimEm: fimEm.toISOString(),
+        local: dados.local ?? null,
+        observacao: dados.observacao ?? null,
+      }),
+    );
+    return this.obterCompromisso(id);
+  }
+
+  async remarcarCompromisso(
+    id: string,
+    dados: RemarcarCompromissoInput,
+  ): Promise<CompromissoResumo> {
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Compromisso')
+        .update({
+          inicioEm: paraIso(dados.inicioEm),
+          fimEm: paraIso(dados.fimEm),
+          local: dados.local ?? null,
+          observacao: dados.observacao ?? null,
+          // Remarcar zera a confirmação: o aluno precisa confirmar o horário
+          // novo, e um "confirmado" herdado seria confirmação de outra coisa.
+          status: 'AGENDADO',
+        })
+        .eq('id', id)
+        .select('id'),
+    );
+    return this.obterCompromisso(id);
+  }
+
+  async mudarStatusCompromisso(id: string, dados: MudarStatusInput): Promise<CompromissoResumo> {
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Compromisso')
+        .update({
+          status: dados.status,
+          motivoCancelamento: dados.status === 'CANCELADO' ? dados.motivo ?? null : null,
+        })
+        .eq('id', id)
+        .select('id'),
+    );
+    return this.obterCompromisso(id);
+  }
+
+  async listarDisponibilidade(): Promise<JanelaDisponivel[]> {
+    const eu = await this.meuId();
+    return this.ou(
+      await this.db
+        .from('DisponibilidadeSlot')
+        .select('id,diaSemana,horaInicio,horaFim,duracaoMin')
+        .eq('profissionalId', eu)
+        .order('diaSemana', { ascending: true })
+        .order('horaInicio', { ascending: true }),
+    ) as unknown as JanelaDisponivel[];
+  }
+
+  /**
+   * Substitui a semana de atendimento inteira, numa transação.
+   *
+   * Apagar as janelas e falhar ao gravar as novas deixaria o profissional sem
+   * agenda nenhuma — e o app mostraria "nenhum horário disponível" para todos
+   * os alunos dele.
+   */
+  async definirDisponibilidade(dados: DefinirDisponibilidadeInput): Promise<JanelaDisponivel[]> {
+    await this.rpc<null>('definir_disponibilidade', { p_janelas: dados.janelas });
+    return this.listarDisponibilidade();
+  }
+
+  async criarBloqueio(dados: CriarBloqueioInput): Promise<void> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db.from('BloqueioAgenda').insert({
+        id: `${eu}-bloqueio-${Date.now()}`,
+        profissionalId: eu,
+        inicioEm: paraIso(dados.inicioEm),
+        fimEm: paraIso(dados.fimEm),
+        motivo: dados.motivo ?? null,
+      }),
+    );
+  }
 }
 
 /** Janela usada para aferir frequência semanal, em dias. */
@@ -2242,11 +2493,21 @@ interface LinhaCondicao {
  */
 function instante(v: unknown): string {
   if (typeof v !== 'string' || v === '') return v as string;
-  // Já tem fuso (`Z` ou `+03:00`)? Então veio pronto.
-  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(v)) return v;
   // Data pura (`AAAA-MM-DD`) não é instante: fica como está.
   if (!v.includes('T') && !v.includes(' ')) return v;
-  return `${v.replace(' ', 'T')}Z`;
+
+  /*
+    Uma forma só, sempre: `AAAA-MM-DDTHH:MM:SS.sssZ`.
+
+    O PostgREST omite os milissegundos quando eles são zero, então o mesmo
+    compromisso saía `...T09:50:00Z` daqui e `...T09:50:00.000Z` da API. As
+    duas apontam o mesmo instante e nada quebra ao PARSEAR — mas várias listas
+    deste SDK ordenam instante como TEXTO, e duas formas convivendo na mesma
+    lista ordenam errado sem dar erro em lugar nenhum.
+  */
+  const comFuso = /(?:Z|[+-]\d{2}:?\d{2})$/.test(v) ? v : `${v.replace(' ', 'T')}Z`;
+  const quando = new Date(comFuso);
+  return Number.isNaN(quando.getTime()) ? comFuso : quando.toISOString();
 }
 
 /**

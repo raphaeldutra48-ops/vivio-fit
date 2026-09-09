@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, StatusCompromisso, StatusVinculo, TipoCompromisso } from '@prisma/client';
 import {
-  DURACAO_PADRAO_MIN,
   STATUS_ATIVOS,
+  fimDoCompromisso,
+  montarHorariosLivres,
   type CompromissoResumo,
   type ConsultaAgenda,
   type CriarBloqueioInput,
@@ -69,12 +70,13 @@ export class AgendaService {
     await this.exigirVinculoAtivo(dados.alunoId, profissional.id);
 
     const inicioEm = dados.inicioEm;
-    const fimEm =
-      dados.fimEm ??
-      new Date(
-        inicioEm.getTime() +
-          (dados.duracaoMin ?? DURACAO_PADRAO_MIN[dados.tipo]) * 60_000,
-      );
+    /*
+      A duração padrão por tipo vive no contrato — avaliação física é uma hora,
+      retorno é meia — e é a mesma que o SDK usa falando direto com o Postgres.
+      Duas cópias fariam o mesmo tipo de consulta durar coisas diferentes
+      conforme quem marcou.
+    */
+    const fimEm = fimDoCompromisso(dados);
 
     if (fimEm <= inicioEm) {
       throw ErroDominio.conflito('O fim precisa ser depois do início.');
@@ -247,25 +249,27 @@ export class AgendaService {
       }),
     ]);
 
-    const indisponiveis = [...ocupados, ...bloqueios];
-    const livres: HorarioLivre[] = [];
-
-    for (const janela of janelas) {
-      const passo = (duracaoMin ?? janela.duracaoMin) * 60_000;
-      const inicioJanela = new Date(`${dataISO}T${janela.horaInicio}:00.000Z`);
-      const fimJanela = new Date(`${dataISO}T${janela.horaFim}:00.000Z`);
-
-      for (let t = inicioJanela.getTime(); t + passo <= fimJanela.getTime(); t += passo) {
-        const inicio = new Date(t);
-        const fim = new Date(t + passo);
-        const colide = indisponiveis.some((o) => inicio < o.fimEm && fim > o.inicioEm);
-        if (!colide) livres.push({ inicioEm: inicio.toISOString(), fimEm: fim.toISOString() });
-      }
-    }
-
-    return livres.sort((a, b) => a.inicioEm.localeCompare(b.inicioEm));
+    /*
+      A conta mora em `@vivio/contracts`: o SDK monta a mesma lista falando
+      direto com o Postgres, e duas implementações do mesmo passo dariam
+      vagas diferentes na web e no celular para o mesmo dia.
+    */
+    return montarHorariosLivres({
+      dataISO,
+      janelas: janelas.map((j) => ({
+        id: j.id,
+        diaSemana: j.diaSemana,
+        horaInicio: j.horaInicio,
+        horaFim: j.horaFim,
+        duracaoMin: j.duracaoMin,
+      })),
+      ocupados: [...ocupados, ...bloqueios].map((o) => ({
+        inicioEm: o.inicioEm.toISOString(),
+        fimEm: o.fimEm.toISOString(),
+      })),
+      duracaoMin,
+    });
   }
-
   // --- auxiliares ----------------------------------------------------------
 
   private async exigirVinculoAtivo(alunoId: string, profissionalId: string): Promise<void> {
