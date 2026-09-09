@@ -1103,27 +1103,21 @@ export class VivioClient {
   // --- site profissional ----------------------------------------------------
 
   readonly site = {
-    meu: (): Promise<PerfilPublicoResumo | null> =>
-      this.requisicao<PerfilPublicoResumo | null>('/site'),
+    meu: (): Promise<PerfilPublicoResumo | null> => this.supabase.meuPerfilPublico(),
 
     salvar: (dados: SalvarPerfilPublicoInput): Promise<PerfilPublicoResumo> =>
-      this.requisicao<PerfilPublicoResumo>('/site', { metodo: 'PUT', corpo: dados }),
+      this.supabase.salvarPerfilPublico(dados),
 
-    listarPedidos: (): Promise<PedidoResumo[]> => this.requisicao<PedidoResumo[]>('/site/pedidos'),
+    listarPedidos: (): Promise<PedidoResumo[]> => this.supabase.listarPedidosDeContato(),
 
     marcarAtendido: (id: string): Promise<void> =>
-      this.requisicao<void>(`/site/pedidos/${id}/atendido`, { metodo: 'PATCH' }),
+      this.supabase.alternarPedidoAtendido(id),
 
     /** Página pública — sem autenticação, é o ponto do recurso. */
-    porSlug: (slug: string): Promise<PaginaPublica> =>
-      this.requisicao<PaginaPublica>(`/p/${slug}`, { autenticada: false }),
+    porSlug: (slug: string): Promise<PaginaPublica> => this.supabase.paginaPublica(slug),
 
     enviarPedido: (slug: string, dados: EnviarPedidoInput): Promise<void> =>
-      this.requisicao<void>(`/p/${slug}/contato`, {
-        metodo: 'POST',
-        corpo: dados,
-        autenticada: false,
-      }),
+      this.supabase.enviarPedidoDeContato(slug, dados),
   };
 
   // --- financeiro -----------------------------------------------------------

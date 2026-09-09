@@ -56,6 +56,11 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  EnviarPedidoInput,
+  PaginaPublica,
+  PedidoResumo,
+  PerfilPublicoResumo,
+  SalvarPerfilPublicoInput,
   ConversaResumo,
   EnviarMensagemInput,
   ListarMensagensQuery,
@@ -2677,6 +2682,139 @@ export class MotorSupabase {
       status: r.status as StatusRefeicao,
       comentario: (r.comentario as string | null) ?? null,
     }));
+  }
+
+  // --- página pública -------------------------------------------------------
+
+  private static readonly CAMPOS_PERFIL_PUBLICO =
+    'id,slug,titulo,apresentacao,cidade,uf,atendeOnline,atendePresencial,' +
+    'whatsapp,instagram,publicado';
+
+  async meuPerfilPublico(): Promise<PerfilPublicoResumo | null> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('PerfilPublico')
+        .select(`${MotorSupabase.CAMPOS_PERFIL_PUBLICO},pedidos:PedidoDeContato(atendidoEm)`)
+        .eq('profissionalId', eu)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) return null;
+
+    const pedidos = (linha.pedidos ?? []) as { atendidoEm: string | null }[];
+    return {
+      id: linha.id as string,
+      slug: linha.slug as string,
+      titulo: linha.titulo as string,
+      apresentacao: (linha.apresentacao as string | null) ?? null,
+      cidade: (linha.cidade as string | null) ?? null,
+      uf: (linha.uf as string | null) ?? null,
+      atendeOnline: Boolean(linha.atendeOnline),
+      atendePresencial: Boolean(linha.atendePresencial),
+      whatsapp: (linha.whatsapp as string | null) ?? null,
+      instagram: (linha.instagram as string | null) ?? null,
+      publicado: Boolean(linha.publicado),
+      pedidosPendentes: pedidos.filter((p) => !p.atendidoEm).length,
+    };
+  }
+
+  /**
+   * Cria ou atualiza a página.
+   *
+   * O gatilho normaliza o endereço, recusa os reservados e barra publicar sem
+   * o registro conferido — "uma página dizendo médico sem verificação seria a
+   * plataforma emprestando credibilidade a quem não comprovou nada". Salvar
+   * rascunho é livre.
+   */
+  async salvarPerfilPublico(dados: SalvarPerfilPublicoInput): Promise<PerfilPublicoResumo> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db.from('PerfilPublico').upsert(
+        {
+          id: eu,
+          profissionalId: eu,
+          slug: dados.slug,
+          titulo: dados.titulo.trim(),
+          apresentacao: dados.apresentacao ?? null,
+          cidade: dados.cidade ?? null,
+          uf: dados.uf ?? null,
+          atendeOnline: dados.atendeOnline,
+          atendePresencial: dados.atendePresencial,
+          whatsapp: dados.whatsapp ?? null,
+          instagram: dados.instagram ?? null,
+          publicado: dados.publicado,
+        },
+        { onConflict: 'profissionalId' },
+      ),
+    );
+    return (await this.meuPerfilPublico())!;
+  }
+
+  /**
+   * A página que qualquer pessoa vê — inclusive sem sessão.
+   *
+   * Vem de uma função porque a página é uma PROJEÇÃO: nome, registro no
+   * conselho e especialidades moram em tabelas que ninguém sem conta pode ler,
+   * e abrir uma política para o `anon` nelas seria escancarar duas portas para
+   * entregar uma janela.
+   */
+  async paginaPublica(slug: string): Promise<PaginaPublica> {
+    const pagina = await this.rpc<PaginaPublica | null>('pagina_publica', { p_slug: slug });
+    // Despublicada, não verificada e conta removida respondem igual: quem
+    // procurou não descobre qual das três.
+    if (!pagina) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Página não encontrada.', 404);
+    return pagina;
+  }
+
+  /** O formulário da página. É a única escrita feita por quem não tem conta. */
+  async enviarPedidoDeContato(slug: string, dados: EnviarPedidoInput): Promise<void> {
+    await this.rpc<null>('enviar_pedido_de_contato', {
+      p_slug: slug,
+      p_nome: dados.nome,
+      p_email: dados.email,
+      p_telefone: dados.telefone ?? null,
+      p_mensagem: dados.mensagem ?? null,
+    });
+  }
+
+  async listarPedidosDeContato(): Promise<PedidoResumo[]> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('PedidoDeContato')
+        .select('id,nome,email,telefone,mensagem,atendidoEm,criadoEm,perfil:PerfilPublico!inner(profissionalId)')
+        .eq('perfil.profissionalId', eu)
+        .order('criadoEm', { ascending: false })
+        .limit(200),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((p) => ({
+      id: p.id as string,
+      nome: p.nome as string,
+      email: p.email as string,
+      telefone: (p.telefone as string | null) ?? null,
+      mensagem: (p.mensagem as string | null) ?? null,
+      atendidoEm: instanteOuNulo(p.atendidoEm),
+      criadoEm: instante(p.criadoEm),
+    }));
+  }
+
+  /** Alterna: marcar de novo desmarca — o profissional corrige o clique errado. */
+  async alternarPedidoAtendido(pedidoId: string): Promise<void> {
+    const atual = this.ou(
+      await this.db.from('PedidoDeContato').select('atendidoEm').eq('id', pedidoId).maybeSingle(),
+    ) as unknown as { atendidoEm: string | null } | null;
+    if (!atual) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Pedido de contato não encontrado.', 404);
+    }
+
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('PedidoDeContato')
+        .update({ atendidoEm: atual.atendidoEm ? null : new Date().toISOString() })
+        .eq('id', pedidoId)
+        .select('id'),
+    );
   }
 
   // --- conversa -------------------------------------------------------------
