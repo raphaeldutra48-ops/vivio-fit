@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { TipoMeta, type CriarMetaInput, type MetaResumo } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
-import { seriesDeTrabalho } from '../treinos/metricas';
+import { seriesDeTrabalho } from '@vivio/contracts';
 import { calcularProgresso, estaAtrasada } from './aferir';
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;

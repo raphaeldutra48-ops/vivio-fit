@@ -8,7 +8,7 @@ import type {
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { MidiaService } from '../midia/midia.service';
-import { volumeKg } from '../treinos/metricas';
+import { volumeKg } from '@vivio/contracts';
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;
 

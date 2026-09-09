@@ -1,15 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TipoSerie } from '@prisma/client';
-import type {
-  AnterioresDaSessao,
-  HistoricoCarga,
-  PontoHistoricoCarga,
-  SerieAnterior,
-  SugestaoDeCarga,
-} from '@vivio/contracts';
+import type { AnterioresDaSessao, HistoricoCarga, SerieComExecucao } from '@vivio/contracts';
+import { montarAnterioresDaSessao, montarHistoricoDeCarga } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
-import { sugerirCarga } from './progressao';
 
 interface LinhaSerie {
   exercicioId: string;
@@ -20,14 +14,18 @@ interface LinhaSerie {
   tipo: TipoSerie;
   rpe: number | null;
   iniciadoEm: Date;
+  criadoEm: Date;
 }
 
-/** Epley: estimativa de 1RM a partir de carga e repetições. */
-function estimar1rm(cargaKg: number, reps: number): number {
-  if (reps <= 1) return cargaKg;
-  return Number((cargaKg * (1 + reps / 30)).toFixed(1));
-}
-
+/**
+ * As duas leituras da tela de execução.
+ *
+ * O serviço faz a parte que só o banco sabe fazer — buscar, e buscar barato. A
+ * conta em si mora em `@vivio/contracts`, porque o SDK falando direto com o
+ * Postgres precisa do mesmo resultado: dois cálculos da mesma sugestão de
+ * carga dariam conselhos diferentes na web e no celular, e ninguém saberia
+ * qual seguir.
+ */
 @Injectable()
 export class HistoricoService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,94 +54,31 @@ export class HistoricoService {
     const exercicioIds = [...new Set(sessao.itens.map((i) => i.exercicioId))];
     if (exercicioIds.length === 0) return { porExercicio: {}, ultimaVezEm: {}, sugestao: {} };
 
-    // Todas as séries desses exercícios, mais recentes primeiro. O corte por
-    // execução é feito abaixo: só interessa a ÚLTIMA vez de cada exercício.
+    // Todas as séries desses exercícios. O corte por execução é da função de
+    // contrato: só interessa a ÚLTIMA vez de cada exercício.
     const linhas = await this.prisma.$queryRaw<LinhaSerie[]>`
       SELECT s."exercicioId", s."execucaoId", s."serieNum", s."repsFeitas", s."cargaKg",
-             s."tipo", s."rpe", e."iniciadoEm"
+             s."tipo", s."rpe", e."iniciadoEm", e."criadoEm"
       FROM "SerieExecutada" s
       JOIN "ExecucaoTreino" e ON e.id = s."execucaoId"
       WHERE e."alunoId" = ${alunoId}
         AND s."exercicioId" = ANY(${exercicioIds})
-      ORDER BY e."iniciadoEm" DESC, e."criadoEm" DESC, s."serieNum" ASC
     `;
 
     /*
-      Dor relatada no treino, por execucao. E a guarda que vem ANTES do numero:
-      quem completou as repeticoes sentindo dor e exatamente quem nao deve
-      subir carga, e e quem a regra numerica sozinha mandaria subir.
+      Dor relatada no treino. É a guarda que vem ANTES do número: quem completou
+      as repetições sentindo dor é exatamente quem não deve subir carga.
     */
-    const execucoesComDor = new Set(
-      (
-        await this.prisma.feedbackTreino.findMany({
-          where: { teveDor: true, execucao: { alunoId } },
-          select: { execucaoId: true },
-        })
-      ).map((f) => f.execucaoId),
-    );
+    const comDor = await this.prisma.feedbackTreino.findMany({
+      where: { teveDor: true, execucao: { alunoId } },
+      select: { execucaoId: true },
+    });
 
-    /** `execucaoId:serieNum` -> RPE informado. O contrato de SerieAnterior nao
-     *  carrega RPE (a coluna ANTERIOR nao o mostra), mas a sugestao precisa. */
-    const rpePorSerie = new Map<string, number>();
-    for (const l of linhas) {
-      if (l.rpe !== null) rpePorSerie.set(`${l.execucaoId}:${l.serieNum}`, l.rpe);
-    }
-
-    const porExercicio: Record<string, SerieAnterior[]> = {};
-    const ultimaVezEm: Record<string, string> = {};
-    /** exercicioId -> id da execução escolhida como "a última". */
-    const execucaoEscolhida: Record<string, string> = {};
-
-    for (const linha of linhas) {
-      // Desduplicar por ID, não por data: duas execuções podem ter o mesmo
-      // `iniciadoEm` (registro retroativo, importação, fila offline reenviada
-      // com horários iguais) e seriam somadas como se fossem uma.
-      const escolhida = execucaoEscolhida[linha.exercicioId];
-      if (escolhida === undefined) {
-        execucaoEscolhida[linha.exercicioId] = linha.execucaoId;
-        ultimaVezEm[linha.exercicioId] = linha.iniciadoEm.toISOString();
-      } else if (escolhida !== linha.execucaoId) {
-        continue; // série de uma execução mais antiga
-      }
-
-      (porExercicio[linha.exercicioId] ??= []).push({
-        serieNum: linha.serieNum,
-        repsFeitas: linha.repsFeitas,
-        cargaKg: Number(linha.cargaKg),
-        tipo: linha.tipo,
-      });
-    }
-
-    /*
-      A sugestão é calculada por EXERCÍCIO, e não por item do plano: o mesmo
-      exercício pode aparecer duas vezes na sessão, e as duas vezes têm o mesmo
-      histórico. Se um item pede 8-12 e outro pede 15-20, vence o primeiro —
-      caso raro, e uma sugestão consistente é melhor que duas conflitantes na
-      mesma tela.
-    */
-    const alvoPorExercicio = new Map<string, string>();
-    for (const item of sessao.itens) {
-      if (!alvoPorExercicio.has(item.exercicioId)) {
-        alvoPorExercicio.set(item.exercicioId, item.repsAlvo);
-      }
-    }
-
-    const sugestao: Record<string, SugestaoDeCarga> = {};
-    for (const exercicioId of exercicioIds) {
-      const series = porExercicio[exercicioId] ?? [];
-      sugestao[exercicioId] = sugerirCarga({
-        ultimaSessao: series.map((s) => ({
-          cargaKg: s.cargaKg,
-          repsFeitas: s.repsFeitas,
-          tipo: s.tipo,
-          rpe: rpePorSerie.get(`${execucaoEscolhida[exercicioId]}:${s.serieNum}`) ?? null,
-        })),
-        repsAlvo: alvoPorExercicio.get(exercicioId) ?? '',
-        teveDorNoTreino: execucoesComDor.has(execucaoEscolhida[exercicioId] ?? ''),
-      });
-    }
-
-    return { porExercicio, ultimaVezEm, sugestao };
+    return montarAnterioresDaSessao({
+      series: linhas.map(paraSerieDeContrato),
+      itens: sessao.itens,
+      execucoesComDor: new Set(comDor.map((f) => f.execucaoId)),
+    });
   }
 
   /**
@@ -161,52 +96,42 @@ export class HistoricoService {
     });
     if (!exercicio) throw ErroDominio.naoEncontrado('Exercício');
 
-    const series = await this.prisma.serieExecutada.findMany({
-      where: { exercicioId, execucao: { alunoId } },
-      select: {
-        serieNum: true,
-        repsFeitas: true,
-        cargaKg: true,
-        tipo: true,
-        execucao: { select: { iniciadoEm: true } },
-      },
-      orderBy: [{ execucao: { iniciadoEm: 'desc' } }, { serieNum: 'asc' }],
-      take: limite * 12,
+    const linhas = await this.prisma.$queryRaw<LinhaSerie[]>`
+      SELECT s."exercicioId", s."execucaoId", s."serieNum", s."repsFeitas", s."cargaKg",
+             s."tipo", s."rpe", e."iniciadoEm", e."criadoEm"
+      FROM "SerieExecutada" s
+      JOIN "ExecucaoTreino" e ON e.id = s."execucaoId"
+      WHERE e."alunoId" = ${alunoId} AND s."exercicioId" = ${exercicioId}
+      ORDER BY e."iniciadoEm" DESC
+      LIMIT ${limite * 12}
+    `;
+
+    return montarHistoricoDeCarga({
+      exercicioId: exercicio.id,
+      exercicioNome: exercicio.nome,
+      series: linhas.map(paraSerieDeContrato),
+      limite,
     });
-
-    const porDia = new Map<string, SerieAnterior[]>();
-    for (const s of series) {
-      const dia = s.execucao.iniciadoEm.toISOString().slice(0, 10);
-      (porDia.get(dia) ?? porDia.set(dia, []).get(dia)!).push({
-        serieNum: s.serieNum,
-        repsFeitas: s.repsFeitas,
-        cargaKg: Number(s.cargaKg),
-        tipo: s.tipo,
-      });
-    }
-
-    const pontos: PontoHistoricoCarga[] = [...porDia.entries()]
-      .slice(0, limite)
-      .map(([data, doDia]) => {
-        // Aquecimento não conta como carga de trabalho — inflaria a progressão
-        // para baixo e distorceria o gráfico.
-        const efetivas = doDia.filter((s) => s.tipo !== 'AQUECIMENTO');
-        const consideradas = efetivas.length > 0 ? efetivas : doDia;
-
-        return {
-          data,
-          cargaMaximaKg: Math.max(...consideradas.map((s) => s.cargaKg)),
-          volumeKg: Number(
-            consideradas.reduce((soma, s) => soma + s.cargaKg * s.repsFeitas, 0).toFixed(2),
-          ),
-          estimativa1rmKg: Math.max(
-            ...consideradas.map((s) => estimar1rm(s.cargaKg, s.repsFeitas)),
-          ),
-          series: doDia,
-        };
-      })
-      .reverse(); // cronológico para o gráfico
-
-    return { exercicioId: exercicio.id, exercicioNome: exercicio.nome, pontos };
   }
+}
+
+/**
+ * `Decimal` vira `number` e `Date` vira ISO antes de a conta começar.
+ *
+ * A função de contrato não sabe de Prisma nem de PostgREST de propósito: um
+ * `Decimal` que escapasse até lá viraria concatenação em vez de soma, e o
+ * volume do treino sairia com dois números colados.
+ */
+function paraSerieDeContrato(l: LinhaSerie): SerieComExecucao {
+  return {
+    exercicioId: l.exercicioId,
+    execucaoId: l.execucaoId,
+    serieNum: l.serieNum,
+    repsFeitas: l.repsFeitas,
+    cargaKg: Number(l.cargaKg),
+    tipo: l.tipo,
+    rpe: l.rpe,
+    iniciadoEm: l.iniciadoEm.toISOString(),
+    criadoEm: l.criadoEm.toISOString(),
+  };
 }

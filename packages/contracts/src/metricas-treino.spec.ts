@@ -6,7 +6,7 @@ import {
   seriesDeTrabalho,
   volumeKg,
   type SerieParaMetrica,
-} from './metricas';
+} from './metricas-treino';
 
 const serie = (cargaKg: number, repsFeitas: number, tipo = 'NORMAL'): SerieParaMetrica => ({
   cargaKg,

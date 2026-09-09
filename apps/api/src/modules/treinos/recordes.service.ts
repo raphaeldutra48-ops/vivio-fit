@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ordenarMarcas, type MarcaPessoal, type MeusRecordes } from '@vivio/contracts';
 import { PrismaService } from '../../infra/prisma.service';
-import { estimar1rm, seriesDeTrabalho } from './metricas';
+import { estimar1rm, seriesDeTrabalho } from '@vivio/contracts';
 
 type SerieComData = {
   exercicioId: string;

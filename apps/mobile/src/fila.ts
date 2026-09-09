@@ -71,8 +71,11 @@ export async function registrarFalha(clienteUuid: string, erro: string): Promise
 }
 
 /**
- * Datas viram string no JSON do storage. Ao reenviar, o Zod do servidor aceita
- * string ISO (`z.coerce.date`), então basta repassar como está.
+ * Datas viram string no JSON do storage, e continuam string ao reenviar.
+ *
+ * O SDK normaliza para ISO com fuso antes de subir — antes quem aceitava as
+ * duas formas era o `z.coerce.date` da API, que não está mais no caminho.
+ * Repassar como está segue certo; o que mudou é quem converte.
  */
 export function paraEnvio(item: ItemDaFila): RegistrarExecucaoInput {
   return item.execucao;

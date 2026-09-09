@@ -1,4 +1,4 @@
-import { TipoSerie } from '@vivio/contracts';
+import { TipoSerie, type TipoRecorde } from './execucoes';
 
 /**
  * Contas de treino, em um lugar só.
@@ -6,6 +6,11 @@ import { TipoSerie } from '@vivio/contracts';
  * Saíram de `historico.service.ts` quando o resumo da execução passou a
  * precisar das mesmas: volume calculado de dois jeitos diferentes daria dois
  * números para a mesma sessão, e o aluno compararia a tela com ela mesma.
+ *
+ * Depois saíram da API pelo mesmo motivo, um nível acima: com o SDK falando
+ * direto com o Postgres, o volume do treino passou a ser calculado nos dois
+ * lados. Vivendo no contrato é uma implementação só — e a suíte que já as
+ * cobria veio junto.
  */
 
 export interface SerieParaMetrica {
@@ -78,9 +83,8 @@ export function marcasDe(series: SerieParaMetrica[]): MarcasDoExercicio | null {
   };
 }
 
-export type TipoRecorde = 'PESO' | 'VOLUME' | 'UM_RM';
 
-export interface RecordeBatido {
+export interface MarcaSuperada {
   tipo: TipoRecorde;
   valor: number;
   /** O melhor anterior; `null` quando é a primeira vez que faz o exercício. */
@@ -101,10 +105,10 @@ export interface RecordeBatido {
 export function recordesBatidos(
   hoje: MarcasDoExercicio,
   antes: MarcasDoExercicio | null,
-): RecordeBatido[] {
+): MarcaSuperada[] {
   if (!antes) return [];
 
-  const batidos: RecordeBatido[] = [];
+  const batidos: MarcaSuperada[] = [];
 
   if (hoje.cargaMaximaKg > antes.cargaMaximaKg) {
     batidos.push({ tipo: 'PESO', valor: hoje.cargaMaximaKg, anterior: antes.cargaMaximaKg });

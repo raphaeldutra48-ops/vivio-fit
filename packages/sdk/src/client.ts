@@ -555,28 +555,21 @@ export class VivioClient {
 
   readonly execucoes = {
     listar: (alunoId: string, limit?: number): Promise<ExecucaoResumo[]> =>
-      this.requisicao<ExecucaoResumo[]>(`/alunos/${alunoId}/execucoes`, { query: { limit } }),
+      this.supabase.listarExecucoes(alunoId, limit),
 
     /** Coluna ANTERIOR da tela de execução — uma chamada para a sessão inteira. */
     anteriores: (alunoId: string, sessaoId: string): Promise<AnterioresDaSessao> =>
-      this.requisicao<AnterioresDaSessao>(`/alunos/${alunoId}/sessoes/${sessaoId}/anteriores`),
+      this.supabase.anterioresDaSessao(alunoId, sessaoId),
 
     historicoDeCarga: (
       alunoId: string,
       exercicioId: string,
       limit?: number,
-    ): Promise<HistoricoCarga> =>
-      this.requisicao<HistoricoCarga>(
-        `/alunos/${alunoId}/exercicios/${exercicioId}/historico-carga`,
-        { query: { limit } },
-      ),
+    ): Promise<HistoricoCarga> => this.supabase.historicoDeCarga(alunoId, exercicioId, limit),
 
     /** Idempotente por clienteUuid: reenviar a fila offline não duplica treino. */
     registrar: (alunoId: string, dados: RegistrarExecucaoInput): Promise<ExecucaoResumo> =>
-      this.requisicao<ExecucaoResumo>(`/alunos/${alunoId}/execucoes`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarExecucao(alunoId, dados),
   };
 
   // --- mídia ---------------------------------------------------------------

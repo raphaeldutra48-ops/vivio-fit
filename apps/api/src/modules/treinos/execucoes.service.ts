@@ -9,7 +9,7 @@ import type {
 import type { RecordeBatido } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
-import { marcasDe, recordesBatidos, seriesDeTrabalho, volumeKg } from './metricas';
+import { apurarRecordes, seriesDeTrabalho, volumeKg } from '@vivio/contracts';
 
 type ExecucaoCompleta = Prisma.ExecucaoTreinoGetPayload<{
   include: { sessao: { select: { nome: true; planoId: true } }; series: true; feedback: true };
@@ -123,22 +123,21 @@ export class ExecucoesService {
   /**
    * Quais marcas desta execução superaram o melhor de antes.
    *
-   * "Antes" exclui a própria execução (`id: { not: ... }`) — sem isso a série
-   * recém-gravada entraria na comparação e nada nunca seria recorde, porque o
-   * melhor histórico já incluiria o de hoje.
+   * A comparação em si mora em `@vivio/contracts`, porque o SDK apura a mesma
+   * medalha falando direto com o Postgres. Aqui fica só o que exige o banco:
+   * buscar o histórico e os nomes.
    */
   private async apurarRecordes(
     alunoId: string,
     execucao: ExecucaoCompleta,
   ): Promise<RecordeBatido[]> {
-    const porExercicio = new Map<string, { cargaKg: number; repsFeitas: number; tipo: string }[]>();
-    for (const s of execucao.series) {
-      const atual = porExercicio.get(s.exercicioId) ?? [];
-      atual.push({ cargaKg: Number(s.cargaKg), repsFeitas: s.repsFeitas, tipo: s.tipo });
-      porExercicio.set(s.exercicioId, atual);
-    }
-
-    const exercicioIds = [...porExercicio.keys()];
+    const deHoje = execucao.series.map((s) => ({
+      exercicioId: s.exercicioId,
+      cargaKg: Number(s.cargaKg),
+      repsFeitas: s.repsFeitas,
+      tipo: s.tipo as string,
+    }));
+    const exercicioIds = [...new Set(deHoje.map((s) => s.exercicioId))];
 
     /*
       Duas consultas em paralelo, e não uma por exercício.
@@ -146,14 +145,12 @@ export class ExecucoesService {
       A versão anterior perguntava o histórico dentro do laço: oito exercícios
       na sessão viravam oito consultas em fila, cada uma pagando a ida e volta
       até o banco — no caminho mais quente do app, que é o aluno apertando
-      "concluir" com o celular na mão no meio da academia. E era o único lugar
-      do sistema cujo custo crescia com o tamanho do treino.
+      "concluir" com o celular na mão no meio da academia.
 
       **Sem corte de data e sem `take`, de propósito.** Recorde é "melhor de
       todos os tempos"; limitar a busca faria marca antiga sair da comparação e
-      voltar como medalha nova. Seria uma mudança de regra disfarçada de
-      otimização — e o aluno receberia parabéns por um peso que ele já tinha
-      levantado no ano passado.
+      voltar como medalha nova — o aluno receberia parabéns por um peso que já
+      tinha levantado no ano passado.
 
       Pelo mesmo motivo o aquecimento não é filtrado no SQL: `seriesDeTrabalho`
       tem um caso de borda em que ele conta (quando é tudo o que existe), e
@@ -167,44 +164,24 @@ export class ExecucoesService {
       this.prisma.serieExecutada.findMany({
         where: {
           exercicioId: { in: exercicioIds },
+          // Excluir a execução recém-gravada: sem isso a série de agora entra
+          // na comparação e nada nunca é recorde.
           execucao: { alunoId, id: { not: execucao.id } },
         },
         select: { exercicioId: true, cargaKg: true, repsFeitas: true, tipo: true },
       }),
     ]);
 
-    const nomes = new Map(listaDeNomes.map((e) => [e.id, e.nome]));
-
-    const anterioresPorExercicio = new Map<
-      string,
-      { cargaKg: number; repsFeitas: number; tipo: string }[]
-    >();
-    for (const s of historico) {
-      const lista = anterioresPorExercicio.get(s.exercicioId) ?? [];
-      lista.push({ cargaKg: Number(s.cargaKg), repsFeitas: s.repsFeitas, tipo: s.tipo });
-      anterioresPorExercicio.set(s.exercicioId, lista);
-    }
-
-    const batidos: RecordeBatido[] = [];
-
-    for (const [exercicioId, series] of porExercicio) {
-      const hoje = marcasDe(series);
-      if (!hoje) continue;
-
-      // Lista vazia quando é a primeira vez no exercício: `marcasDe` devolve
-      // `null`, e `recordesBatidos` já trata isso como "não há o que superar".
-      const antes = marcasDe(anterioresPorExercicio.get(exercicioId) ?? []);
-
-      for (const r of recordesBatidos(hoje, antes)) {
-        batidos.push({
-          exercicioId,
-          exercicioNome: nomes.get(exercicioId) ?? 'Exercício',
-          ...r,
-        });
-      }
-    }
-
-    return batidos;
+    return apurarRecordes({
+      deHoje,
+      anteriores: historico.map((s) => ({
+        exercicioId: s.exercicioId,
+        cargaKg: Number(s.cargaKg),
+        repsFeitas: s.repsFeitas,
+        tipo: s.tipo as string,
+      })),
+      nomes: Object.fromEntries(listaDeNomes.map((e) => [e.id, e.nome])),
+    });
   }
 
   private paraResumo(e: ExecucaoCompleta): ExecucaoResumo {

@@ -9,9 +9,24 @@ import {
   resumoDeAgua,
   resumoDeCheckins,
   ordenarPlanosDeTreino,
+  seriesDeTrabalho,
+  volumeKg,
+  montarAnterioresDaSessao,
+  montarHistoricoDeCarga,
+  apurarRecordes,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  AnterioresDaSessao,
+  ExecucaoResumo,
+  HistoricoCarga,
+  MomentoDaDor,
+  RecordeBatido,
+  RegistrarExecucaoInput,
+  SerieComExecucao,
+  SerieExecutadaResumo,
+  TipoDeDor,
+  TipoSerie,
   AlimentoResumo,
   Classificacao,
   ExameResumo,
@@ -1495,6 +1510,267 @@ export class MotorSupabase {
     await this.rpc<null>('ativar_plano_treino', { p_plano_id: planoId });
     return this.obterPlano(alunoId, planoId);
   }
+
+  // --- treino realizado -----------------------------------------------------
+
+  private static readonly CAMPOS_EXECUCAO =
+    'id,clienteUuid,sessaoId,iniciadoEm,finalizadoEm,duracaoSeg,' +
+    'sessao:SessaoTreino(nome),' +
+    'series:SerieExecutada(itemTreinoId,exercicioId,serieNum,repsFeitas,cargaKg,tipo,rpe),' +
+    'feedback:FeedbackTreino(dificuldade,teveDor,localDor,dorTipo,dorMomento,' +
+    'dorExercicioId,sensacao,comentario)';
+
+  private paraExecucao(e: Record<string, unknown>): ExecucaoResumo {
+    /*
+      Ordem estável das séries: a tela lê como lista, e ordem que muda entre
+      dois carregamentos faz a mesma sessão parecer outra.
+    */
+    const series: SerieExecutadaResumo[] = ((e.series ?? []) as Record<string, unknown>[])
+      .map((s) => ({
+        itemTreinoId: s.itemTreinoId as string,
+        exercicioId: s.exercicioId as string,
+        serieNum: Number(s.serieNum),
+        repsFeitas: Number(s.repsFeitas),
+        cargaKg: n(s.cargaKg) ?? 0,
+        tipo: s.tipo as TipoSerie,
+        rpe: s.rpe === null || s.rpe === undefined ? null : Number(s.rpe),
+      }))
+      .sort(
+        (a, b) => a.itemTreinoId.localeCompare(b.itemTreinoId) || a.serieNum - b.serieNum,
+      );
+
+    /*
+      O feedback é 1-para-1 no schema, mas o `@unique` do Prisma vira um
+      ÍNDICE único, e não uma constraint — o PostgREST decide entre objeto e
+      lista olhando a constraint. Aceitar as duas formas custa uma linha e
+      evita que a nota do treino suma se essa detecção mudar de ideia.
+    */
+    const f = umSo(e.feedback);
+
+    return {
+      id: e.id as string,
+      clienteUuid: e.clienteUuid as string,
+      sessaoId: e.sessaoId as string,
+      sessaoNome: ((e.sessao ?? {}) as { nome?: string }).nome ?? '',
+      iniciadoEm: instante(e.iniciadoEm),
+      finalizadoEm: instanteOuNulo(e.finalizadoEm),
+      duracaoSeg: e.duracaoSeg === null || e.duracaoSeg === undefined ? null : Number(e.duracaoSeg),
+      totalSeries: seriesDeTrabalho(series).length,
+      volumeTotalKg: volumeKg(series),
+      /*
+        Vazio por padrão: só o registro de uma execução nova apura recorde.
+        Listar o histórico não deve ir atrás do "melhor de todos os tempos" de
+        cada exercício de cada linha — e "bateu recorde" é notícia do momento,
+        não atributo permanente da sessão.
+      */
+      recordes: [],
+      series,
+      feedback: f
+        ? {
+            dificuldade: Number(f.dificuldade),
+            teveDor: Boolean(f.teveDor),
+            localDor: (f.localDor as string | null) ?? null,
+            /*
+              Os três campos da dor são texto no banco, e opcionais de
+              propósito: quem está com dor não deve ser obrigado a classificar
+              nada para conseguir avisar.
+            */
+            dorTipo: (f.dorTipo as TipoDeDor | null) ?? null,
+            dorMomento: (f.dorMomento as MomentoDaDor | null) ?? null,
+            dorExercicioId: (f.dorExercicioId as string | null) ?? null,
+            sensacao: (f.sensacao as string | null) ?? null,
+            comentario: (f.comentario as string | null) ?? null,
+          }
+        : null,
+    };
+  }
+
+  async listarExecucoes(alunoId: string, limite = 30): Promise<ExecucaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('ExecucaoTreino')
+        .select(MotorSupabase.CAMPOS_EXECUCAO)
+        .eq('alunoId', alunoId)
+        .order('iniciadoEm', { ascending: false })
+        .limit(limite),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((e) => this.paraExecucao(e));
+  }
+
+  /**
+   * As séries do aluno nos exercícios pedidos, com o instante da sessão.
+   *
+   * É a matéria-prima das três contas da tela de execução. Uma consulta só —
+   * perguntar exercício por exercício seriam N idas à rede com a pessoa de pé
+   * na academia.
+   */
+  private async seriesDoAluno(
+    alunoId: string,
+    exercicioIds: string[],
+  ): Promise<SerieComExecucao[]> {
+    if (exercicioIds.length === 0) return [];
+    const linhas = this.ou(
+      await this.db
+        .from('SerieExecutada')
+        .select(
+          'exercicioId,execucaoId,serieNum,repsFeitas,cargaKg,tipo,rpe,' +
+            // `!inner` porque o filtro é pelo pai: sem ele o PostgREST devolve
+            // a série com o pai nulo em vez de descartá-la.
+            'execucao:ExecucaoTreino!inner(alunoId,iniciadoEm,criadoEm)',
+        )
+        .eq('execucao.alunoId', alunoId)
+        .in('exercicioId', exercicioIds),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((s) => {
+      const e = s.execucao as Record<string, unknown>;
+      return {
+        exercicioId: s.exercicioId as string,
+        execucaoId: s.execucaoId as string,
+        serieNum: Number(s.serieNum),
+        repsFeitas: Number(s.repsFeitas),
+        cargaKg: n(s.cargaKg) ?? 0,
+        tipo: s.tipo as string,
+        rpe: s.rpe === null || s.rpe === undefined ? null : Number(s.rpe),
+        iniciadoEm: instante(e.iniciadoEm),
+        criadoEm: instante(e.criadoEm),
+      };
+    });
+  }
+
+  /** As execuções em que o aluno relatou dor. Guarda que vem antes do número. */
+  private async execucoesComDor(alunoId: string): Promise<Set<string>> {
+    const linhas = this.ou(
+      await this.db
+        .from('FeedbackTreino')
+        .select('execucaoId,execucao:ExecucaoTreino!inner(alunoId)')
+        .eq('teveDor', true)
+        .eq('execucao.alunoId', alunoId),
+    ) as unknown as { execucaoId: string }[];
+    return new Set(linhas.map((f) => f.execucaoId));
+  }
+
+  async anterioresDaSessao(alunoId: string, sessaoId: string): Promise<AnterioresDaSessao> {
+    const sessao = this.ou(
+      await this.db
+        .from('SessaoTreino')
+        .select(
+          // `repsAlvo` entra porque a sugestão é dupla progressão: sem a faixa
+          // que o plano pede, não dá para dizer se o aluno fechou o topo.
+          'id,plano:PlanoTreino!inner(alunoId),itens:ItemTreino(exercicioId,repsAlvo)',
+        )
+        .eq('id', sessaoId)
+        .eq('plano.alunoId', alunoId)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+
+    if (!sessao) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Sessão de treino não encontrado.', 404);
+
+    const itens = (sessao.itens ?? []) as { exercicioId: string; repsAlvo: string }[];
+    const exercicioIds = [...new Set(itens.map((i) => i.exercicioId))];
+    if (exercicioIds.length === 0) return { porExercicio: {}, ultimaVezEm: {}, sugestao: {} };
+
+    const [series, comDor] = await Promise.all([
+      this.seriesDoAluno(alunoId, exercicioIds),
+      this.execucoesComDor(alunoId),
+    ]);
+
+    return montarAnterioresDaSessao({ series, itens, execucoesComDor: comDor });
+  }
+
+  async historicoDeCarga(
+    alunoId: string,
+    exercicioId: string,
+    limite = 20,
+  ): Promise<HistoricoCarga> {
+    const exercicio = this.ou(
+      await this.db.from('Exercicio').select('id,nome').eq('id', exercicioId).maybeSingle(),
+    ) as unknown as { id: string; nome: string } | null;
+    if (!exercicio) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Exercício não encontrado.', 404);
+
+    return montarHistoricoDeCarga({
+      exercicioId: exercicio.id,
+      exercicioNome: exercicio.nome,
+      series: await this.seriesDoAluno(alunoId, [exercicioId]),
+      limite,
+    });
+  }
+
+  /**
+   * Envia o treino realizado.
+   *
+   * Idempotente por `clienteUuid`, e a idempotência é do BANCO: reenviar a fila
+   * offline devolve a execução que já está gravada com `jaRegistrada: true`, em
+   * vez de criar uma segunda ou de dar erro. Erro faria o app manter o item na
+   * fila para sempre.
+   */
+  async registrarExecucao(
+    alunoId: string,
+    dados: RegistrarExecucaoInput,
+  ): Promise<ExecucaoResumo> {
+    const resposta = await this.rpc<{ id: string; jaRegistrada: boolean }>('registrar_execucao', {
+      p_aluno_id: alunoId,
+      p_dados: {
+        ...dados,
+        iniciadoEm: paraIso(dados.iniciadoEm),
+        finalizadoEm: dados.finalizadoEm ? paraIso(dados.finalizadoEm) : null,
+      },
+    });
+
+    const linha = this.ou(
+      await this.db
+        .from('ExecucaoTreino')
+        .select(MotorSupabase.CAMPOS_EXECUCAO)
+        .eq('id', resposta.id)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    const resumo = this.paraExecucao(linha);
+
+    // Reenvio não ganha medalha de novo: ela já foi dada quando o treino
+    // entrou, e repeti-la faria o aluno comemorar duas vezes o mesmo peso.
+    if (resposta.jaRegistrada) return { ...resumo, jaRegistrada: true };
+
+    return { ...resumo, recordes: await this.recordesDa(alunoId, resumo) };
+  }
+
+  /**
+   * Compara o que acabou de entrar com tudo o que veio antes.
+   *
+   * O histórico é buscado INTEIRO, sem corte de data: recorde é "melhor de
+   * todos os tempos", e limitar faria marca antiga sair da comparação e voltar
+   * como medalha nova.
+   */
+  private async recordesDa(alunoId: string, execucao: ExecucaoResumo): Promise<RecordeBatido[]> {
+    const exercicioIds = [...new Set(execucao.series.map((s) => s.exercicioId))];
+    if (exercicioIds.length === 0) return [];
+
+    const [todas, nomes] = await Promise.all([
+      this.seriesDoAluno(alunoId, exercicioIds),
+      this.db.from('Exercicio').select('id,nome').in('id', exercicioIds),
+    ]);
+
+    return apurarRecordes({
+      deHoje: execucao.series.map((s) => ({
+        exercicioId: s.exercicioId,
+        cargaKg: s.cargaKg,
+        repsFeitas: s.repsFeitas,
+        tipo: s.tipo,
+      })),
+      // Sem a execução de agora: com ela dentro, o melhor histórico já inclui
+      // o de hoje e nada nunca seria recorde.
+      anteriores: todas
+        .filter((s) => s.execucaoId !== execucao.id)
+        .map((s) => ({
+          exercicioId: s.exercicioId,
+          cargaKg: s.cargaKg,
+          repsFeitas: s.repsFeitas,
+          tipo: s.tipo,
+        })),
+      nomes: Object.fromEntries(
+        ((nomes.data ?? []) as { id: string; nome: string }[]).map((e) => [e.id, e.nome]),
+      ),
+    });
+  }
 }
 
 /** As linhas cruas que o PostgREST devolve, antes de virarem contrato. */
@@ -1574,6 +1850,23 @@ function instante(v: unknown): string {
   // Data pura (`AAAA-MM-DD`) não é instante: fica como está.
   if (!v.includes('T') && !v.includes(' ')) return v;
   return `${v.replace(' ', 'T')}Z`;
+}
+
+/**
+ * `Date` ou string vira ISO com fuso antes de subir.
+ *
+ * O contrato aceita os dois (`z.coerce.date()`), e a função do banco espera
+ * texto ISO. Sem o `Z`, o Postgres leria o instante no fuso do servidor e o
+ * treino apareceria três horas fora do lugar.
+ */
+/** O embed que pode chegar como objeto ou como lista de um. */
+function umSo(v: unknown): Record<string, unknown> | null {
+  const alvo = Array.isArray(v) ? (v[0] ?? null) : v;
+  return (alvo as Record<string, unknown> | null) ?? null;
+}
+
+function paraIso(v: Date | string): string {
+  return (v instanceof Date ? v : new Date(v)).toISOString();
 }
 
 /** Idem, para colunas que aceitam nulo. */

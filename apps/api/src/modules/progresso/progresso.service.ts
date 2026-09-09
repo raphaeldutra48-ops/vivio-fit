@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { EvolucaoDeCarga, PainelDeProgresso } from '@vivio/contracts';
 import { PrismaService } from '../../infra/prisma.service';
 import { CheckinService } from '../checkin/checkin.service';
-import { estimar1rm, seriesDeTrabalho, volumeKg } from '../treinos/metricas';
+import { estimar1rm, seriesDeTrabalho, volumeKg } from '@vivio/contracts';
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;
 

@@ -1,4 +1,5 @@
-import { seriesDeTrabalho } from './metricas';
+import { seriesDeTrabalho } from './metricas-treino';
+import type { AcaoSugerida, SugestaoDeCarga } from './execucoes';
 
 /**
  * Sugestão de progressão de carga.
@@ -10,6 +11,10 @@ import { seriesDeTrabalho } from './metricas';
  * O módulo é puro de propósito. A conta é simples; o que é difícil é decidir
  * **quando NÃO sugerir aumento** — e essa parte não pode depender de quem
  * lembrar de checar.
+ *
+ * Mora no contrato, e não na API, porque a sugestão agora é montada dos dois
+ * lados: duas implementações dariam conselhos diferentes na web e no celular
+ * sobre o mesmo treino, e ninguém saberia qual seguir.
  */
 
 export interface SerieFeita {
@@ -18,18 +23,6 @@ export interface SerieFeita {
   tipo: string;
   /** 1 a 10. 10 = falha. `null` quando o aluno não informou. */
   rpe?: number | null;
-}
-
-export type AcaoSugerida = 'AUMENTAR' | 'MANTER' | 'REDUZIR' | 'SEM_DADO';
-
-export interface SugestaoDeCarga {
-  acao: AcaoSugerida;
-  /** Carga sugerida para a próxima vez. `null` em SEM_DADO. */
-  cargaKg: number | null;
-  /** Diferença para a carga atual; 0 em MANTER. */
-  variacaoKg: number;
-  /** Frase pronta, na voz de quem orienta — a tela não remonta o texto. */
-  porque: string;
 }
 
 /**
