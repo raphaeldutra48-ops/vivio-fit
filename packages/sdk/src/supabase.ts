@@ -56,6 +56,10 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  DefinirLembreteInput,
+  LembreteResumo,
+  NotificacaoResumo,
+  RegistrarDispositivoInput,
   EnviarPedidoInput,
   PaginaPublica,
   PedidoResumo,
@@ -2682,6 +2686,125 @@ export class MotorSupabase {
       status: r.status as StatusRefeicao,
       comentario: (r.comentario as string | null) ?? null,
     }));
+  }
+
+  // --- lembretes e notificações ---------------------------------------------
+
+  private paraLembrete(c: Record<string, unknown>): LembreteResumo {
+    return {
+      id: c.id as string,
+      tipo: c.tipo as LembreteResumo['tipo'],
+      // Colunas de array vêm como array; nulo é lista vazia, e não ausência.
+      horarios: (c.horarios as string[] | null) ?? [],
+      diasDaSemana: ((c.diasDaSemana as number[] | null) ?? []).map(Number),
+      canais: (c.canais as LembreteResumo['canais'] | null) ?? [],
+      ativo: Boolean(c.ativo),
+    };
+  }
+
+  async listarLembretes(): Promise<LembreteResumo[]> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('ConfiguracaoLembrete')
+        .select('id,tipo,horarios,diasDaSemana,canais,ativo')
+        .eq('alunoId', eu)
+        .order('tipo', { ascending: true }),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((c) => this.paraLembrete(c));
+  }
+
+  /** Um lembrete por tipo: definir de novo reescreve o que estava lá. */
+  async definirLembrete(dados: DefinirLembreteInput): Promise<LembreteResumo> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db.from('ConfiguracaoLembrete').upsert(
+        {
+          id: `${eu}-${dados.tipo}`,
+          alunoId: eu,
+          tipo: dados.tipo,
+          horarios: dados.horarios,
+          diasDaSemana: dados.diasDaSemana,
+          canais: dados.canais,
+          ativo: dados.ativo,
+        },
+        { onConflict: 'alunoId,tipo' },
+      ),
+    );
+
+    const salvo = (await this.listarLembretes()).find((l) => l.tipo === dados.tipo);
+    if (!salvo) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Lembrete não encontrado.', 404);
+    return salvo;
+  }
+
+  /**
+   * Registra o aparelho.
+   *
+   * O mesmo token migra de conta — celular emprestado, troca de login —, e por
+   * isso o `upsert` REATRIBUI em vez de duplicar: sem isso o dono anterior
+   * continuaria recebendo os lembretes de quem está com o aparelho agora.
+   */
+  async registrarDispositivo(dados: RegistrarDispositivoInput): Promise<void> {
+    /*
+      Por função, e não por `upsert`: a reatribuição resolve um conflito com a
+      linha de OUTRA pessoa, e o Postgres exige poder lê-la para isso. Fazer o
+      upsert daqui obrigaria a abrir o registro de quem estava com o aparelho —
+      e "este token pertence a alguém" é justamente o que não se conta.
+    */
+    await this.rpc<null>('registrar_dispositivo', {
+      p_token: dados.token,
+      p_plataforma: dados.plataforma,
+    });
+  }
+
+  /** Sair carimba `ativo = false`; o registro fica, para explicar um push errado. */
+  async removerDispositivo(token: string): Promise<void> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db
+        .from('TokenDispositivo')
+        .update({ ativo: false })
+        .eq('userId', eu)
+        .eq('token', token),
+    );
+  }
+
+  async listarNotificacoes(limite = 30): Promise<NotificacaoResumo[]> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('Notificacao')
+        .select('id,tipo,titulo,corpo,deeplink,agendadaPara,enviadaEm,lidaEm')
+        .eq('userId', eu)
+        .order('criadoEm', { ascending: false })
+        .limit(limite),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((n) => ({
+      id: n.id as string,
+      tipo: n.tipo as NotificacaoResumo['tipo'],
+      titulo: n.titulo as string,
+      corpo: n.corpo as string,
+      deeplink: (n.deeplink as string | null) ?? null,
+      agendadaPara: instante(n.agendadaPara),
+      enviadaEm: instanteOuNulo(n.enviadaEm),
+      lidaEm: instanteOuNulo(n.lidaEm),
+    }));
+  }
+
+  /**
+   * Marca lida. Já lida continua com a hora da PRIMEIRA abertura — reabrir a
+   * lista não pode reescrever quando a pessoa viu o aviso.
+   */
+  async marcarNotificacaoLida(id: string): Promise<void> {
+    const eu = await this.meuId();
+    this.ou(
+      await this.db
+        .from('Notificacao')
+        .update({ lidaEm: new Date().toISOString() })
+        .eq('id', id)
+        .eq('userId', eu),
+    );
   }
 
   // --- página pública -------------------------------------------------------

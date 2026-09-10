@@ -625,22 +625,22 @@ export class VivioClient {
   // --- lembretes e notificações --------------------------------------------
 
   readonly lembretes = {
-    listar: (): Promise<LembreteResumo[]> => this.requisicao<LembreteResumo[]>('/me/lembretes'),
+    listar: (): Promise<LembreteResumo[]> => this.supabase.listarLembretes(),
 
     definir: (dados: DefinirLembreteInput): Promise<LembreteResumo> =>
-      this.requisicao<LembreteResumo>('/me/lembretes', { metodo: 'PUT', corpo: dados }),
+      this.supabase.definirLembrete(dados),
 
     registrarDispositivo: (dados: RegistrarDispositivoInput): Promise<void> =>
-      this.requisicao<void>('/me/dispositivos', { metodo: 'PUT', corpo: dados }),
+      this.supabase.registrarDispositivo(dados),
 
     removerDispositivo: (token: string): Promise<void> =>
-      this.requisicao<void>(`/me/dispositivos/${encodeURIComponent(token)}`, { metodo: 'DELETE' }),
+      this.supabase.removerDispositivo(token),
 
     notificacoes: (limit?: number): Promise<NotificacaoResumo[]> =>
-      this.requisicao<NotificacaoResumo[]>('/me/notificacoes', { query: { limit } }),
+      this.supabase.listarNotificacoes(limit),
 
     marcarComoLida: (id: string): Promise<void> =>
-      this.requisicao<void>(`/me/notificacoes/${id}/lida`, { metodo: 'PATCH' }),
+      this.supabase.marcarNotificacaoLida(id),
   };
 
   // --- agenda ---------------------------------------------------------------
