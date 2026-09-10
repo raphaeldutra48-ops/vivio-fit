@@ -1154,29 +1154,30 @@ export class VivioClient {
 
   readonly materiais = {
     listar: (etiqueta?: string): Promise<MaterialResumo[]> =>
-      this.requisicao<MaterialResumo[]>('/materiais', { query: { etiqueta } }),
+      this.supabase.listarMateriais(etiqueta),
 
     /** Visão do aluno: só o que foi compartilhado com ele. */
-    meus: (): Promise<MaterialDoAluno[]> => this.requisicao<MaterialDoAluno[]>('/materiais/meus'),
+    meus: (): Promise<MaterialDoAluno[]> => this.supabase.meusMateriais(),
 
     criar: (dados: CriarMaterialInput): Promise<MaterialResumo> =>
-      this.requisicao<MaterialResumo>('/materiais', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarMaterial(dados),
 
-    /** Link assinado e curto — o arquivo nunca fica público. */
+    /**
+     * Link assinado e curto — o arquivo nunca fica público.
+     *
+     * Continua na API: assinar depende do armazenamento, que ainda vive
+     * fora do Supabase. É a mesma pendência do laudo e da foto de evolução.
+     */
     abrir: (id: string): Promise<UrlAssinada> =>
       this.requisicao<UrlAssinada>(`/materiais/${id}/abrir`),
 
     compartilhar: (id: string, dados: CompartilharMaterialInput): Promise<MaterialResumo> =>
-      this.requisicao<MaterialResumo>(`/materiais/${id}/compartilhar`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.compartilharMaterial(id, dados.alunoIds),
 
     descompartilhar: (id: string, alunoId: string): Promise<void> =>
-      this.requisicao<void>(`/materiais/${id}/compartilhar/${alunoId}`, { metodo: 'DELETE' }),
+      this.supabase.descompartilharMaterial(id, alunoId),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/materiais/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerMaterial(id),
   };
 
   // --- relatórios -----------------------------------------------------------

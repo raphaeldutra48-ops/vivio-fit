@@ -56,6 +56,9 @@ import type {
   TipoDeDor,
   TipoSerie,
   AlimentoResumo,
+  CriarMaterialInput,
+  MaterialDoAluno,
+  MaterialResumo,
   DefinirLembreteInput,
   LembreteResumo,
   NotificacaoResumo,
@@ -2686,6 +2689,169 @@ export class MotorSupabase {
       status: r.status as StatusRefeicao,
       comentario: (r.comentario as string | null) ?? null,
     }));
+  }
+
+  // --- material -------------------------------------------------------------
+
+  /*
+    `chave` fica de fora da lista. É o caminho do arquivo no armazenamento
+    privado, e nada na tela precisa dele: quem abre recebe uma URL assinada,
+    curta, emitida por quem confere o direito. É a mesma regra da chave do
+    laudo de exame.
+  */
+  private static readonly CAMPOS_MATERIAL =
+    'id,titulo,descricao,tipo,nomeArquivo,mimeType,tamanhoBytes,url,etiquetas,criadoEm';
+
+  async listarMateriais(etiqueta?: string): Promise<MaterialResumo[]> {
+    const eu = await this.meuId();
+    let q = this.db
+      .from('Material')
+      .select(
+        `${MotorSupabase.CAMPOS_MATERIAL},` +
+          'compartilhamentos:MaterialCompartilhado(alunoId,vistoEm,aluno:User(id,nome))',
+      )
+      .eq('autorId', eu)
+      .is('deletadoEm', null)
+      .order('criadoEm', { ascending: false })
+      .limit(200);
+    // `cs` é "contains": a coluna é lista de etiquetas, e o filtro é por uma.
+    if (etiqueta) q = q.contains('etiquetas', [etiqueta.trim().toLowerCase()]);
+
+    return (this.ou(await q) as unknown as Record<string, unknown>[]).map((m) => ({
+      id: m.id as string,
+      titulo: m.titulo as string,
+      descricao: (m.descricao as string | null) ?? null,
+      tipo: m.tipo as MaterialResumo['tipo'],
+      nomeArquivo: (m.nomeArquivo as string | null) ?? null,
+      mimeType: (m.mimeType as string | null) ?? null,
+      tamanhoBytes:
+        m.tamanhoBytes === null || m.tamanhoBytes === undefined ? null : Number(m.tamanhoBytes),
+      url: (m.url as string | null) ?? null,
+      etiquetas: (m.etiquetas as string[] | null) ?? [],
+      criadoEm: instante(m.criadoEm),
+      compartilhadoCom: ((m.compartilhamentos ?? []) as Record<string, unknown>[])
+        .map((c) => ({
+          alunoId: c.alunoId as string,
+          nome: (umSo(c.aluno)?.nome as string | undefined) ?? '',
+          vistoEm: instanteOuNulo(c.vistoEm),
+        }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    }));
+  }
+
+  /** Visão do aluno: só o que foi compartilhado com ele. */
+  async meusMateriais(): Promise<MaterialDoAluno[]> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('MaterialCompartilhado')
+        .select(
+          `compartilhadoEm,vistoEm,material:Material!inner(${MotorSupabase.CAMPOS_MATERIAL},` +
+            'deletadoEm,autor:User!Material_autorId_fkey(id,nome))',
+        )
+        .eq('alunoId', eu)
+        .is('material.deletadoEm', null)
+        .order('compartilhadoEm', { ascending: false })
+        .limit(200),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((c) => {
+      const m = umSo(c.material) as Record<string, unknown>;
+      return {
+        id: m.id as string,
+        titulo: m.titulo as string,
+        descricao: (m.descricao as string | null) ?? null,
+        tipo: m.tipo as MaterialDoAluno['tipo'],
+        nomeArquivo: (m.nomeArquivo as string | null) ?? null,
+        mimeType: (m.mimeType as string | null) ?? null,
+        tamanhoBytes:
+          m.tamanhoBytes === null || m.tamanhoBytes === undefined ? null : Number(m.tamanhoBytes),
+        url: (m.url as string | null) ?? null,
+        etiquetas: (m.etiquetas as string[] | null) ?? [],
+        compartilhadoEm: instante(c.compartilhadoEm),
+        vistoEm: instanteOuNulo(c.vistoEm),
+        autor: umSo(m.autor) as unknown as { id: string; nome: string },
+      };
+    });
+  }
+
+  private async obterMaterial(id: string): Promise<MaterialResumo> {
+    const encontrado = (await this.listarMateriais()).find((m) => m.id === id);
+    if (!encontrado) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Material não encontrado.', 404);
+    }
+    return encontrado;
+  }
+
+  async criarMaterial(dados: CriarMaterialInput): Promise<MaterialResumo> {
+    const eu = await this.meuId();
+    const id = `${eu}-material-${Date.now()}`;
+    const ehArquivo = dados.tipo === 'ARQUIVO';
+
+    this.ou(
+      await this.db.from('Material').insert({
+        id,
+        autorId: eu,
+        titulo: dados.titulo.trim(),
+        descricao: dados.descricao ?? null,
+        tipo: dados.tipo,
+        // Arquivo e link são excludentes: guardar os dois faria a tela ter de
+        // escolher qual obedecer.
+        chave: ehArquivo ? dados.chave : null,
+        nomeArquivo: ehArquivo ? dados.nomeArquivo : null,
+        mimeType: ehArquivo ? dados.mimeType : null,
+        tamanhoBytes: ehArquivo ? dados.tamanhoBytes : null,
+        url: ehArquivo ? null : dados.url,
+        etiquetas: dados.etiquetas,
+      }),
+    );
+    return this.obterMaterial(id);
+  }
+
+  /** Soft delete: o arquivo em si sai do armazenamento pela API, por enquanto. */
+  async removerMaterial(id: string): Promise<void> {
+    await this.exigirLinhaAlterada(
+      this.db
+        .from('Material')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .select('id'),
+    );
+  }
+
+  /**
+   * Compartilha com alunos da carteira.
+   *
+   * Só com quem tem vínculo ATIVO — a política recusa o lote inteiro se um dos
+   * nomes não for aluno de quem envia. É tudo ou nada de propósito: metade
+   * entregue com um erro na tela deixaria o profissional sem saber quem
+   * recebeu.
+   */
+  async compartilharMaterial(id: string, alunoIds: string[]): Promise<MaterialResumo> {
+    if (alunoIds.length > 0) {
+      this.ou(
+        await this.db.from('MaterialCompartilhado').upsert(
+          [...new Set(alunoIds)].map((alunoId) => ({
+            id: `${id}-${alunoId}`,
+            materialId: id,
+            alunoId,
+          })),
+          // Recompartilhar não apaga o "visto em" nem duplica.
+          { onConflict: 'materialId,alunoId', ignoreDuplicates: true },
+        ),
+      );
+    }
+    return this.obterMaterial(id);
+  }
+
+  async descompartilharMaterial(id: string, alunoId: string): Promise<void> {
+    this.ou(
+      await this.db
+        .from('MaterialCompartilhado')
+        .delete()
+        .eq('materialId', id)
+        .eq('alunoId', alunoId),
+    );
   }
 
   // --- lembretes e notificações ---------------------------------------------
