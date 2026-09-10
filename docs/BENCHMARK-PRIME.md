@@ -301,6 +301,25 @@ Catálogo global: **156 → 214** no arquivo (217 no banco, com os do wger).
 contra 30 para 156. O catálogo ficou mais completo em nome e mais vazio em
 imagem. Vídeo continua em zero.
 
+**Atualização em 10/09/2026 — os vídeos voltaram à mesa.** O Raphael informou
+que o Prime autorizou o uso e assumiu a responsabilidade pela autorização, que
+precisa existir por escrito fora do repositório. Nada foi baixado ainda: o
+arquivo de vídeo responde 403, porque a conta do Prime bloqueia o acesso direto
+e só o player deles busca o vídeo — e passar por cima disso seria contornar uma
+proteção deles. O caminho é eles entregarem os arquivos ou uma chave de leitura
+da biblioteca.
+
+O que já está feito é o casamento, em `apps/api/src/ferramentas/prime.ts`:
+**155 dos 214 exercícios** com vídeo em português do Prime, 124 certos e 31
+marcados para conferir no vídeo (quase sempre o aparelho, que o nome não diz).
+Decidido à mão contra o catálogo inteiro — o comparador por palavras sozinho
+teria posto a rotação **externa** na **interna**.
+
+Correção de um número acima: os 3 exercícios que o banco tem a mais que o
+arquivo **não são do wger**. São "Remada curvada", "Rosca direta" e "Tríceps na
+polia", sobras da semente de 28/07 que o arquivo renomeou depois; nenhum plano
+os usa, e eles aparecem duplicados na busca do profissional.
+
 ### Números medidos
 
 Contra o banco na nuvem a partir de uma conexão residencial, o que **infla tudo**:
