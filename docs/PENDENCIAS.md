@@ -243,6 +243,31 @@ foto de novo. Antes disso o log do boot já diz qual driver está em uso.
 **Ainda aberto até o bucket existir.** A pendência 22 (arquivo do exame) se paga
 junto: o upload do laudo usa o mesmo armazenamento.
 
+**Atualização em 2026-09-10 — conferido nas Variables do Railway:**
+
+- **Paga no Railway, pelo volume — e não pelo R2.** A API continua lá
+  (`x-railway-edge: gru1`), com o volume `@vivio/api-volume` montado em
+  `/dados/midia` e `MEDIA_DIR=/dados/midia`. A mídia no disco local **sobrevive
+  ao deploy**. R2 **não** está configurado.
+- **O aviso de boot mentia desde 01/09.** `midiaEmDiscoPersistente()` tinha sido
+  trocada por um `return false` fixo, na premissa de que a API já estava na
+  Cloudflare. Todo boot de produção anunciava, em nível de erro, que as fotos
+  seriam APAGADAS no próximo deploy — com o volume de 5 GB no lugar. A checagem
+  do volume voltou, com os testes de caminho que tinham sido apagados junto.
+- **O importador do wger passou a gravar pelo driver**
+  (`src/ferramentas/importar-wger.ts`; a interface `Armazenamento` ganhou
+  `gravar` e `existe`) e é idempotente pelo ARQUIVO, não pela coluna. No volume
+  isso dá na mesma que antes; importa no dia da troca de armazenamento — rodar
+  o importador é o que repovoa o destino novo.
+- **Diagnóstico sem gravar nada:** `IMPORTAR_WGER=true` e `SIMULAR=true` nas
+  Variables do serviço `api`, e deploy. O log diz qual driver está em uso e
+  quantas imagens do banco não estão no armazenamento.
+
+**Volta a abrir quando a API sair do Railway** — a Cloudflare não tem volume
+para montar. Aí o destino tem de ser R2 ou Storage do Supabase, e a
+`midiaEmDiscoPersistente()` passa a responder `false` sozinha, porque
+`RAILWAY_VOLUME_MOUNT_PATH` some junto.
+
 ### 20. Confirmação automática de pagamento exige gateway
 **Assumida em:** Receba Fácil
 **Estado:** o app **gera** o PIX copia e cola (BR Code do BACEN, padrão aberto),
@@ -376,6 +401,31 @@ não sobre data.
 **Pagar em:** na próxima vez que a suíte ficar vermelha.
 
 ## Resolvidas
+
+### A suíte deixava alunos de mentira no banco de produção — resolvida em 2026-09-10
+
+`test/resumo.e2e.spec.ts` criava três alunos por execução e, no `afterAll`,
+apagava o vínculo e o consentimento deles — mas nunca a conta. Desde que a
+suíte passou a rodar contra o Supabase de produção, em 2026-09-01, 27 execuções
+tinham deixado **81 contas** `resumo.*@teste.com` na base real. Era o único
+arquivo que criava conta sem apagar; agora usa o mesmo `apagarConta` dos outros.
+
+A mesma varredura achou mais quatro sobras de execuções interrompidas — duas
+`estranho.*` de 06/08, uma `prova-*` de 01/09 e uma `semverif.*` de uma
+execução derrubada nesta data. As 85 foram removidas conta por conta, cada uma
+numa transação: as chaves estrangeiras com RESTRICT recusariam qualquer conta
+com histórico de verdade, e nenhuma recusou. Ficaram só as da semente (Ana,
+Bruno, Carla).
+
+A sobra `semverif` expôs outro defeito, este no teste de vínculo. "Um
+profissional ativo por tipo" pegava *qualquer* outro PERSONAL com `findFirst`;
+como a semente tem um só, o teste caía no `return` e **passava sem nunca ter
+rodado a regra** contra o Supabase. Achou o profissional sem verificação, parou
+na trava do conselho e quebrou. Agora o próprio arquivo cria o segundo personal,
+já verificado, e confere o código da recusa e o estado que ficou. (A mensagem
+não serve de prova ali: o Prisma troca o texto de todo `23505` cru por "Unique
+constraint failed". O PostgREST, que é o que o app usa, entrega o texto
+inteiro.)
 
 ### A tabela de migrações estava aberta à chave anônima — resolvida em 2026-09-10
 

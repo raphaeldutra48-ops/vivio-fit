@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, resolve, sep } from 'node:path';
 import type { Armazenamento } from './armazenamento';
 
@@ -78,7 +78,13 @@ export class ArmazenamentoLocal implements Armazenamento {
     return { url: this.montarUrl(chave, expiraEm.getTime(), 'GET'), expiraEm };
   }
 
-  async gravar(chave: string, conteudo: Buffer): Promise<void> {
+  /**
+   * O tipo do conteúdo não vai para lugar nenhum aqui: disco não guarda
+   * `Content-Type`, e a rota de leitura serve pelo que o arquivo é. O parâmetro
+   * existe para cumprir o contrato — no R2 ele é o que faz o navegador tocar o
+   * vídeo em vez de baixá-lo.
+   */
+  async gravar(chave: string, conteudo: Buffer, _mimeType?: string): Promise<void> {
     const destino = this.caminhoDe(chave);
     await mkdir(dirname(destino), { recursive: true });
     await writeFile(destino, conteudo);
@@ -92,5 +98,17 @@ export class ArmazenamentoLocal implements Armazenamento {
 
   async remover(chave: string): Promise<void> {
     await rm(this.caminhoDe(chave), { force: true });
+  }
+
+  async existe(chave: string): Promise<boolean> {
+    try {
+      return (await stat(this.caminhoDe(chave))).isFile();
+    } catch (erro) {
+      // Só "não existe" vira `false`. Permissão negada ou disco fora do ar
+      // respondidos como ausência fariam o importador baixar tudo de novo por
+      // cima de um problema que ninguém veria.
+      if ((erro as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw erro;
+    }
   }
 }

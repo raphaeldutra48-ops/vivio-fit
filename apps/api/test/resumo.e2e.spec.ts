@@ -94,10 +94,28 @@ describe('Resumo do profissional (e2e)', () => {
     });
   });
 
+  /*
+    Apaga a CONTA, e não só o vínculo e o consentimento.
+
+    A versão anterior limpava os dois e deixava os alunos para trás — três
+    contas por execução, nunca removidas. Com a suíte rodando contra o banco de
+    produção desde a migração para o Supabase, 27 execuções tinham deixado 81
+    alunos de mentira na base real.
+  */
+  const apagarConta = async (email: string) => {
+    const u = await prisma.user.findUnique({ where: { email } });
+    if (!u) return;
+    await prisma.logAuditoria.deleteMany({ where: { OR: [{ alunoId: u.id }, { atorId: u.id }] } });
+    await prisma.consentimento.deleteMany({ where: { alunoId: u.id } });
+    await prisma.vinculo.deleteMany({ where: { OR: [{ alunoId: u.id }, { profissionalId: u.id }] } });
+    await prisma.sessaoRefresh.deleteMany({ where: { userId: u.id } });
+    await prisma.perfilAluno.deleteMany({ where: { userId: u.id } });
+    await prisma.user.delete({ where: { id: u.id } });
+  };
+
   afterAll(async () => {
-    for (const alunoId of [idComConsentimento, idSemConsentimento]) {
-      await prisma.consentimento.deleteMany({ where: { alunoId } });
-      await prisma.vinculo.deleteMany({ where: { alunoId } });
+    for (const rotulo of ['autoriza', 'naoautoriza', 'curioso']) {
+      await apagarConta(`resumo.${rotulo}.${sufixo}@teste.com`);
     }
     await app.close();
   });

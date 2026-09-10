@@ -1,4 +1,4 @@
-import { MAPA, indiceDeMidia } from './wger';
+import { MAPA, indiceDeMidia } from '../src/ferramentas/wger';
 
 /**
  * Confere, **contra a API do wger ao vivo**, que cada id do mapa existe e tem

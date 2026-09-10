@@ -28,6 +28,29 @@ export interface Armazenamento {
   ler(chave: string): Promise<Buffer>;
 
   remover(chave: string): Promise<void>;
+
+  /**
+   * Grava bytes que o SERVIDOR já tem nas mãos.
+   *
+   * Não é caminho de upload de usuário — esse continua sendo `autorizarUpload`,
+   * direto do aparelho para o armazenamento. É para o que nasce do nosso lado:
+   * a mídia do catálogo, baixada de acervo aberto.
+   *
+   * Existe porque o importador do wger gravava com `writeFile` direto na pasta
+   * de mídia, por fora desta interface. Com a mídia no volume do Railway dava
+   * na mesma; com o R2 ligado, o arquivo ficaria no disco e a API o procuraria
+   * no bucket — a importação "funcionaria" e a imagem nunca apareceria.
+   */
+  gravar(chave: string, conteudo: Buffer, mimeType: string): Promise<void>;
+
+  /**
+   * O arquivo está lá?
+   *
+   * A coluna preenchida no banco não responde a isso: ela diz que o arquivo foi
+   * gravado um dia, não que ainda existe. É a diferença entre um importador que
+   * pula o que "já tem" e um que conserta o que perdeu.
+   */
+  existe(chave: string): Promise<boolean>;
 }
 
 export const ARMAZENAMENTO = Symbol('ARMAZENAMENTO');

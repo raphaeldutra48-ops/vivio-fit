@@ -93,9 +93,6 @@ fi
 # cadastrar uma conta em produção e torcer, e a falha viria muda: o CorreioSmtp
 # engole o erro de propósito (pendência 16), para o provedor fora do ar não
 # derrubar um cadastro já gravado.
-# Baixa as imagens do wger para o volume. Roda aqui, e não da máquina de quem
-# desenvolve, porque o disco de destino só existe dentro do contêiner.
-# Idempotente: exercício que já tem imagem é pulado.
 # A pasta prisma/ e o tsx vao inteiros para a imagem (ver Dockerfile), entao
 # roda pelo script do package.json como as outras tarefas de instalacao.
 # Idempotente: alimento ja existente e pulado, nao duplicado.
@@ -105,10 +102,20 @@ if [ "$IMPORTAR_TACO" = "true" ]; then
   echo "→ pronto. Pode remover IMPORTAR_TACO."
 fi
 
+# Traz a mídia do wger para o armazenamento da API, pelo mesmo driver que a
+# API usa: hoje o volume do Railway, amanhã o bucket. Gravar direto na pasta,
+# como antes, deixaria as imagens no disco no dia em que a API passasse a
+# procurar no bucket.
+# Pelo `dist`, como o teste de e-mail: o importador usa o código do driver, e o
+# código-fonte não vem na imagem.
+# Sem R2 e sem volume persistente ele se recusa a gravar. Com SIMULAR=true
+# junto, só diagnostica: quantas imagens do banco não estão no armazenamento.
+# Idempotente pelo arquivo: o que está no armazenamento é pulado, o que sumiu
+# é trazido de novo.
 if [ "$IMPORTAR_WGER" = "true" ]; then
-  echo "→ IMPORTAR_WGER=true: baixando imagens dos exercícios"
-  como_node npm run --silent importar-wger
-  echo "→ pronto. Pode remover IMPORTAR_WGER."
+  echo "→ IMPORTAR_WGER=true: mídia dos exercícios"
+  como_node node dist/ferramentas/importar-wger.js
+  echo "→ pronto. Pode remover IMPORTAR_WGER (e SIMULAR, se usou)."
 fi
 
 if [ -n "$EMAIL_TESTE_PARA" ]; then

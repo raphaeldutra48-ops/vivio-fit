@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { EXERCICIOS_GLOBAIS } from './exercicios-globais';
-import { indiceDeMidia, nomesPorExercicio } from './wger';
+import { indiceDeMidia, nomesPorExercicio } from '../src/ferramentas/wger';
 
 /**
  * Gera a lista de candidatos para o mapa `MAPA` de `wger.ts`.

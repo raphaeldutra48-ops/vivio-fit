@@ -18,6 +18,7 @@ describe('RLS: vínculo de cuidado', () => {
   const marca = `prova-vinc-${Date.now()}`;
   const alunoId = `${marca}-aluno`;
   const alunoEmail = `${marca}@teste.com`;
+  const segundoPersonal = `${marca}-personal2`;
   let personal = '';
   let nutri = '';
   let vinculoId = '';
@@ -46,11 +47,30 @@ describe('RLS: vínculo de cuidado', () => {
     await p.user.create({
       data: { id: alunoId, email: alunoEmail, nome: 'Aluno de Prova', papel: 'ALUNO' },
     });
+    // Verificado de propósito: a regra sob teste é "um ativo por tipo", e um
+    // convite parado na trava do conselho nunca chegaria a ela.
+    await p.user.create({
+      data: {
+        id: segundoPersonal,
+        email: `${marca}-personal2@teste.com`,
+        nome: 'Segundo Personal',
+        papel: 'PERSONAL',
+        status: 'ATIVA',
+        perfilProfissional: {
+          create: {
+            tipo: 'PERSONAL',
+            registroConselho: `CREF ${marca}`,
+            ufRegistro: 'SP',
+            verificadoEm: new Date(),
+          },
+        },
+      },
+    });
   });
 
   afterAll(async () => {
     await p.vinculo.deleteMany({ where: { alunoId } });
-    await p.user.deleteMany({ where: { id: alunoId } });
+    await p.user.deleteMany({ where: { id: { in: [alunoId, segundoPersonal] } } });
     await p.$disconnect();
   });
 
@@ -97,16 +117,40 @@ describe('RLS: vínculo de cuidado', () => {
       Trocar de personal exige encerrar o anterior, e o histórico dele
       permanece — é o ponto de encerrar em vez de apagar. Aqui o segundo
       convite chega a existir; o que a regra barra é ele virar ATIVO.
-    */
-    const admin = await p.user.findFirst({
-      where: { papel: 'PERSONAL', id: { not: personal } },
-      select: { id: true, email: true },
-    });
-    if (!admin) return; // a semente tem um personal só; nada a provar aqui.
 
-    const r = await convidar(admin.id, alunoEmail);
+      O segundo personal é criado por este arquivo, e não procurado no banco.
+
+      A versão anterior pegava "qualquer outro PERSONAL" com `findFirst` — e,
+      como a semente tem um só, caía no `return` e passava sem provar nada. A
+      regra nunca tinha rodado de verdade contra o Supabase. Ela só apareceu
+      quando uma execução interrompida deixou para trás um profissional SEM
+      verificação: o `findFirst` o achou, e o convite parou na trava do
+      conselho, antes de chegar à regra. Teste que depende de quem mais está
+      no banco de produção decide pela sorte.
+
+      Pelo mesmo motivo a recusa não pode ser só "deu algum erro": qualquer
+      outra trava no caminho passaria por esta. A mensagem não serve de prova
+      aqui — o Prisma troca o texto de todo `23505` cru por "Unique constraint
+      failed" (o PostgREST, que é o que o app usa, entrega o texto inteiro).
+      Então a prova é o CÓDIGO, que separa esta recusa da trava do conselho
+      (`42501`), e o ESTADO que ficou: o segundo convite pendente, e o personal
+      de antes como o único ativo.
+    */
+    const r = await convidar(segundoPersonal, alunoEmail);
     const segundo = r[0]!.convidar_vinculo;
-    await expect(responder(alunoId, segundo, 'ACEITAR')).rejects.toThrow();
+
+    const recusa = await responder(alunoId, segundo, 'ACEITAR').then(
+      () => null,
+      (e: { meta?: { code?: string } }) => e,
+    );
+    expect(recusa?.meta?.code).toBe('23505');
+
+    expect((await p.vinculo.findUniqueOrThrow({ where: { id: segundo } })).status).toBe('PENDENTE');
+    const ativos = await p.vinculo.findMany({
+      where: { alunoId, tipo: 'PERSONAL', status: 'ATIVO' },
+      select: { id: true },
+    });
+    expect(ativos.map((v) => v.id)).toEqual([vinculoId]);
   });
 
   it('qualquer um dos dois lados encerra, e o encerrado não se aceita', async () => {
@@ -154,6 +198,7 @@ describe('RLS: vínculo de cuidado', () => {
     ).rejects.toThrow();
     expect(await p.vinculo.count({ where: { id: `${marca}-direto` } })).toBe(0);
 
+    // O aluno tentando ativar sozinho o vínculo que ainda está pendente.
     const antes = await p.vinculo.findUniqueOrThrow({ where: { id: vinculoId } });
     await expect(
       como(alunoId, `update "Vinculo" set status='ATIVO' where id='${vinculoId}'`),
@@ -162,4 +207,3 @@ describe('RLS: vínculo de cuidado', () => {
     expect(depois.status).toBe(antes.status);
   });
 });
-    // O aluno tentando ativar sozinho o vínculo que ainda está pendente.

@@ -24,20 +24,32 @@ export type DriverDeMidia = 'R2' | 'LOCAL';
 /**
  * O disco local sobrevive ao deploy?
  *
- * **Não.** Nunca, na hospedagem atual. A resposta era condicional enquanto o
- * app rodava no Railway, que expõe `RAILWAY_VOLUME_MOUNT_PATH` quando há um
- * volume montado — se o `MEDIA_DIR` apontasse para dentro dele, a mídia durava.
+ * No Railway, sim — quando há volume montado e o `MEDIA_DIR` aponta para
+ * dentro dele. É o caso da produção: volume `@vivio/api-volume` em
+ * `/dados/midia`, e `MEDIA_DIR=/dados/midia`.
  *
- * Na Cloudflare não existe volume persistente para anexar: o Worker não tem
- * disco, e o contêiner tem sistema de arquivos efêmero. Ou a mídia está no R2,
- * ou ela morre no próximo deploy.
+ * Esta função passou de 01/09 a 10/09 respondendo `false` fixo, escrita na
+ * premissa de que a API já tinha saído do Railway para a Cloudflare — onde,
+ * de fato, não há volume para montar. A API não tinha saído. O resultado foi o
+ * pior tipo de aviso: todo boot de produção gritava, em nível de erro, que as
+ * fotos de evolução seriam APAGADAS no próximo deploy, e elas não seriam. Log
+ * que mente ensina todo mundo a ignorar o log.
  *
- * A função continua existindo porque o aviso de boot depende dela, e continuar
- * respondendo `false` de propósito é mais honesto que sumir com a pergunta:
- * quem ler o log vai encontrar o alerta em vez do silêncio.
+ * Quando a API sair do Railway de verdade, `RAILWAY_VOLUME_MOUNT_PATH` some
+ * junto, esta função passa a responder `false` sozinha, e o aviso volta a ser
+ * verdadeiro — sem ninguém precisar lembrar de mudar nada aqui.
  */
-export function midiaEmDiscoPersistente(_config: ConfigService): boolean {
-  return false;
+export function midiaEmDiscoPersistente(config: ConfigService): boolean {
+  const montagem = config.get<string>('RAILWAY_VOLUME_MOUNT_PATH');
+  const destino = config.get<string>('MEDIA_DIR');
+  if (!montagem || !destino) return false;
+
+  const normalizar = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+  const raiz = normalizar(montagem);
+  const alvo = normalizar(destino);
+
+  // Prefixo de texto não basta: `/dados-teste` não está dentro de `/dados`.
+  return alvo === raiz || alvo.startsWith(`${raiz}/`);
 }
 
 export function faltandoParaR2(config: ConfigService): string[] {

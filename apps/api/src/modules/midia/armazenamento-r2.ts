@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -95,5 +96,34 @@ export class ArmazenamentoR2 implements Armazenamento {
 
   async remover(chave: string): Promise<void> {
     await this.cliente.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: chave }));
+  }
+
+  async gravar(chave: string, conteudo: Buffer, mimeType: string): Promise<void> {
+    await this.cliente.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: chave,
+        Body: conteudo,
+        // Sem o tipo, o R2 serve `application/octet-stream` e o navegador baixa
+        // o vídeo em vez de tocá-lo — o mesmo defeito do `.bin`, por outra via.
+        ContentType: mimeType,
+      }),
+    );
+  }
+
+  async existe(chave: string): Promise<boolean> {
+    try {
+      await this.cliente.send(new HeadObjectCommand({ Bucket: this.bucket, Key: chave }));
+      return true;
+    } catch (erro) {
+      /*
+        Só o 404 é "não existe". Um 403 de credencial trocada respondido como
+        ausência faria o importador tentar regravar o catálogo inteiro — e
+        falhar na gravação com uma mensagem que aponta para o lugar errado.
+      */
+      const e = erro as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === 'NotFound' || e.$metadata?.httpStatusCode === 404) return false;
+      throw erro;
+    }
   }
 }

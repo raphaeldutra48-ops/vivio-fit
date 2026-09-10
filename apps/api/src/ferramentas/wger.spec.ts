@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXERCICIOS_GLOBAIS } from './exercicios-globais';
+import { EXERCICIOS_GLOBAIS } from '../../prisma/exercicios-globais';
 import { MAPA } from './wger';
 
 /**
