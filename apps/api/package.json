@@ -24,7 +24,10 @@
     "migrar-supabase": "tsx prisma/migrar-para-supabase.ts",
     "lint": "eslint .",
     "semear-auth": "tsx prisma/semear-auth.ts",
-    "exportar-regras": "tsx prisma/exportar-regras.ts"
+    "exportar-regras": "tsx prisma/exportar-regras.ts",
+    "rls:aplicar": "tsx prisma/aplicar-rls.ts",
+    "rls:conferir": "tsx prisma/conferir-rls.ts",
+    "rls:auditar": "tsx prisma/auditar-rls.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

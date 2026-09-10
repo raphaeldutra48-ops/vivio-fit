@@ -173,4 +173,47 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: medida corporal', () =>
       nutri.medidas.registrar(alunoId, { data: new Date(), pesoKg: 70, fonte: 'MANUAL' }),
     ).rejects.toBeInstanceOf(ErroApi);
   });
+
+  it('pesar de novo no mesmo dia CORRIGE, e a correção fica gravada', async () => {
+    /*
+      A tabela tem única por (aluno, data): o segundo peso do dia é conserto do
+      primeiro, não uma segunda medição. O SDK grava com `upsert`, e o caminho
+      do conflito é um UPDATE.
+
+      Este teste existe porque esse caminho passou muito tempo sem política de
+      UPDATE: só o INSERT tinha regra, e corrigir o peso do dia devolvia "Você
+      não tem acesso a este conteúdo" — sobre a própria medida que a pessoa
+      tinha acabado de gravar. A mensagem apontava para consentimento e
+      vínculo, que estavam certos.
+
+      A conferência é no BANCO, e não na resposta do `upsert`: derrubar só a
+      política e deixar o `grant` de pé é a mutação que reproduz o defeito, e é
+      o banco que distingue "corrigiu" de "criou uma segunda linha".
+    */
+    const dia = '2026-05-20';
+    await personal.medidas.registrar(alunoId, {
+      data: new Date(dia),
+      pesoKg: 92,
+      cinturaCm: 98,
+      fonte: 'MANUAL',
+    });
+    await personal.medidas.registrar(alunoId, {
+      data: new Date(dia),
+      pesoKg: 82,
+      cinturaCm: 94,
+      fonte: 'MANUAL',
+    });
+
+    const noBanco =
+      ((await admin.from('Medida').select('pesoKg,cinturaCm').eq('alunoId', alunoId).eq('data', dia))
+        .data as { pesoKg: string; cinturaCm: string }[] | null) ?? [];
+
+    // Uma linha só: corrigiu, não duplicou.
+    expect(noBanco).toHaveLength(1);
+    expect(Number(noBanco[0]!.pesoKg)).toBe(82);
+    expect(Number(noBanco[0]!.cinturaCm)).toBe(94);
+
+    const listada = (await personal.medidas.listar(alunoId)).find((m) => m.data === dia);
+    expect(listada?.pesoKg).toBe(82);
+  });
 });

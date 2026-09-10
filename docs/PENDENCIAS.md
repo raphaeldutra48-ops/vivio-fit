@@ -377,6 +377,41 @@ não sobre data.
 
 ## Resolvidas
 
+### A tabela de migrações estava aberta à chave anônima — resolvida em 2026-09-10
+
+`_prisma_migrations` era a única tabela da schema sem RLS: foi o Prisma que a
+criou, e por isso nenhum arquivo de `prisma/rls/` a cobria. Sem RLS, o
+`grant all` que o Supabase dá de nascença valia inteiro — e a chave anônima,
+que viaja no pacote do site e dentro do app, **lia, alterava, apagava e
+truncava** a tabela. Conferido antes de mexer: a leitura anônima devolveu os
+nomes das migrações e o UPDATE anônimo foi aceito.
+
+Nenhum dado de aluno ficava exposto por ali, mas apagar o histórico faria o
+Prisma achar o banco vazio, e o `migrate deploy` seguinte tentaria recriar tudo
+por cima de uma base cheia.
+
+A mesma revisão achou mais três coisas, todas em `99-fechar-portas.sql` ou ao
+lado da regra que faltava:
+
+- **`notificacao_escreve`**, política que nenhum arquivo criava, com
+  `with check (true)`. Não fazia efeito porque `Notificacao` nunca teve
+  permissão de INSERT — mas bastava uma permissão bem-intencionada para a caixa
+  de avisos de qualquer um aceitar texto de qualquer outro. Removida.
+- **`Medida` sem política de UPDATE.** O SDK grava com `upsert`, e o lado do
+  conflito é um UPDATE: corrigir o peso do dia devolvia "Você não tem acesso a
+  este conteúdo" sobre a medida que a pessoa acabara de gravar. Política e
+  gatilho novos em `07-politicas-escrita.sql`, e teste que falha sem eles.
+- **82 permissões de escrita sem política** e `TRUNCATE`/`REFERENCES`/`TRIGGER`
+  para `anon` em 68 tabelas, herança do `grant all`. Falhavam fechadas, mas
+  armavam a próxima: uma política de leitura acrescentada numa dessas tabelas
+  traria de brinde o INSERT e o DELETE parados ali. A varredura as tira pela
+  regra, e roda por último (`99-`) para pegar também os grupos que ainda vão
+  ser migrados.
+
+`pnpm --filter @vivio/api rls:auditar` refaz a conferência contra o banco e sai
+com código 1 se algo voltar: tabela sem RLS, permissão sem regra, política
+órfã, ou leitura/escrita do SDK que o banco não deixa.
+
 ### A suíte parou de poder apagar gente de verdade — resolvida em 2026-09-01
 
 Era a pendência 2, e ela estava **pior do que descrita**. O texto dizia "o mesmo

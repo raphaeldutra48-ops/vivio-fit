@@ -129,14 +129,21 @@ describe('RLS: vínculo de cuidado', () => {
     /*
       Não há política de INSERT nem de UPDATE: as funções são o único caminho.
 
-      As duas falham de jeitos DIFERENTES, e a diferença enganou este teste na
-      primeira escrita. INSERT sem política lança, porque o `with check` não
-      passa. UPDATE sem política **não lança**: ele simplesmente não alcança
-      linha nenhuma e devolve zero, calado. É o comportamento mais seguro dos
-      dois — nada muda — mas quem espera exceção lê o silêncio como sucesso.
+      As duas já falharam de jeitos DIFERENTES, e a diferença enganou este
+      teste na primeira escrita. INSERT sem política lança, porque o `with
+      check` não passa. UPDATE sem política NÃO lançava: não alcançava linha
+      nenhuma e devolvia zero, calado. Nada mudava — mas quem esperasse exceção
+      lia o silêncio como sucesso.
 
-      Por isso aqui a prova do UPDATE não é o erro: é a linha continuar como
-      estava.
+      Hoje as duas lançam, e a mudança foi de propósito: `99-fechar-portas.sql`
+      tira a permissão de escrita de toda tabela que não tem política para
+      aquele comando. Sem `grant update`, o Postgres recusa na porta em vez de
+      deixar entrar e não fazer nada.
+
+      Ainda assim a linha é conferida depois do erro. O erro prova que a porta
+      está fechada; a linha prova que nada passou por ela — e é a segunda
+      metade que continuaria valendo se um dia alguém devolvesse o `grant` sem
+      escrever a política junto.
     */
     await expect(
       como(
@@ -148,8 +155,11 @@ describe('RLS: vínculo de cuidado', () => {
     expect(await p.vinculo.count({ where: { id: `${marca}-direto` } })).toBe(0);
 
     const antes = await p.vinculo.findUniqueOrThrow({ where: { id: vinculoId } });
-    await como(alunoId, `update "Vinculo" set status='ATIVO' where id='${vinculoId}'`);
+    await expect(
+      como(alunoId, `update "Vinculo" set status='ATIVO' where id='${vinculoId}'`),
+    ).rejects.toThrow();
     const depois = await p.vinculo.findUniqueOrThrow({ where: { id: vinculoId } });
     expect(depois.status).toBe(antes.status);
   });
 });
+    // O aluno tentando ativar sozinho o vínculo que ainda está pendente.

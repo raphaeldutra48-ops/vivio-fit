@@ -167,6 +167,62 @@ drop policy if exists medida_escreve on public."Medida";
 create policy medida_escreve on public."Medida" for insert
   with check (public.pode_escrever_do_aluno("alunoId", 'EVOLUCAO', array[]::text[]));
 
+/*
+  E o UPDATE, que faltava desde sempre.
+
+  A tabela tem única por (aluno, data), e o SDK grava com `upsert`: pesar duas
+  vezes no mesmo dia é CORRIGIR a primeira pesagem, não criar uma segunda. Só o
+  INSERT tinha regra — e o lado do conflito, que é um UPDATE, batia na ausência
+  de política e voltava sem linha nenhuma.
+
+  Quem digitou 92 no lugar de 82 e tentou consertar recebia "Você não tem
+  acesso a este conteúdo" ao corrigir a PRÓPRIA medida que acabara de gravar.
+  A mensagem mandava investigar consentimento e vínculo, que estavam certos; o
+  que faltava era uma política que ninguém tinha escrito.
+
+  Vale a comparação com `RegistroRefeicao`, que tinha o mesmo furo: lá a
+  correção sumia calada, aqui ela acusa a pessoa errada. O furo é o mesmo — só
+  o INSERT tinha regra.
+
+  O `using` olha a linha que já está lá e o `with check` olha a que vai ficar —
+  os dois pelo mesmo consentimento, senão dava para mover a medida de um aluno
+  para outro trocando o `alunoId` na correção.
+*/
+drop policy if exists medida_altera on public."Medida";
+create policy medida_altera on public."Medida" for update
+  using (public.pode_escrever_do_aluno("alunoId", 'EVOLUCAO', array[]::text[]))
+  with check (public.pode_escrever_do_aluno("alunoId", 'EVOLUCAO', array[]::text[]));
+
+/*
+  `atualizadoEm` é `@updatedAt` no Prisma: NOT NULL e sem default no banco.
+  Pelo PostgREST não existe quem o preencha, e a correção que esquecesse a
+  coluna seria recusada por violação de nulo.
+*/
+create or replace function public.governar_medida()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $funcao$
+begin
+  new."atualizadoEm" := now();
+  if tg_op = 'UPDATE' then
+    -- A medida é do dia dela e do aluno dela; corrigir é corrigir os números.
+    new."alunoId" := old."alunoId";
+    new.data := old.data;
+    new."criadoEm" := old."criadoEm";
+  end if;
+  return new;
+end;
+$funcao$;
+
+drop trigger if exists governar_medida on public."Medida";
+create trigger governar_medida
+  before insert or update on public."Medida"
+  for each row execute function public.governar_medida();
+
+grant select, insert, update on public."Medida" to authenticated;
+
 drop policy if exists checkin_escreve on public."CheckinDiario";
 create policy checkin_escreve on public."CheckinDiario" for insert
   with check (public.pode_escrever_do_aluno("alunoId", 'EVOLUCAO', array[]::text[]));
