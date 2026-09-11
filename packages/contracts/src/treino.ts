@@ -80,6 +80,19 @@ export interface ExercicioResumo {
    */
   imagemCredito: string | null;
   videoCredito: string | null;
+  /**
+   * Player de vídeo hospedado fora — a PÁGINA do player, para abrir num iframe
+   * no site e numa WebView no aplicativo. Nunca é um arquivo: não entra em
+   * `<video>`.
+   *
+   * É o acervo do Prime: o arquivo deles não sai da conta deles, e o player
+   * oficial é o jeito autorizado de assistir. Vale só quando o exercício não
+   * tem vídeo próprio — ver `videoDeMaiorPrioridade`.
+   *
+   * Vem no resumo, e não por consulta à parte como o link assinado, porque não
+   * expira: o endereço do player é o mesmo amanhã.
+   */
+  videoExternoUrl: string | null;
 }
 
 /**
@@ -198,7 +211,7 @@ export type MidiaDeExerciciosInput = z.infer<typeof midiaDeExerciciosSchema>;
 /** Exercício sem mídia nenhuma não aparece no mapa — a tela trata a ausência. */
 export type MidiaDeExercicios = Record<
   string,
-  { imagemUrl: string | null; videoUrl: string | null }
+  { imagemUrl: string | null; videoUrl: string | null; videoExternoUrl: string | null }
 >;
 
 /**

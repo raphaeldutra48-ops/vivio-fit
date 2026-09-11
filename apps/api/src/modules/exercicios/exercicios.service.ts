@@ -6,10 +6,12 @@ import type {
   ExercicioAGravar,
   ExercicioResumo,
   GrupoMuscular,
+  MidiaDeExercicios,
   ListarExerciciosQuery,
   UrlAssinada,
   UsuarioAutenticado,
 } from '@vivio/contracts';
+import { playerExternoSeguro } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 import { MidiaService } from '../midia/midia.service';
@@ -27,6 +29,7 @@ interface LinhaExercicio {
   imagemChave?: string | null;
   imagemCredito?: string | null;
   videoCredito?: string | null;
+  videoExternoUrl?: string | null;
 }
 
 /**
@@ -54,6 +57,8 @@ function paraResumo(
     imagemUrl,
     imagemCredito: e.imagemCredito ?? null,
     videoCredito: e.videoCredito ?? null,
+    // Passa de novo pela lista de hosts: o valor vira `src` de iframe na tela.
+    videoExternoUrl: playerExternoSeguro(e.videoExternoUrl),
   };
 }
 
@@ -141,7 +146,7 @@ export class ExerciciosService {
   async midiaDeVarios(
     usuario: UsuarioAutenticado,
     ids: string[],
-  ): Promise<Record<string, { imagemUrl: string | null; videoUrl: string | null }>> {
+  ): Promise<MidiaDeExercicios> {
     const exercicios = await this.prisma.exercicio.findMany({
       where: {
         id: { in: ids },
@@ -149,12 +154,12 @@ export class ExerciciosService {
         // Mesma regra do link individual: ninguém alcança a biblioteca alheia.
         OR: [{ escopo: EscopoExercicio.GLOBAL }, { criadoPorId: usuario.id }],
       },
-      select: { id: true, imagemChave: true, videoChave: true },
+      select: { id: true, imagemChave: true, videoChave: true, videoExternoUrl: true },
     });
 
     const doProfissional = await this.demonstracoesParaEsteUsuario(usuario, ids);
 
-    const mapa: Record<string, { imagemUrl: string | null; videoUrl: string | null }> = {};
+    const mapa: MidiaDeExercicios = {};
     for (const e of exercicios) {
       /*
         A gravação do profissional que acompanha esta pessoa vence a do
@@ -162,10 +167,18 @@ export class ExerciciosService {
         prescreve e a voz que o aluno reconhece. O vídeo genérico é a reserva.
       */
       const chaveDeVideo = doProfissional.get(e.id) ?? e.videoChave;
-      if (!e.imagemChave && !chaveDeVideo) continue;
+      /*
+        O player de fora é a última reserva: só vai quando não há arquivo nosso
+        nenhum. Mandar os dois deixaria a escolha para cada tela — e bastaria
+        uma decidir diferente para o aluno ver a demonstração genérica por
+        cima da gravação do personal dele.
+      */
+      const externo = chaveDeVideo ? null : playerExternoSeguro(e.videoExternoUrl);
+      if (!e.imagemChave && !chaveDeVideo && !externo) continue;
       mapa[e.id] = {
         imagemUrl: e.imagemChave ? (await this.midia.urlDeLeitura(e.imagemChave)).url : null,
         videoUrl: chaveDeVideo ? (await this.midia.urlDeLeitura(chaveDeVideo)).url : null,
+        videoExternoUrl: externo,
       };
     }
     return mapa;
@@ -370,6 +383,7 @@ export class ExerciciosService {
         escopo: true,
         videoChave: true,
         imagemChave: true,
+        videoExternoUrl: true,
       },
     });
 
@@ -396,7 +410,8 @@ export class ExerciciosService {
           urgência: o aluno pelo menos vê o movimento. Sem nada, ele executa
           por adivinhação — e foi por isso que a gravação virou prioridade.
         */
-        temAlgumaReferencia: e.videoChave !== null || e.imagemChave !== null,
+        temAlgumaReferencia:
+          e.videoChave !== null || e.imagemChave !== null || e.videoExternoUrl !== null,
       }))
       .sort(
         (a, b) =>

@@ -98,7 +98,7 @@ function Lista({
             </div>
             <div className="flex items-center gap-md">
               {/*
-                Três estados, não dois. "Já gravei este" e "o acervo tem um
+                Estados distintos, não um "com vídeo". "Já gravei este" e "o acervo tem um
                 vídeo genérico" são coisas diferentes para quem está passando
                 por 159 exercícios — juntar as duas num "com vídeo" só faz
                 regravar o que já foi gravado.
@@ -114,6 +114,18 @@ function Lista({
                 <>
                   <Etiqueta texto="vídeo do acervo" cor="var(--vv-texto-secundario)" />
                   <Botao variante="neutra" onClick={() => void verVideo(e.id)}>
+                    Ver
+                  </Botao>
+                </>
+              ) : e.videoExternoUrl ? (
+                /*
+                  Quarto estado: a demonstração do Prime. Não é gravação do
+                  profissional nem arquivo do acervo, e ele precisa saber disso
+                  para decidir se grava a própria — a dele sempre vence.
+                */
+                <>
+                  <Etiqueta texto="vídeo do Prime" cor="var(--vv-texto-secundario)" />
+                  <Botao variante="neutra" onClick={() => setAberto(e.id)}>
                     Ver
                   </Botao>
                 </>

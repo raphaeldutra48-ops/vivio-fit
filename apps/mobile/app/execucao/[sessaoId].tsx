@@ -95,6 +95,15 @@ export default function Execucao() {
   /** URL assinada do vídeo em exibição, e se ela ainda está vindo. */
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [buscandoVideo, setBuscandoVideo] = useState(false);
+
+  /*
+    O player do acervo externo (Prime). A mídia pedida no começo do treino já
+    vem com a precedência resolvida pela API — só traz o player quando não há
+    vídeo nosso. Sem ela (sem rede no começo), vale o do plano em cache, e só
+    para exercício sem arquivo nosso.
+  */
+  const videoExternoDe = (e: ExercicioResumo): string | null =>
+    midia[e.id] ? midia[e.id]!.videoExternoUrl : e.temVideo ? null : e.videoExternoUrl;
   /** Segundos desde que o treino começou. Zera só ao sair da tela. */
   const [decorrido, setDecorrido] = useState(0);
   const [dor, setDor] = useState<RespostaDeDor>(DOR_VAZIA);
@@ -742,11 +751,17 @@ export default function Execucao() {
                   {item.exercicio.nome}
                 </Text>
 
-                {item.exercicio.temVideo && (
+                {(item.exercicio.temVideo || videoExternoDe(item.exercicio)) && (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Ver vídeo de ${item.exercicio.nome}`}
-                    onPress={() => void abrirVideo(item.exercicio)}
+                    // O vídeo nosso precisa de link assinado; o do player de fora,
+                    // não — abre direto na tela cheia.
+                    onPress={() =>
+                      item.exercicio.temVideo
+                        ? void abrirVideo(item.exercicio)
+                        : setAmpliado(item.exercicio)
+                    }
                     style={{
                       minHeight: alvoToqueMin,
                       paddingHorizontal: espacamento.md,
@@ -773,6 +788,7 @@ export default function Execucao() {
               <Demonstracao
                 exercicio={item.exercicio}
                 url={midia[item.exercicio.id]?.imagemUrl ?? null}
+                temVideoExterno={videoExternoDe(item.exercicio) !== null}
                 aoAmpliar={() => setAmpliado(item.exercicio)}
                 tema={tema}
               />
@@ -1147,6 +1163,7 @@ export default function Execucao() {
         exercicio={ampliado}
         url={ampliado ? (midia[ampliado.id]?.imagemUrl ?? null) : null}
         videoUrl={videoUrl}
+        videoExternoUrl={ampliado ? videoExternoDe(ampliado) : null}
         carregandoVideo={buscandoVideo}
         aoFechar={() => {
           setAmpliado(null);

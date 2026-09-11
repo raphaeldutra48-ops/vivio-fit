@@ -39,6 +39,7 @@ import {
   ordenarPorStatusDoPlano,
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
+  playerExternoSeguro,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
@@ -1453,7 +1454,7 @@ export class MotorSupabase {
   */
   private static readonly CAMPOS_EXERCICIO_DO_ITEM =
     'id,nome,grupoMuscular,equipamento,instrucoes,passos,escopo,videoChave,' +
-    'criadoPorId,imagemCredito,videoCredito';
+    'criadoPorId,imagemCredito,videoCredito,videoExternoUrl';
 
   /*
     `!PlanoTreino_personalId_fkey` porque o plano aponta DUAS vezes para `User`
@@ -1537,6 +1538,9 @@ export class MotorSupabase {
                 temDemonstracao: null,
                 imagemCredito: (e.imagemCredito as string | null) ?? null,
                 videoCredito: (e.videoCredito as string | null) ?? null,
+                // Vai no plano: o endereço do player não expira, ao contrário do
+                // link assinado. E passa pela lista de hosts antes de virar iframe.
+                videoExternoUrl: playerExternoSeguro(e.videoExternoUrl as string | null),
               } satisfies ExercicioResumo,
             };
           })
@@ -2028,7 +2032,8 @@ export class MotorSupabase {
       exercicioId: (m.exercicioId as string | null) ?? null,
       exercicioNome: (umSo(m.exercicio)?.nome as string | undefined) ?? null,
       valorInicial: n(m.valorInicial),
-      prazo: m.prazo === null || m.prazo === undefined ? null : String(m.prazo).slice(0, 10),
+      // `date` chega do PostgREST como texto `AAAA-MM-DD`; o corte tira hora, se vier.
+      prazo: m.prazo === null || m.prazo === undefined ? null : (m.prazo as string).slice(0, 10),
       observacao: (m.observacao as string | null) ?? null,
       criadoEm: instante(m.criadoEm),
       concluidaEm: instanteOuNulo(m.concluidaEm),

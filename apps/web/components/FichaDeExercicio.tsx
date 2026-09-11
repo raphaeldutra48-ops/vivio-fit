@@ -1,7 +1,9 @@
 'use client';
 
 import type { ExercicioResumo } from '@vivio/contracts';
+import { videoDeMaiorPrioridade } from '@vivio/contracts';
 import { useState } from 'react';
+import { PlayerExterno } from './PlayerExterno';
 import { Aviso, Botao, Cartao, Etiqueta } from './ui';
 
 type Aba = 'RESUMO' | 'INSTRUCOES';
@@ -30,6 +32,11 @@ export function FichaDeExercicio({
 }) {
   const temPassos = exercicio.passos.length > 0;
   const [aba, setAba] = useState<Aba>('RESUMO');
+  const video = videoDeMaiorPrioridade({
+    arquivoUrl: videoUrl,
+    temArquivo: exercicio.temVideo || exercicio.temDemonstracao === true,
+    playerUrl: exercicio.videoExternoUrl,
+  });
 
   return (
     <Cartao>
@@ -106,10 +113,11 @@ export function FichaDeExercicio({
           )}
 
           <div className="flex flex-wrap items-center gap-md">
-            {exercicio.temVideo ? (
+            {exercicio.temVideo || video?.tipo === 'PLAYER' ? (
               <>
                 <Etiqueta texto="com vídeo" cor="var(--vv-sucesso)" />
-                {aoPedirVideo && (
+                {/* O player de fora já está na tela; o botão é para buscar o arquivo nosso. */}
+                {aoPedirVideo && exercicio.temVideo && !videoUrl && (
                   <Botao variante="neutra" onClick={aoPedirVideo}>
                     Ver vídeo
                   </Botao>
@@ -122,14 +130,18 @@ export function FichaDeExercicio({
             )}
           </div>
 
-          {videoUrl && (
+          {video && (
             <figure className="flex flex-col gap-xs">
-              <video
-                controls
-                src={videoUrl}
-                className="w-full rounded-md"
-                style={{ maxHeight: 420, background: '#000' }}
-              />
+              {video.tipo === 'ARQUIVO' ? (
+                <video
+                  controls
+                  src={video.url}
+                  className="w-full rounded-md"
+                  style={{ maxHeight: 420, background: '#000' }}
+                />
+              ) : (
+                <PlayerExterno url={video.url} titulo={exercicio.nome} />
+              )}
               {exercicio.videoCredito && (
                 <figcaption className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
                   Vídeo: {exercicio.videoCredito}

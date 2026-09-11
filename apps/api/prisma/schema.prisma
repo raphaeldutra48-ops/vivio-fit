@@ -323,6 +323,14 @@ model Exercicio {
   videoCredito     String?
   videoOrigemUrl   String?
   /*
+    Player de vídeo hospedado fora: a PÁGINA do player, para iframe e WebView.
+    Nunca é arquivo — não vai para `<video>` nem passa pelo armazenamento.
+    É o acervo do Prime (autorizado), cujo arquivo não sai da conta deles; o
+    player oficial é o jeito de assistir sem baixar. Só aparece quando o
+    exercício não tem vídeo próprio: ver `videoDeMaiorPrioridade`.
+  */
+  videoExternoUrl  String?
+  /*
     Passo a passo de execução, um item por passo.
 
     Convive com `instrucoes` de propósito, porque servem a momentos

@@ -20,6 +20,7 @@
     "preparar-teste": "tsx prisma/preparar-teste.ts",
     "email-teste": "tsx src/ferramentas/enviar-email-teste.ts",
     "importar-wger": "tsx src/ferramentas/importar-wger.ts",
+    "vincular-prime": "tsx src/ferramentas/vincular-prime.ts",
     "importar-taco": "tsx prisma/importar-taco.ts",
     "migrar-supabase": "tsx prisma/migrar-para-supabase.ts",
     "lint": "eslint .",

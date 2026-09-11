@@ -8,7 +8,7 @@ import type {
   PlanoTreinoResumo,
   SessaoTreinoResumo,
 } from '@vivio/contracts';
-import { ordenarPlanosDeTreino } from '@vivio/contracts';
+import { ordenarPlanosDeTreino, playerExternoSeguro } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';
 
@@ -298,6 +298,11 @@ export class PlanosService {
           temDemonstracao: null,
           imagemCredito: i.exercicio.imagemCredito,
           videoCredito: i.exercicio.videoCredito,
+          /*
+            Este sim vai no plano: o endereço do player não expira, e o plano em
+            cache pode mostrar a demonstração assim que houver rede.
+          */
+          videoExternoUrl: playerExternoSeguro(i.exercicio.videoExternoUrl),
         } satisfies ExercicioResumo,
       })),
     }));

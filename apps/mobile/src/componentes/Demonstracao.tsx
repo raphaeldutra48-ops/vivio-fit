@@ -1,8 +1,10 @@
 import type { ExercicioResumo } from '@vivio/contracts';
+import { videoDeMaiorPrioridade } from '@vivio/contracts';
 import type { Tema } from '@vivio/ui-native';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { PlayerDeVideo } from './PlayerDeVideo';
+import { PlayerExterno } from './PlayerExterno';
 
 /**
  * A demonstração do movimento, dentro do treino.
@@ -20,11 +22,14 @@ import { PlayerDeVideo } from './PlayerDeVideo';
 export function Demonstracao({
   exercicio,
   url,
+  temVideoExterno = false,
   aoAmpliar,
   tema,
 }: {
   exercicio: ExercicioResumo;
   url: string | null;
+  /** Há demonstração em vídeo do acervo externo (Prime) para tocar ao ampliar. */
+  temVideoExterno?: boolean;
   aoAmpliar: () => void;
   tema: Tema;
 }) {
@@ -59,6 +64,38 @@ export function Demonstracao({
             {exercicio.imagemCredito ? ` · ${exercicio.imagemCredito}` : ''}
           </Text>
         </View>
+      </Pressable>
+    );
+  }
+
+  /*
+    Sem imagem, mas com o vídeo do Prime: o quadro chama para o vídeo. Sem
+    isto ele caía no "demonstração ainda não gravada" — afirmando que não há
+    demonstração justamente para um exercício que tem.
+  */
+  if (temVideoExterno) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Ver demonstração em vídeo de ${exercicio.nome}`}
+        onPress={aoAmpliar}
+        style={{
+          borderRadius: raio.md,
+          borderWidth: 1,
+          borderColor: tema.borda,
+          backgroundColor: tema.fundo,
+          padding: espacamento.md,
+          gap: espacamento.xs,
+        }}
+      >
+        <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
+          ▶ Ver demonstração em vídeo
+        </Text>
+        {exercicio.videoCredito ? (
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+            {exercicio.videoCredito}
+          </Text>
+        ) : null}
       </Pressable>
     );
   }
@@ -117,6 +154,7 @@ export function DemonstracaoAmpliada({
   exercicio,
   url,
   videoUrl,
+  videoExternoUrl,
   carregandoVideo,
   aoFechar,
   tema,
@@ -125,11 +163,23 @@ export function DemonstracaoAmpliada({
   url: string | null;
   /** URL assinada do vídeo. `null` quando não há vídeo ou ainda está vindo. */
   videoUrl?: string | null;
+  /** Página do player do acervo externo — só vale sem vídeo nosso. */
+  videoExternoUrl?: string | null;
   carregandoVideo?: boolean;
   aoFechar: () => void;
   tema: Tema;
 }) {
   if (!exercicio) return null;
+
+  /*
+    A mesma regra do site, na mesma função: arquivo nosso primeiro — inclusive
+    o que ainda está chegando —, e o player de fora só quando não há nenhum.
+  */
+  const video = videoDeMaiorPrioridade({
+    arquivoUrl: videoUrl,
+    temArquivo: exercicio.temVideo || carregandoVideo === true,
+    playerUrl: videoExternoUrl,
+  });
 
   return (
     <Modal visible animationType="slide" onRequestClose={aoFechar} transparent={false}>
@@ -171,9 +221,18 @@ export function DemonstracaoAmpliada({
             dúvida melhor, e quem já sabe o movimento rola direto para o passo
             a passo.
           */}
-          {(videoUrl || carregandoVideo) && (
+          {(video?.tipo === 'ARQUIVO' || carregandoVideo) && (
             <PlayerDeVideo
-              url={videoUrl ?? null}
+              url={video?.tipo === 'ARQUIVO' ? video.url : null}
+              nome={exercicio.nome}
+              credito={exercicio.videoCredito}
+              tema={tema}
+            />
+          )}
+
+          {video?.tipo === 'PLAYER' && (
+            <PlayerExterno
+              url={video.url}
               nome={exercicio.nome}
               credito={exercicio.videoCredito}
               tema={tema}
