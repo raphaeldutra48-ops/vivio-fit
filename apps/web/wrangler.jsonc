@@ -36,8 +36,15 @@
     chama `pnpm build` por dentro com `execSync`, e a chamada aninhada quebra
     por causa das variáveis `npm_config_*` que o pnpm externo injeta.
 
-    `turbo run build --filter=@vivio/web^...` compila antes os pacotes de que o
-    site depende (`contracts`, `sdk`, `ui`). O `package.json` deles aponta para
+    Pelo turbo, e não por `next build` direto, por dois motivos. Ele compila
+    antes os pacotes de que o site depende (`contracts`, `sdk`, `ui` — tarefa
+    `build:cloudflare` com `dependsOn: ^build`). E roda o script DENTRO de
+    `apps/web` qualquer que seja a pasta de onde foi chamado: rodando da raiz
+    do monorepo, `next build` direto procurava o site na raiz e falhava com
+    "Couldn't find any `pages` or `app` directory" — e `build.cwd` não
+    resolve, porque o wrangler o interpreta a partir de quem chamou.
+
+    Os pacotes internos apontam para
     `dist/`, que não vai para o GitHub: na máquina de quem desenvolve a pasta
     existe de um build anterior, e no servidor da Cloudflare, que começa do
     zero, o `next build` não acharia os pacotes.
@@ -47,7 +54,7 @@
     Node e acha os binários de `node_modules` nos dois ambientes.
   */
   "build": {
-    "command": "npx turbo run build --filter=@vivio/web^... && npx next build && npx opennextjs-cloudflare build --skipNextBuild"
+    "command": "npx turbo run build:cloudflare --filter=@vivio/web"
   },
 
   "assets": {

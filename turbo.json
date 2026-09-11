@@ -9,6 +9,10 @@
       "dependsOn": ["^build"]
     },
     "lint": {},
+    "build:cloudflare": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "test": {
       "dependsOn": ["^build"]
     },
