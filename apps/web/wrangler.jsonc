@@ -11,7 +11,10 @@
   // No painel, basta apontar **Root directory = apps/web**. O resto — inclusive
   // o build — está aqui, versionado junto do código.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "vivio-web",
+  // O nome TEM de ser o do Worker criado no painel, que é `vivio-fit`
+  // (vivio-fit.raphaeldutra48.workers.dev). Com outro nome, o deploy pelo
+  // GitHub não publica no Worker que o painel mostra.
+  "name": "vivio-fit",
   "main": ".open-next/worker.js",
   // Data fixa: subir sozinha mudaria o comportamento do runtime sem ninguém
   // pedir.
@@ -33,12 +36,18 @@
     chama `pnpm build` por dentro com `execSync`, e a chamada aninhada quebra
     por causa das variáveis `npm_config_*` que o pnpm externo injeta.
 
+    `turbo run build --filter=@vivio/web^...` compila antes os pacotes de que o
+    site depende (`contracts`, `sdk`, `ui`). O `package.json` deles aponta para
+    `dist/`, que não vai para o GitHub: na máquina de quem desenvolve a pasta
+    existe de um build anterior, e no servidor da Cloudflare, que começa do
+    zero, o `next build` não acharia os pacotes.
+
     `npx` e não `pnpm exec`: o wrangler roda este comando pelo shell do sistema,
     que no Windows é o `cmd` e não herda o PATH do terminal. O `npx` vem com o
     Node e acha os binários de `node_modules` nos dois ambientes.
   */
   "build": {
-    "command": "npx next build && npx opennextjs-cloudflare build --skipNextBuild"
+    "command": "npx turbo run build --filter=@vivio/web^... && npx next build && npx opennextjs-cloudflare build --skipNextBuild"
   },
 
   "assets": {
