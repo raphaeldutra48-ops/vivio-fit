@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sem conexão — Vívio Fit</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: #fafafa;
+        color: #2b2e33;
+      }
+      main { max-width: 34ch; text-align: center; }
+      img { width: 72px; height: 72px; }
+      h1 { font-size: 20px; margin: 16px 0 8px; }
+      p { margin: 0; color: #6b7280; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #14161a; color: #f3f4f6; }
+        p { color: #9ca3af; }
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Página curta de propósito: ela é guardada no aparelho e precisa abrir sem
+      rede nenhuma. Nada de fonte externa, imagem pesada ou script.
+    -->
+    <main>
+      <img src="/icone-192.png" alt="" />
+      <h1>Sem conexão</h1>
+      <p>
+        O treino que você já abriu continua disponível no aplicativo. Assim que a internet
+        voltar, esta tela sai sozinha.
+      </p>
+    </main>
+  </body>
+</html>

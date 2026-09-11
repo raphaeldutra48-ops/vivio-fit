@@ -1,11 +1,35 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { areaTemaClaro, areaTemaEscuro, temaClaro, temaEscuro, type Tema } from '@vivio/ui';
+import { RegistraAplicativo } from '../components/RegistraAplicativo';
 import { SessaoProvider } from '../lib/sessao';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Vívio Fit — Painel do profissional',
   description: 'Treino, nutrição e saúde integrados.',
+  /*
+    Instalado no iPhone, o site só abre sem a barra do Safari com este par —
+    o manifesto sozinho, que basta no Android, ali é ignorado.
+  */
+  appleWebApp: {
+    capable: true,
+    title: 'Vívio',
+    statusBarStyle: 'default',
+  },
+};
+
+export const viewport: Viewport = {
+  /*
+    Pinta a barra do sistema com a cor do app em vez do branco do navegador —
+    e segue o tema, porque a barra clara sobre tela escura é justamente o que
+    denuncia que aquilo "é um site".
+  */
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#0F9D6D' },
+    { media: '(prefers-color-scheme: dark)', color: '#14161A' },
+  ],
+  // Aproveita a tela inteira nos celulares com recorte na frente.
+  viewportFit: 'cover',
 };
 
 const emKebab = (chave: string) => chave.replace(/[A-Z]/g, (l) => `-${l.toLowerCase()}`);
@@ -76,6 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: scriptDoTema }} />
       </head>
       <body>
+        <RegistraAplicativo />
         <SessaoProvider>{children}</SessaoProvider>
       </body>
     </html>
