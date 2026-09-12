@@ -40,6 +40,8 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  ESCOPOS_ESSENCIAIS,
+  estaSumido,
   compararPorAtencao,
   marcarSequenciasDeDor,
   montarListaDeCompras,
@@ -64,6 +66,16 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  LinhaDoRelatorio,
+  RelatorioDaCarteira,
+  CompromissoDeHoje,
+  AutorizacaoPendente,
+  AlertaNoResumo,
+  AlunoSumido,
+  ResumoDoProfissional,
+  LadoDoComparativo,
+  FotoDoComparativo,
+  ComparativoDeEvolucao,
   FeedbackDoAluno,
   PainelDeFeedback,
   ListaDeCompras,
@@ -6438,6 +6450,472 @@ export class MotorSupabase {
       total: linhas.length,
       precisamDeOlhar,
       linhas: visiveis.sort(compararPorAtencao),
+    };
+  }
+
+  // --- comparativo de evolução ----------------------------------------------
+
+  /*
+    Tolerância ao redor da data-alvo do "antes".
+
+    Ninguém se mede exatamente 60 dias antes. Sem uma janela, o comparativo de
+    quem mediu no dia 57 viria vazio — e a pessoa concluiria que o app perdeu os
+    dados dela.
+  */
+  private static readonly JANELA_DO_ANTES_DIAS = 21;
+
+  private static readonly CAMPOS_LADO =
+    'data,pesoKg,percentualGordura,massaMagraKg,cinturaCm,quadrilCm,bracoCm,coxaCm,toraxCm';
+
+  /**
+   * O documento que a pessoa leva para casa: antes, agora e a diferença.
+   *
+   * As fotos entram quando o aluno as liberou — e quem decide isso é a política
+   * `fotoevolucao_le`, a mesma que vale na tela de evolução. Um comparativo
+   * bonito não é motivo para furar a escolha dela: sem liberação, o documento
+   * sai só com os números.
+   */
+  async montarComparativo(alunoId: string, dias: number): Promise<ComparativoDeEvolucao> {
+    const aluno = this.ou(
+      await this.db
+        .from('User')
+        .select('id,nome')
+        .eq('id', alunoId)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as { id: string; nome: string } | null;
+    if (!aluno) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Aluno não encontrado.', 404);
+
+    const agoraEm = new Date();
+    const alvoDoAntes = new Date(agoraEm.getTime() - dias * 86400000);
+    const janela = MotorSupabase.JANELA_DO_ANTES_DIAS * 86400000;
+    const dia = (t: number): string => new Date(t).toISOString().slice(0, 10);
+
+    const [respostaAgora, respostaAntes, fotosAgora, fotosAntes, treino] = await Promise.all([
+      this.db
+        .from('Medida')
+        .select(MotorSupabase.CAMPOS_LADO)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false })
+        .limit(1),
+      /*
+        A medição mais recente DENTRO da janela em torno do alvo — não a mais
+        antiga que existir. A mais antiga faria um aluno de dois anos de casa
+        comparar hoje com o primeiro dia, o que não é um comparativo de 60 dias.
+      */
+      this.db
+        .from('Medida')
+        .select(MotorSupabase.CAMPOS_LADO)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .gte('data', dia(alvoDoAntes.getTime() - janela))
+        .lte('data', dia(alvoDoAntes.getTime() + janela))
+        .order('data', { ascending: false })
+        .limit(1),
+      this.fotosProximasDe(alunoId, agoraEm),
+      this.fotosProximasDe(alunoId, alvoDoAntes),
+      this.resumoDeTreinoDesde(alunoId, alvoDoAntes),
+    ]);
+
+    const antes = MotorSupabase.paraLadoDoComparativo(
+      (this.ou(respostaAntes) as unknown as Record<string, unknown>[])[0],
+      fotosAntes,
+    );
+    const nova = MotorSupabase.paraLadoDoComparativo(
+      (this.ou(respostaAgora) as unknown as Record<string, unknown>[])[0],
+      fotosAgora,
+    );
+
+    /**
+     * `null` quando falta um dos lados — e não zero.
+     *
+     * Zero significaria "não mudou", que é uma afirmação sobre o corpo da
+     * pessoa. Ausência de medida é ausência, e o documento vai para a mão dela.
+     */
+    const delta = (a: number | null, b: number | null): number | null =>
+      a === null || b === null ? null : Number((b - a).toFixed(1));
+
+    return {
+      dias,
+      aluno,
+      antes,
+      agora: nova,
+      diferenca: {
+        pesoKg: delta(antes.pesoKg, nova.pesoKg),
+        percentualGordura: delta(antes.percentualGordura, nova.percentualGordura),
+        massaMagraKg: delta(antes.massaMagraKg, nova.massaMagraKg),
+        cinturaCm: delta(antes.cinturaCm, nova.cinturaCm),
+        quadrilCm: delta(antes.quadrilCm, nova.quadrilCm),
+        bracoCm: delta(antes.bracoCm, nova.bracoCm),
+        coxaCm: delta(antes.coxaCm, nova.coxaCm),
+        toraxCm: delta(antes.toraxCm, nova.toraxCm),
+      },
+      treino,
+      geradoEm: agoraEm.toISOString(),
+    };
+  }
+
+  private static paraLadoDoComparativo(
+    m: Record<string, unknown> | undefined,
+    fotos: FotoDoComparativo[],
+  ): LadoDoComparativo {
+    return {
+      data: m ? String(m.data).slice(0, 10) : null,
+      pesoKg: n(m?.pesoKg),
+      percentualGordura: n(m?.percentualGordura),
+      massaMagraKg: n(m?.massaMagraKg),
+      cinturaCm: n(m?.cinturaCm),
+      quadrilCm: n(m?.quadrilCm),
+      bracoCm: n(m?.bracoCm),
+      coxaCm: n(m?.coxaCm),
+      toraxCm: n(m?.toraxCm),
+      fotos,
+    };
+  }
+
+  /**
+   * Uma foto por ângulo, a mais próxima da data.
+   *
+   * Sem filtro de visibilidade nesta consulta, e é de propósito: quem recorta é
+   * a política, que confere a lista `visivelPara` que o aluno definiu foto a
+   * foto. Repetir a regra aqui seria a segunda cópia que um dia diverge — e
+   * seria justo a cópia do lado que o aluno não controla.
+   */
+  private async fotosProximasDe(alunoId: string, alvo: Date): Promise<FotoDoComparativo[]> {
+    const janela = MotorSupabase.JANELA_DO_ANTES_DIAS * 86400000;
+    const dia = (t: number): string => new Date(t).toISOString().slice(0, 10);
+
+    const candidatas = this.ou(
+      await this.db
+        .from('FotoEvolucao')
+        .select('id,data,angulo,chaveArquivo')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .gte('data', dia(alvo.getTime() - janela))
+        .lte('data', dia(alvo.getTime() + janela))
+        .order('data', { ascending: false }),
+    ) as unknown as { id: string; data: string; angulo: string; chaveArquivo: string }[];
+
+    const distancia = (d: string): number =>
+      Math.abs(new Date(`${d}T00:00:00Z`).getTime() - alvo.getTime());
+
+    const porAngulo = new Map<string, (typeof candidatas)[number]>();
+    for (const f of candidatas) {
+      const atual = porAngulo.get(f.angulo);
+      if (!atual || distancia(f.data) < distancia(atual.data)) porAngulo.set(f.angulo, f);
+    }
+
+    const escolhidas = [...porAngulo.values()];
+    const urls = await this.urlsDeLeitura(escolhidas.map((f) => f.chaveArquivo));
+
+    return escolhidas
+      .filter((f) => urls.has(f.chaveArquivo))
+      .map((f) => ({
+        id: f.id,
+        data: f.data.slice(0, 10),
+        angulo: f.angulo as FotoDoComparativo['angulo'],
+        url: urls.get(f.chaveArquivo)!,
+      }));
+  }
+
+  /** O esforço que explica o resultado — sem isso o documento é só o corpo. */
+  private async resumoDeTreinoDesde(
+    alunoId: string,
+    de: Date,
+  ): Promise<ComparativoDeEvolucao['treino']> {
+    const execucoes = this.ou(
+      await this.db
+        .from('ExecucaoTreino')
+        .select('duracaoSeg,series:SerieExecutada(cargaKg,repsFeitas,tipo)')
+        .eq('alunoId', alunoId)
+        .gte('iniciadoEm', de.toISOString()),
+    ) as unknown as {
+      duracaoSeg: number | null;
+      series: { cargaKg: string | number; repsFeitas: number; tipo: string }[] | null;
+    }[];
+
+    // `null` e não zero: "nenhum treino no período" e "não olhamos o treino" se
+    // leem diferente num documento que a pessoa leva para casa.
+    if (execucoes.length === 0) return null;
+
+    const volume = execucoes.reduce(
+      (soma, e) =>
+        soma +
+        volumeKg(
+          (e.series ?? []).map((s) => ({
+            cargaKg: n(s.cargaKg) ?? 0,
+            repsFeitas: s.repsFeitas,
+            tipo: s.tipo as TipoSerie,
+          })),
+        ),
+      0,
+    );
+    const segundos = execucoes.reduce((s, e) => s + (e.duracaoSeg ?? 0), 0);
+
+    return {
+      sessoes: execucoes.length,
+      volumeKg: Number(volume.toFixed(2)),
+      minutos: Math.round(segundos / 60),
+    };
+  }
+
+  // --- painel do profissional -----------------------------------------------
+
+  /** Dias inteiros entre uma data e agora, nunca negativo. */
+  private static diasAte(quando: Date, agora: Date): number {
+    return Math.max(0, Math.floor((agora.getTime() - quando.getTime()) / 86400000));
+  }
+
+  /**
+   * A tela inicial do profissional.
+   *
+   * Duas restrições moldaram este método inteiro.
+   *
+   * **O consentimento.** Um resumo é, por definição, leitura de dado de muitos
+   * alunos de uma vez — o tipo de tela em que a regra de acesso costuma ser
+   * esquecida, porque não há um aluno na pergunta. Quem não autorizou TREINO
+   * não entra na lista de sumidos; quem não autorizou CLINICO não tem alerta
+   * lido. Nada disso é conferido aqui: os alertas vêm recortados pela política,
+   * e os sumidos por uma função que repete a mesma pergunta de sempre.
+   *
+   * **O número de consultas.** A tentação é buscar os alunos e depois perguntar
+   * por cada um; com sessenta alunos isso seriam sessenta e uma consultas a cada
+   * abertura da tela. São cinco, e cinco continuam sendo cinco com seiscentos.
+   */
+  async resumoDoProfissional(): Promise<ResumoDoProfissional> {
+    const eu = await this.usuarioAtual();
+    if (!eu) throw new ErroApi('NAO_AUTENTICADO', 'Sua sessão expirou. Entre de novo.', 401);
+
+    const agora = new Date();
+    const inicioDeHoje = new Date(agora);
+    inicioDeHoje.setHours(0, 0, 0, 0);
+    const amanha = new Date(inicioDeHoje);
+    amanha.setDate(amanha.getDate() + 1);
+
+    const [
+      respostaVinculos,
+      respostaPendentes,
+      respostaAlertas,
+      respostaAgenda,
+      ultimoTreino,
+      escopos,
+    ] = await Promise.all([
+      this.db
+        .from('Vinculo')
+        .select('alunoId,iniciadoEm,criadoEm,aluno:User!Vinculo_alunoId_fkey(nome)')
+        .eq('profissionalId', eu.id)
+        .eq('status', 'ATIVO'),
+      this.db
+        .from('Vinculo')
+        .select('id', { count: 'exact', head: true })
+        .eq('profissionalId', eu.id)
+        .eq('status', 'PENDENTE'),
+      /*
+        Alertas do MEU papel, não reconhecidos. O personal entra aqui de
+        propósito: ele não vê marcador de exame nenhum, e por isso precisa
+        receber a orientação já derivada. O que ele não pode ver é o número que
+        a originou — e não vê, porque o alerta carrega título e orientação,
+        nunca o resultado.
+
+        Teto de dez: um resumo com quarenta alertas deixa de ser resumo, e quem
+        tem mais que isso abre a ficha do aluno.
+      */
+      this.db
+        .from('AlertaClinico')
+        .select('id,alunoId,titulo,severidade,criadoEm,aluno:User!AlertaClinico_alunoId_fkey(nome)')
+        .eq('papelDestino', eu.papel)
+        .is('reconhecidoEm', null)
+        .order('criadoEm', { ascending: false })
+        .limit(10),
+      /*
+        Compromissos de hoje. Cancelado fica de fora; "não compareceu" fica
+        dentro, porque é justamente o que o profissional precisa ver para
+        decidir se cobra ou remarca.
+      */
+      this.db
+        .from('Compromisso')
+        .select('id,inicioEm,tipo,status,aluno:User!Compromisso_alunoId_fkey(nome)')
+        .eq('profissionalId', eu.id)
+        .gte('inicioEm', inicioDeHoje.toISOString())
+        .lt('inicioEm', amanha.toISOString())
+        .neq('status', 'CANCELADO')
+        .order('inicioEm', { ascending: true }),
+      this.rpc<{ alunoId: string; ultimoEm: string | null }[]>('ultimo_treino_da_carteira'),
+      this.rpc<{ alunoId: string; escopo: string }[]>('escopos_da_carteira'),
+    ]);
+
+    const vinculos = this.ou(respostaVinculos) as unknown as {
+      alunoId: string;
+      iniciadoEm: string | null;
+      criadoEm: string;
+      aluno: unknown;
+    }[];
+    const convitesPendentes = (respostaPendentes as { count: number | null }).count ?? 0;
+
+    const autorizados = new Map<string, Set<string>>();
+    for (const c of escopos) {
+      const atual = autorizados.get(c.alunoId) ?? new Set<string>();
+      atual.add(c.escopo);
+      autorizados.set(c.alunoId, atual);
+    }
+
+    const ultimoPorAluno = new Map(ultimoTreino.map((u) => [u.alunoId, u.ultimoEm]));
+    const nomeDe = (v: { aluno: unknown }): string =>
+      ((umSo(v.aluno) as { nome?: string } | null)?.nome ?? '');
+
+    const sumidos: AlunoSumido[] = vinculos
+      // A função já devolve só quem autorizou TREINO — de quem não autorizou, o
+      // app não sabe se sumiu, e listar como sumido afirmaria o que não se mediu.
+      .filter((v) => ultimoPorAluno.has(v.alunoId))
+      .map((v) => {
+        const ultimo = ultimoPorAluno.get(v.alunoId) ?? null;
+        // `iniciadoEm` nulo não deveria acontecer em vínculo ATIVO, mas a coluna
+        // é opcional: cair no `criadoEm` é mais honesto que assumir.
+        const desde = new Date(instante(v.iniciadoEm ?? v.criadoEm));
+        return {
+          alunoId: v.alunoId,
+          nome: nomeDe(v),
+          diasSemTreinar:
+            ultimo === null ? null : MotorSupabase.diasAte(new Date(instante(ultimo)), agora),
+          diasDeVinculo: MotorSupabase.diasAte(desde, agora),
+        };
+      })
+      .filter((a) => estaSumido(a.diasSemTreinar, a.diasDeVinculo))
+      // Mais tempo sumido primeiro: é quem corre mais risco de destravar o
+      // vínculo antes de o profissional perceber.
+      .sort((a, b) => (b.diasSemTreinar ?? b.diasDeVinculo) - (a.diasSemTreinar ?? a.diasDeVinculo));
+
+    const alertas: AlertaNoResumo[] = (
+      this.ou(respostaAlertas) as unknown as Record<string, unknown>[]
+    ).map((a) => ({
+      alertaId: a.id as string,
+      alunoId: a.alunoId as string,
+      alunoNome: (umSo(a.aluno) as { nome?: string } | null)?.nome ?? '',
+      titulo: a.titulo as string,
+      severidade: a.severidade as string,
+      criadoEm: instante(a.criadoEm),
+    }));
+
+    /*
+      Quem está travado esperando autorização — a linha que nenhum concorrente
+      tem, porque nenhum deles tem consentimento por escopo. Sem isto, o
+      profissional descobre o bloqueio ao abrir a ficha e encontrar o botão
+      desligado, e a conclusão natural é "o app está quebrado".
+    */
+    const essenciais = ESCOPOS_ESSENCIAIS[eu.papel] ?? [];
+    const autorizacoesPendentes: AutorizacaoPendente[] = vinculos
+      .map((v) => ({
+        alunoId: v.alunoId,
+        nome: nomeDe(v),
+        faltando: essenciais.filter((e) => !(autorizados.get(v.alunoId)?.has(e) ?? false)),
+      }))
+      .filter((p) => p.faltando.length > 0);
+
+    const agendaDeHoje: CompromissoDeHoje[] = (
+      this.ou(respostaAgenda) as unknown as Record<string, unknown>[]
+    ).map((c) => ({
+      id: c.id as string,
+      alunoNome: (umSo(c.aluno) as { nome?: string } | null)?.nome ?? '',
+      inicioEm: instante(c.inicioEm),
+      tipo: c.tipo as string,
+      status: c.status as string,
+    }));
+
+    return {
+      alunosAtivos: vinculos.length,
+      convitesPendentes,
+      sumidos,
+      alertas,
+      autorizacoesPendentes,
+      agendaDeHoje,
+    };
+  }
+
+  // --- relatório da carteira ------------------------------------------------
+
+  /**
+   * Panorama da carteira.
+   *
+   * Cruza treino, evolução e nutrição — e cada um tem escopo próprio. O que a
+   * pessoa não autorizou vem NULO, e não zero: zero seria mentira, e mostrar o
+   * dado seria vazamento. Quem apaga cada coluna é a função do banco, campo a
+   * campo; aqui só se monta a leitura.
+   */
+  async relatorioDaCarteira(dias: number): Promise<RelatorioDaCarteira> {
+    const ate = new Date();
+    const de = new Date(ate.getTime() - dias * 86400000);
+    const arredondar1 = (v: number): number => Math.round(v * 10) / 10;
+
+    const bruto = await this.rpc<
+      {
+        alunoId: string;
+        nome: string;
+        veTreino: boolean;
+        veEvolucao: boolean;
+        veNutricao: boolean;
+        treinosNoPeriodo: number;
+        ultimoTreinoEm: string | null;
+        pesoInicialKg: string | null;
+        pesoAtualKg: string | null;
+        medidasNoPeriodo: number;
+        refeicoesNoPeriodo: number;
+        refeicoesFeitas: number;
+        ultimoCheckinEm: string | null;
+      }[]
+    >('relatorio_da_carteira', { p_dias: dias });
+
+    const linhas: LinhaDoRelatorio[] = bruto.map((l) => {
+      const inicial = n(l.pesoInicialKg);
+      const atual = n(l.pesoAtualKg);
+      const ultimoTreino = l.ultimoTreinoEm ? new Date(instante(l.ultimoTreinoEm)) : null;
+      const ultimoCheckin = l.ultimoCheckinEm ? new Date(`${l.ultimoCheckinEm}T00:00:00Z`) : null;
+
+      return {
+        alunoId: l.alunoId,
+        nome: l.nome,
+        autorizou: { treino: l.veTreino, evolucao: l.veEvolucao, nutricao: l.veNutricao },
+
+        treinosNoPeriodo: l.veTreino ? Number(l.treinosNoPeriodo) : null,
+        ultimoTreinoEm: ultimoTreino ? ultimoTreino.toISOString() : null,
+        diasSemTreinar: ultimoTreino ? MotorSupabase.diasAte(ultimoTreino, ate) : null,
+
+        pesoInicialKg: inicial,
+        pesoAtualKg: atual,
+        /*
+          Variação só com DUAS medidas: com uma só, inicial e atual são a mesma
+          linha, e a diferença seria sempre zero — "não mudou nada" dito sobre
+          quem se pesou uma vez.
+        */
+        variacaoPesoKg:
+          inicial !== null && atual !== null && Number(l.medidasNoPeriodo) > 1
+            ? arredondar1(atual - inicial)
+            : null,
+
+        adesaoDietaPercentual:
+          Number(l.refeicoesNoPeriodo) > 0
+            ? Math.round((Number(l.refeicoesFeitas) / Number(l.refeicoesNoPeriodo)) * 100)
+            : null,
+
+        diasSemCheckin: ultimoCheckin ? MotorSupabase.diasAte(ultimoCheckin, ate) : null,
+      };
+    });
+
+    const comTreino = linhas.filter((l) => l.autorizou.treino);
+    const treinosNoPeriodo = comTreino.reduce((s, l) => s + (l.treinosNoPeriodo ?? 0), 0);
+
+    return {
+      dias,
+      de: de.toISOString().slice(0, 10),
+      ate: ate.toISOString().slice(0, 10),
+      totalAlunos: linhas.length,
+      alunosQueTreinaram: comTreino.filter((l) => (l.treinosNoPeriodo ?? 0) > 0).length,
+      treinosNoPeriodo,
+      // A média é sobre quem AUTORIZOU, não sobre a carteira inteira: dividir
+      // pelo total faria a média cair por causa de quem o app não pode medir.
+      mediaTreinosPorAluno:
+        comTreino.length > 0 ? arredondar1(treinosNoPeriodo / comTreino.length) : 0,
+      linhas,
     };
   }
 }

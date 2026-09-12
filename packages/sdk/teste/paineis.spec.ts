@@ -302,6 +302,57 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: painéis', () => {
     );
   });
 
+  it('o resumo separa quem sumiu de quem não autorizou', async () => {
+    const r = await personal.resumo.doProfissional();
+
+    expect(r.alunosAtivos).toBeGreaterThanOrEqual(2);
+
+    /*
+      O aluno sem consentimento de TREINO não pode aparecer como sumido: de
+      quem não autorizou, o app NÃO SABE se sumiu, e listar como sumido
+      afirmaria o que não se mediu. Ele aparece em `autorizacoesPendentes`, que
+      é a informação verdadeira e a que leva a uma ação possível.
+    */
+    expect(r.sumidos.map((a) => a.alunoId)).not.toContain(semConsentimento);
+    expect(r.autorizacoesPendentes.map((a) => a.alunoId)).toContain(semConsentimento);
+    const pendente = r.autorizacoesPendentes.find((a) => a.alunoId === semConsentimento)!;
+    expect(pendente.faltando).toContain('TREINO');
+
+    // E quem autorizou e treinou há um dia também não é sumido.
+    expect(r.sumidos.map((a) => a.alunoId)).not.toContain(comConsentimento);
+    expect(r.autorizacoesPendentes.map((a) => a.alunoId)).not.toContain(comConsentimento);
+  });
+
+  it('o relatório deixa em branco o que o aluno não autorizou', async () => {
+    const r = await personal.relatorios.carteira(30);
+
+    const comAcesso = r.linhas.find((l) => l.alunoId === comConsentimento)!;
+    const semAcesso = r.linhas.find((l) => l.alunoId === semConsentimento)!;
+
+    // Os dois aparecem: ambos são da carteira, e a tela precisa dizer o que
+    // falta autorizar.
+    expect(comAcesso).toBeDefined();
+    expect(semAcesso).toBeDefined();
+
+    expect(comAcesso.autorizou.treino).toBe(true);
+    expect(comAcesso.treinosNoPeriodo).toBe(3);
+    expect(comAcesso.diasSemTreinar).toBeLessThanOrEqual(2);
+
+    /*
+      Branco, e não zero. Zero diria "este aluno não treinou", que é uma
+      afirmação sobre ele — e o app não tem como saber: ele treinou três vezes
+      e não autorizou ninguém a contar.
+    */
+    expect(semAcesso.autorizou.treino).toBe(false);
+    expect(semAcesso.treinosNoPeriodo).toBeNull();
+    expect(semAcesso.ultimoTreinoEm).toBeNull();
+    expect(semAcesso.pesoAtualKg).toBeNull();
+
+    // A média é sobre quem autorizou: dividir pela carteira inteira faria a
+    // média cair por causa de quem o app não pode medir.
+    expect(r.mediaTreinosPorAluno).toBeGreaterThan(0);
+  });
+
   it('sem plano ativo, a lista de compras diz isso em vez de vir vazia', async () => {
     const erro = await personal.listaDeCompras
       .gerar(comConsentimento, 7)

@@ -809,9 +809,7 @@ export class VivioClient {
   readonly comparativo = {
     /** Antes e depois de 30, 60, 90 ou 120 dias. */
     montar: (alunoId: string, dias = 60): Promise<ComparativoDeEvolucao> =>
-      this.requisicao<ComparativoDeEvolucao>(`/alunos/${alunoId}/comparativo`, {
-        query: { dias },
-      }),
+      this.supabase.montarComparativo(alunoId, dias),
   };
 
   readonly metas = {
@@ -841,7 +839,7 @@ export class VivioClient {
      * do servidor, porque cada volta paga a latencia da rede inteira.
      */
     doProfissional: (): Promise<ResumoDoProfissional> =>
-      this.requisicao<ResumoDoProfissional>('/resumo'),
+      this.supabase.resumoDoProfissional(),
   };
 
   readonly progresso = {
@@ -1135,8 +1133,8 @@ export class VivioClient {
 
   readonly relatorios = {
     /** Cada linha traz só o que aquele aluno autorizou este profissional a ver. */
-    carteira: (dias?: number): Promise<RelatorioDaCarteira> =>
-      this.requisicao<RelatorioDaCarteira>('/relatorios/carteira', { query: { dias } }),
+    carteira: (dias = 30): Promise<RelatorioDaCarteira> =>
+      this.supabase.relatorioDaCarteira(dias),
   };
 
   // --- anamnese -------------------------------------------------------------
