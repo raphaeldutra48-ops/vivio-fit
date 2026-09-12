@@ -17,7 +17,6 @@ import {
   type RegistrarPagamentoInput,
   type ResumoFinanceiro,
   type SalvarPagamentoInput,
-  type SituacaoCobranca,
   type TipoChavePix,
 } from '@vivio/contracts';
 import { randomUUID } from 'node:crypto';

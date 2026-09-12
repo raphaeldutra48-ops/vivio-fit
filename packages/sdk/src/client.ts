@@ -3,12 +3,11 @@ import type {
   AcessoRegistrado,
   AnterioresDaSessao,
   AtualizarExercicioInput,
-  AutorizacaoDeUpload,
   FotoEvolucaoResumo,
   HistoricoCarga,
-  PedirUploadInput,
   RegistrarFotoInput,
   UrlAssinada,
+  TipoMidia,
   ConcederConsentimentoInput,
   CriarExercicioInput,
   CriarPlanoTreinoInput,
@@ -473,39 +472,30 @@ export class VivioClient {
 
   readonly exercicios = {
     listar: (consulta: Partial<ListarExerciciosQuery> = {}): Promise<ExercicioResumo[]> =>
-      this.requisicao<ExercicioResumo[]>('/exercicios', {
-        query: { q: consulta.q, grupoMuscular: consulta.grupoMuscular, limit: consulta.limit },
-      }),
+      this.supabase.listarExercicios(consulta),
 
-    obter: (id: string): Promise<ExercicioResumo> =>
-      this.requisicao<ExercicioResumo>(`/exercicios/${id}`),
+    obter: (id: string): Promise<ExercicioResumo> => this.supabase.obterExercicio(id),
 
     criar: (dados: CriarExercicioInput): Promise<ExercicioResumo> =>
-      this.requisicao<ExercicioResumo>('/exercicios', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarExercicio(dados),
 
     atualizar: (id: string, dados: AtualizarExercicioInput): Promise<ExercicioResumo> =>
-      this.requisicao<ExercicioResumo>(`/exercicios/${id}`, { metodo: 'PATCH', corpo: dados }),
+      this.supabase.atualizarExercicio(id, dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/exercicios/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerExercicio(id),
 
-    /** Vincula ao exercício um vídeo já enviado via `midia.enviarArquivo`. */
+    /** Vincula ao exercício um vídeo já enviado via `midia.enviar`. */
     vincularVideo: (id: string, chave: string): Promise<ExercicioResumo> =>
-      this.requisicao<ExercicioResumo>(`/exercicios/${id}/video`, {
-        metodo: 'PATCH',
-        corpo: { chave },
-      }),
+      this.supabase.vincularVideo(id, chave),
 
     /** Demonstração de vários de uma vez — pedida no começo do treino. */
-    midia: (ids: string[]): Promise<MidiaDeExercicios> =>
-      this.requisicao<MidiaDeExercicios>('/exercicios/midia', { metodo: 'POST', corpo: { ids } }),
+    midia: (ids: string[]): Promise<MidiaDeExercicios> => this.supabase.midiaDeExercicios(ids),
 
     /** Grava a demonstração do profissional; só os alunos dele veem. */
     gravarDemonstracao: (id: string, chave: string): Promise<void> =>
-      this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'POST', corpo: { chave } }),
+      this.supabase.gravarDemonstracao(id, chave),
 
-    removerDemonstracao: (id: string): Promise<void> =>
-      this.requisicao<void>(`/exercicios/${id}/minha-demonstracao`, { metodo: 'DELETE' }),
+    removerDemonstracao: (id: string): Promise<void> => this.supabase.removerDemonstracao(id),
 
     /**
      * Transcreve um plano alimentar em PDF ou foto. Devolve RASCUNHO — nada é
@@ -519,11 +509,9 @@ export class VivioClient {
       this.requisicao<LeituraDeDieta>('/importacao-dieta', { metodo: 'POST', corpo: dados }),
 
     /** A fila de gravação: o que falta, do mais prescrito para o menos. */
-    planoDeGravacao: (): Promise<ExercicioAGravar[]> =>
-      this.requisicao<ExercicioAGravar[]>('/exercicios/plano-de-gravacao'),
+    planoDeGravacao: (): Promise<ExercicioAGravar[]> => this.supabase.planoDeGravacao(),
 
-    urlDoVideo: (id: string): Promise<UrlAssinada> =>
-      this.requisicao<UrlAssinada>(`/exercicios/${id}/video`),
+    urlDoVideo: (id: string): Promise<UrlAssinada> => this.supabase.urlDoVideoDoExercicio(id),
   };
 
   // --- planos de treino ---------------------------------------------------
@@ -576,23 +564,20 @@ export class VivioClient {
   // --- mídia ---------------------------------------------------------------
 
   readonly midia = {
-    autorizarUpload: (dados: PedirUploadInput): Promise<AutorizacaoDeUpload> =>
-      this.requisicao<AutorizacaoDeUpload>('/midia/upload-url', { metodo: 'POST', corpo: dados }),
-
     /**
-     * Envia o arquivo direto ao storage usando a autorização.
-     * Não passa pelo `requisicao` porque o destino pode ser o bucket, não a API.
+     * Envia o arquivo e devolve a chave que o registro guarda.
+     *
+     * Era em duas etapas — pedir autorização à API, depois fazer o PUT no
+     * endereço que ela devolvia. As duas viraram uma: quem monta o endereço é o
+     * cliente, e quem confere se pode gravar ali é a política do compartimento.
+     * A conferência não sumiu, mudou de lugar — e agora está num lugar que um
+     * cliente adulterado não contorna.
      */
-    enviarArquivo: async (autorizacao: AutorizacaoDeUpload, arquivo: Blob): Promise<void> => {
-      const resposta = await this.fetchImpl(autorizacao.urlUpload, {
-        method: autorizacao.metodo,
-        headers: autorizacao.cabecalhos,
-        body: arquivo,
-      });
-      if (!resposta.ok) {
-        throw new ErroApi('ERRO_INTERNO', 'Falha ao enviar o arquivo.', resposta.status);
-      }
-    },
+    enviar: (tipo: TipoMidia, arquivo: Blob, mimeType?: string): Promise<string> =>
+      this.supabase.enviarMidia(tipo, arquivo, mimeType),
+
+    /** Link de leitura de um arquivo guardado. */
+    urlDeLeitura: (chave: string): Promise<UrlAssinada> => this.supabase.urlDeLeitura(chave),
   };
 
   // --- fotos de evolução ----------------------------------------------------

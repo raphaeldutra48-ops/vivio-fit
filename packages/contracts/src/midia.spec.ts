@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { comoDemonstracao, playerExternoSeguro, videoDeMaiorPrioridade } from './midia';
+import {
+  caminhoDeMidia,
+  chaveDeMidia,
+  comoDemonstracao,
+  partesDaChave,
+  playerExternoSeguro,
+  urlPublicaDoCatalogo,
+  videoDeMaiorPrioridade,
+} from './midia';
 
 /**
  * O endereço do player vem do banco e vira `src` de iframe e de WebView. O que
@@ -73,5 +81,47 @@ describe('qual vídeo tocar', () => {
     // O site só busca o link ao clicar em "Ver vídeo". Até lá, nada de player
     // genérico por cima da gravação do personal.
     expect(videoDeMaiorPrioridade({ temArquivo: true, playerUrl: bunny })).toBeNull();
+  });
+});
+
+describe('endereço do arquivo no Storage', () => {
+  it('a primeira pasta é o dono — é ela que a política lê', () => {
+    const caminho = caminhoDeMidia('user-1', 'image/png');
+    expect(caminho.startsWith('user-1/')).toBe(true);
+    expect(caminho.endsWith('.png')).toBe(true);
+  });
+
+  it('dois envios seguidos não se atropelam', () => {
+    const a = caminhoDeMidia('user-1', 'image/png');
+    const b = caminhoDeMidia('user-1', 'image/png');
+    expect(a).not.toBe(b);
+  });
+
+  it('cada tipo cai no seu compartimento', () => {
+    expect(chaveDeMidia('FOTO_EVOLUCAO', 'u', 'image/jpeg').startsWith('evolucao/u/')).toBe(true);
+    expect(chaveDeMidia('LAUDO_EXAME', 'u', 'application/pdf').startsWith('exames/u/')).toBe(true);
+    expect(chaveDeMidia('VIDEO_EXERCICIO', 'u', 'video/mp4').startsWith('exercicios/u/')).toBe(true);
+  });
+
+  it('formato desconhecido vira .bin, e não quebra o envio', () => {
+    expect(caminhoDeMidia('u', 'application/sei-la').endsWith('.bin')).toBe(true);
+  });
+
+  it('desmonta a chave guardada, e recusa o que não dá para usar', () => {
+    expect(partesDaChave('evolucao/u1/foto.png')).toEqual({
+      compartimento: 'evolucao',
+      caminho: 'u1/foto.png',
+    });
+    for (const ruim of ['', null, undefined, 'sembarra', '/comeca-com-barra', 'termina/']) {
+      expect(partesDaChave(ruim), String(ruim)).toBeNull();
+    }
+  });
+
+  it('só o catálogo tem URL pública', () => {
+    expect(urlPublicaDoCatalogo('https://x.supabase.co', 'catalogo/exercicios/a.png')).toBe(
+      'https://x.supabase.co/storage/v1/object/public/catalogo/exercicios/a.png',
+    );
+    // Foto de evolução por URL pública seria dado de saúde aberto na internet.
+    expect(urlPublicaDoCatalogo('https://x.supabase.co', 'evolucao/u1/foto.png')).toBeNull();
   });
 });

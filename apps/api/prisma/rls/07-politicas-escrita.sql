@@ -261,10 +261,8 @@ drop policy if exists exercicio_escreve on public."Exercicio";
 create policy exercicio_escreve on public."Exercicio" for insert
   with check ("criadoPorId" = public.usuario_atual());
 
-drop policy if exists exercicio_altera on public."Exercicio";
-create policy exercicio_altera on public."Exercicio" for update
-  using ("criadoPorId" = public.usuario_atual() and escopo = 'PRIVADO')
-  with check ("criadoPorId" = public.usuario_atual() and escopo = 'PRIVADO');
+-- `exercicio_altera` está no arquivo 33, junto do gatilho que congela escopo e
+-- procedência — as duas metades da mesma regra, e separá-las fazia ler só uma.
 
 drop policy if exists modelocardapio_escreve on public."ModeloCardapio";
 create policy modelocardapio_escreve on public."ModeloCardapio" for all

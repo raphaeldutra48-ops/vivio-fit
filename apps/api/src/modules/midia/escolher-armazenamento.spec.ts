@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   escolherDriverDeMidia,
   faltandoParaR2,
+  faltandoParaSupabase,
   midiaEmDiscoPersistente,
 } from './escolher-armazenamento';
 
@@ -52,7 +53,41 @@ describe('faltandoParaR2', () => {
   });
 });
 
+const SUPABASE_COMPLETO = {
+  SUPABASE_URL: 'https://projeto.supabase.co',
+  SUPABASE_SERVICE_ROLE: 'chave-de-servico',
+};
+
 describe('escolherDriverDeMidia', () => {
+  /*
+    A ordem entre Supabase e R2 não é preferência: é onde o CLIENTE escreve.
+    Quem envia foto, laudo e vídeo é o aparelho da pessoa, direto para o
+    compartimento do Supabase. Com a API apontada para o R2, ela procuraria o
+    PDF da dieta num bucket onde ele nunca foi gravado — e o erro sairia como
+    arquivo corrompido, longe da causa.
+  */
+  it('o Supabase ganha do R2 quando os dois estão configurados', () => {
+    const { logger: l } = logger();
+    expect(escolherDriverDeMidia(configFalsa({ ...R2_COMPLETO, ...SUPABASE_COMPLETO }), l)).toBe(
+      'SUPABASE',
+    );
+  });
+
+  it('sem a chave de serviço não usa Supabase — meia configuração não conta', () => {
+    const { logger: l } = logger();
+    const meio = { ...R2_COMPLETO, SUPABASE_URL: 'https://projeto.supabase.co' };
+    expect(escolherDriverDeMidia(configFalsa(meio), l)).toBe('R2');
+  });
+
+  it('sem Supabase nenhum, a escolha antiga vale inteira', () => {
+    const { logger: l } = logger();
+    expect(faltandoParaSupabase(configFalsa({}))).toEqual([
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE',
+    ]);
+    expect(escolherDriverDeMidia(configFalsa(R2_COMPLETO), l)).toBe('R2');
+  });
+
   it('usa R2 quando o bucket está apontado', () => {
     const { logger: l, error } = logger();
     expect(escolherDriverDeMidia(configFalsa(R2_COMPLETO), l)).toBe('R2');

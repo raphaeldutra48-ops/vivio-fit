@@ -70,15 +70,10 @@ export default function ImportarDieta() {
     setLendo(true);
     setErro(null);
     try {
-      const autorizacao = await sdk.midia.autorizarUpload({
-        tipo: TipoMidia.MATERIAL,
-        mimeType: arquivo.type,
-        tamanhoBytes: arquivo.size,
-      });
-      await sdk.midia.enviarArquivo(autorizacao, arquivo);
+      const chave = await sdk.midia.enviar(TipoMidia.MATERIAL, arquivo);
 
       const lida = await sdk.exercicios.importarDieta({
-        chave: autorizacao.chave,
+        chave,
         mimeType: arquivo.type as 'application/pdf',
         alunoId,
       });

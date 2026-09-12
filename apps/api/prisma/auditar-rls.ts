@@ -88,6 +88,52 @@ function usoDoSdk(): Map<string, Set<string>> {
   return achados;
 }
 
+/**
+ * As colunas que o SDK nomeia ao inserir em cada tabela.
+ *
+ * Serve para uma falha que só aparece na primeira gravação de verdade: coluna
+ * NOT NULL cujo valor o PRISMA gerava (`@default(cuid())`, `@updatedAt`) e que
+ * o banco não tem quem preencha. Com o Prisma fora, o INSERT morre em "null
+ * value in column ... violates not-null constraint" — depois de a tela já ter
+ * dito que ia salvar.
+ *
+ * É leitura de texto, então erra para o lado seguro: pega as chaves do objeto
+ * literal das ~30 linhas seguintes ao `.insert(`. Objeto montado em variável
+ * separada vira falso alarme, e é por isso que o achado é informativo.
+ */
+function colunasQueOSdkPreenche(): Map<string, Set<string>> {
+  const caminho = join(__dirname, '../../../packages/sdk/src/supabase.ts');
+  const linhas = readFileSync(caminho, 'utf8').split('\n');
+  const mapa = new Map<string, Set<string>>();
+
+  for (let i = 0; i < linhas.length; i++) {
+    if (!/\.(insert|upsert)\s*\(/.test(linhas[i]!)) continue;
+    let tabela: string | null = null;
+    for (let j = i; j >= Math.max(0, i - 40); j--) {
+      const dono = linhas[j]!.match(/\.from\(\s*'(\w+)'\s*\)/);
+      if (dono) {
+        tabela = dono[1]!;
+        break;
+      }
+    }
+    if (tabela === null) continue;
+
+    const campos = mapa.get(tabela) ?? new Set<string>();
+    for (const linha of linhas.slice(i, i + 30)) {
+      // Para no fim do bloco: a próxima chamada encadeada já é outra coisa.
+      if (/^\s*\)\s*[.;]/.test(linha)) break;
+      for (const m of linha.matchAll(/(?:^|[{,\s])(\w+)\s*:/g)) campos.add(m[1]!);
+      // Abreviação de objeto (`id,` em vez de `id: id`) — o jeito mais comum
+      // de passar a variável homônima, e ignorá-la fazia a varredura acusar
+      // quinze colunas que estão preenchidas.
+      const curto = linha.match(/^\s*(\w+),\s*$/);
+      if (curto) campos.add(curto[1]!);
+    }
+    mapa.set(tabela, campos);
+  }
+  return mapa;
+}
+
 /** Nomes de política que algum arquivo de `rls/` cria. */
 function politicasDeclaradas(): Set<string> {
   const pasta = join(__dirname, 'rls');
@@ -222,6 +268,41 @@ async function principal(): Promise<void> {
         )
         .map((c) => `${t.tabela}.${c}`),
     ),
+  });
+
+  /*
+    Coluna obrigatória que ninguém preenche.
+
+    `@default(cuid())` e `@updatedAt` do Prisma são do CLIENTE: o valor era
+    sorteado em JavaScript e vinha dentro do INSERT. No banco essas colunas
+    ficaram NOT NULL e sem default, e pelo PostgREST não há quem as preencha —
+    foi assim que a regravação de demonstração morreu, e antes dela o
+    `atualizadoEm` de meia dúzia de tabelas.
+  */
+  const obrigatorias = await prisma.$queryRawUnsafe<{ tabela: string; coluna: string }[]>(
+    `select table_name tabela, column_name coluna
+       from information_schema.columns
+      where table_schema = 'public'
+        and is_nullable = 'NO'
+        and column_default is null
+        and is_identity = 'NO'
+      order by 1, 2`,
+  );
+  const preenchidas = colunasQueOSdkPreenche();
+  const semQuemPreencha: string[] = [];
+  for (const { tabela, coluna } of obrigatorias) {
+    const campos = preenchidas.get(tabela);
+    // Só interessa tabela em que o SDK realmente insere.
+    if (!campos || campos.has(coluna)) continue;
+    semQuemPreencha.push(`${tabela}.${coluna}`);
+  }
+  achados.push({
+    titulo: 'COLUNA OBRIGATÓRIA SEM QUEM PREENCHA',
+    explicacao:
+      'NOT NULL, sem default no banco, e o INSERT do SDK não a nomeia. Ou um gatilho a ' +
+      'preenche (e está tudo certo), ou a primeira gravação de verdade falha.',
+    informativo: true,
+    itens: semQuemPreencha,
   });
 
   achados.push({

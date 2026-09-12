@@ -262,16 +262,11 @@ export default function Exercicios() {
     setEnviandoVideoDe(exercicioId);
     setErro(null);
     try {
-      const autorizacao = await sdk.midia.autorizarUpload({
-        tipo: TipoMidia.VIDEO_EXERCICIO,
-        mimeType: arquivo.type,
-        tamanhoBytes: arquivo.size,
-      });
-      await sdk.midia.enviarArquivo(autorizacao, arquivo);
+      const chave = await sdk.midia.enviar(TipoMidia.VIDEO_EXERCICIO, arquivo);
       if (ehExercicioProprio.current) {
-        await sdk.exercicios.vincularVideo(exercicioId, autorizacao.chave);
+        await sdk.exercicios.vincularVideo(exercicioId, chave);
       } else {
-        await sdk.exercicios.gravarDemonstracao(exercicioId, autorizacao.chave);
+        await sdk.exercicios.gravarDemonstracao(exercicioId, chave);
       }
       setMensagem('Gravação salva. Seus alunos já veem durante o treino.');
       // Encurta a fila junto com a lista: o item recém-gravado sai de cena.

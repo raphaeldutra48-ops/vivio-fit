@@ -4,7 +4,6 @@ import type {
   CriarPlanoDietaInput,
   PlanoDietaCompleto,
   PlanoDietaResumo,
-  RefeicaoResumo,
 } from '@vivio/contracts';
 import { ErroDominio } from '../../common/erros/erro-dominio';
 import { PrismaService } from '../../infra/prisma.service';

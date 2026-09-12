@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ARMAZENAMENTO, type Armazenamento } from './armazenamento';
 import { ArmazenamentoLocal } from './armazenamento-local';
 import { ArmazenamentoR2 } from './armazenamento-r2';
+import { ArmazenamentoSupabase } from './armazenamento-supabase';
 import { escolherDriverDeMidia } from './escolher-armazenamento';
 import { MidiaController } from './midia.controller';
 import { MidiaService } from './midia.service';
@@ -24,10 +25,12 @@ import { MidiaService } from './midia.service';
     {
       provide: ARMAZENAMENTO,
       inject: [ConfigService, ArmazenamentoLocal],
-      useFactory: (config: ConfigService, local: ArmazenamentoLocal): Armazenamento =>
-        escolherDriverDeMidia(config, new Logger('Midia')) === 'R2'
-          ? new ArmazenamentoR2(config)
-          : local,
+      useFactory: (config: ConfigService, local: ArmazenamentoLocal): Armazenamento => {
+        const driver = escolherDriverDeMidia(config, new Logger('Midia'));
+        if (driver === 'SUPABASE') return new ArmazenamentoSupabase(config);
+        if (driver === 'R2') return new ArmazenamentoR2(config);
+        return local;
+      },
     },
     MidiaService,
   ],

@@ -40,9 +40,20 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  chaveDeMidia,
+  partesDaChave,
+  urlPublicaDoCatalogo,
+  LIMITES_MIDIA,
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  UrlAssinada,
+  TipoMidia,
+  MidiaDeExercicios,
+  ListarExerciciosQuery,
+  ExercicioAGravar,
+  CriarExercicioInput,
+  AtualizarExercicioInput,
   AnterioresDaSessao,
   ExecucaoResumo,
   HistoricoCarga,
@@ -230,14 +241,32 @@ export function erroDoSupabase(e: { message?: string; status?: number; code?: st
   }
 
   /*
-    42501 é "insufficient_privilege": a política de RLS barrou. Do lado de fora
-    isso é sempre uma das três condições faltando — sessão, vínculo ou
-    consentimento — e a tela não deve dizer QUAL, porque dizer "você não tem
-    consentimento para o clínico deste aluno" já confirma que o aluno existe e
-    que ele tem dado clínico.
+    42501 é "insufficient_privilege", e chega por dois caminhos bem diferentes.
+
+    Quando quem recusa é a POLÍTICA, a frase é do Postgres e não se mostra a
+    ninguém — "new row violates row-level security policy for table ...". Ela
+    também não deve virar explicação: do lado de fora a recusa é sempre uma das
+    três condições faltando (sessão, vínculo, consentimento), e dizer qual já
+    confirma que o aluno existe e que ele tem dado clínico.
+
+    Quando quem recusa é um GATILHO NOSSO, a frase foi escrita para a tela:
+    "Chave de arquivo não pertence a você.", "Este pedido já foi encerrado.",
+    "Só um pedido pendente pode ser respondido.". São recusas por conteúdo
+    errado, não por falta de acesso, e trocá-las pela genérica era jogar fora a
+    única parte útil — a pessoa via "você não tem acesso" sobre um botão que
+    ela tem acesso e ficava sem saber o que corrigir.
+
+    A mesma distinção que o 23505 já fazia, pelo mesmo sinal: a mensagem do
+    Postgres é reconhecível, e o que não é dele é nosso.
   */
   if (e.code === '42501' || status === 403) {
-    return new ErroApi('ACESSO_NEGADO', 'Você não tem acesso a este conteúdo.', 403);
+    const doPostgres =
+      bruto === '' || /row-level security|permission denied|insufficient privilege/i.test(bruto);
+    return new ErroApi(
+      'ACESSO_NEGADO',
+      doPostgres ? 'Você não tem acesso a este conteúdo.' : bruto,
+      403,
+    );
   }
 
   /*
@@ -3727,6 +3756,689 @@ export class MotorSupabase {
         motivo: dados.motivo ?? null,
       }),
     );
+  }
+
+  // --- arquivos no Storage --------------------------------------------------
+
+  /*
+    Quanto tempo vale um link de leitura.
+
+    Cinco minutos é o que a API usava, e é o certo para laudo e foto de
+    evolução: o link vaza inteiro em qualquer histórico de navegação, e a
+    janela curta é o que limita o estrago.
+
+    O treino é o caso que não cabia nesse número. A tela pede a mídia de todos
+    os exercícios da sessão de uma vez, no começo — e a sessão dura uma hora.
+    Com cinco minutos, o vídeo do último exercício chegava morto, e o aluno via
+    um quadrado preto justamente no movimento que ele menos conhece. É
+    demonstração de exercício, não dado de saúde: uma hora aqui custa pouco.
+  */
+  private static readonly VALIDADE_LEITURA_SEG = 5 * 60;
+  private static readonly VALIDADE_TREINO_SEG = 60 * 60;
+
+  private static expiraEm(segundos: number): string {
+    return new Date(Date.now() + segundos * 1000).toISOString();
+  }
+
+  /**
+   * Link de leitura de um arquivo guardado.
+   *
+   * O catálogo é público e responde com URL direta — é a figura do acervo, a
+   * mesma para todo mundo, e assinar cada uma seria pagar um HMAC por item de
+   * uma lista de cem para esconder o que não é segredo. Todo o resto é
+   * assinado, e é o Storage que decide se assina: a política do compartimento
+   * roda com a sessão de quem pediu.
+   */
+  async urlDeLeitura(
+    chave: string,
+    segundos = MotorSupabase.VALIDADE_LEITURA_SEG,
+  ): Promise<UrlAssinada> {
+    const partes = partesDaChave(chave);
+    if (!partes) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Arquivo não encontrado.', 404);
+
+    const publica = urlPublicaDoCatalogo(this.opcoes.url, chave);
+    if (publica) {
+      // Não expira. A data existe porque o contrato a tem, e quem lê precisa de
+      // um valor que não faça a tela pedir outro link a cada minuto.
+      return { url: publica, expiraEm: MotorSupabase.expiraEm(365 * 24 * 3600) };
+    }
+
+    const r = await this.db.storage
+      .from(partes.compartimento)
+      .createSignedUrl(partes.caminho, segundos);
+    if (r.error || !r.data?.signedUrl) {
+      /*
+        O Storage responde o mesmo "Object not found" para arquivo que não
+        existe e para arquivo que a política não deixa ver — de propósito, e
+        está certo: distinguir os dois contaria que o arquivo existe.
+      */
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Arquivo não encontrado.', 404);
+    }
+    return { url: r.data.signedUrl, expiraEm: MotorSupabase.expiraEm(segundos) };
+  }
+
+  /**
+   * Links de vários arquivos de uma vez.
+   *
+   * A tela de execução pede a mídia de seis exercícios no começo do treino;
+   * uma assinatura por arquivo seriam seis idas à rede no meio da academia. O
+   * Storage assina em lote, mas só dentro de um compartimento — daí o
+   * agrupamento.
+   *
+   * Chave que o Storage recusa simplesmente não entra no mapa. Quem chama
+   * trata a ausência (é o caso da maioria do acervo hoje), e derrubar a tela de
+   * treino inteira porque um vídeo sumiu seria a troca errada.
+   */
+  async urlsDeLeitura(
+    chaves: readonly string[],
+    segundos = MotorSupabase.VALIDADE_LEITURA_SEG,
+  ): Promise<Map<string, string>> {
+    const mapa = new Map<string, string>();
+    const porCompartimento = new Map<string, { chave: string; caminho: string }[]>();
+
+    for (const chave of new Set(chaves)) {
+      const partes = partesDaChave(chave);
+      if (!partes) continue;
+      const publica = urlPublicaDoCatalogo(this.opcoes.url, chave);
+      if (publica) {
+        mapa.set(chave, publica);
+        continue;
+      }
+      const lista = porCompartimento.get(partes.compartimento) ?? [];
+      lista.push({ chave, caminho: partes.caminho });
+      porCompartimento.set(partes.compartimento, lista);
+    }
+
+    await Promise.all(
+      [...porCompartimento].map(async ([compartimento, itens]) => {
+        const r = await this.db.storage
+          .from(compartimento)
+          .createSignedUrls(
+            itens.map((i) => i.caminho),
+            segundos,
+          );
+        if (r.error || !r.data) return;
+        /*
+          A resposta vem na ordem do pedido, mas quem liga o link de volta à
+          chave é o `path` de cada item: a ordem é detalhe de implementação do
+          Storage, e um item recusado no meio da lista deslocaria todo o resto.
+        */
+        const porCaminho = new Map(
+          r.data.filter((d) => d.signedUrl).map((d) => [d.path ?? '', d.signedUrl]),
+        );
+        for (const i of itens) {
+          const url = porCaminho.get(i.caminho);
+          if (url) mapa.set(i.chave, url);
+        }
+      }),
+    );
+
+    return mapa;
+  }
+
+  /**
+   * Envia um arquivo e devolve a chave que os registros guardam.
+   *
+   * Antes o servidor decidia o endereço e assinava uma autorização de PUT;
+   * agora o cliente monta o endereço e o Storage decide se aceita. A diferença
+   * que importa: o endereço começa com o id de quem envia, e a política do
+   * compartimento recusa qualquer coisa fora dessa pasta. Um cliente adulterado
+   * pode pedir o caminho que quiser — o banco é que responde não.
+   *
+   * O limite de tamanho e a lista de formatos também estão no compartimento. A
+   * conferência aqui é só para a pessoa saber ANTES de subir 90 MB por uma
+   * conexão de celular que o arquivo não serve.
+   */
+  async enviarMidia(tipo: TipoMidia, arquivo: Blob, mimeType?: string): Promise<string> {
+    const tipoReal = mimeType ?? arquivo.type;
+    const limite = LIMITES_MIDIA[tipo];
+    if (!limite.mimesAceitos.includes(tipoReal)) {
+      throw new ErroApi(
+        'DADOS_INVALIDOS',
+        `Formato de arquivo não aceito: ${tipoReal || 'desconhecido'}.`,
+        422,
+      );
+    }
+    if (arquivo.size > limite.tamanhoMaximoBytes) {
+      const mb = Math.floor(limite.tamanhoMaximoBytes / (1024 * 1024));
+      throw new ErroApi('DADOS_INVALIDOS', `Arquivo acima do limite de ${mb} MB.`, 422);
+    }
+
+    const eu = await this.meuId();
+    const chave = chaveDeMidia(tipo, eu, tipoReal);
+    const partes = partesDaChave(chave);
+    if (!partes) throw new ErroApi('ERRO_INTERNO', 'Falha ao enviar o arquivo.', 500);
+
+    /*
+      O tipo tem de estar NO BLOB, e não só na opção.
+
+      O `supabase-js` manda Blob como `multipart/form-data`, e nesse caminho
+      quem o Storage lê é o tipo do próprio Blob — a opção `contentType` não
+      chega até a conferência. Um Blob sem tipo (é o que sai de `fetch().blob()`
+      no celular, e de qualquer montagem à mão) era recusado como "mime type
+      not supported" mesmo sendo um JPEG perfeitamente aceito, e a tela dizia
+      "formato não aceito" sobre a foto que a pessoa acabara de tirar.
+    */
+    const corpo = arquivo.type === tipoReal ? arquivo : new Blob([arquivo], { type: tipoReal });
+
+    const r = await this.db.storage
+      .from(partes.compartimento)
+      .upload(partes.caminho, corpo, { contentType: tipoReal, upsert: false });
+    if (r.error) {
+      const texto = r.error.message ?? '';
+      /*
+        O Storage recusa por política com uma frase que não se mostra a ninguém
+        ("new row violates row-level security policy"). Traduzir aqui é o que
+        faz a tela dizer o que houve em vez de "erro inesperado".
+      */
+      if (/row-level security|not authorized|violates/i.test(texto)) {
+        throw new ErroApi('ACESSO_NEGADO', 'Você não pode enviar este arquivo.', 403);
+      }
+      if (/exceeded the maximum|payload too large/i.test(texto)) {
+        throw new ErroApi('DADOS_INVALIDOS', 'Arquivo acima do limite.', 422);
+      }
+      if (/mime type|not supported/i.test(texto)) {
+        throw new ErroApi('DADOS_INVALIDOS', 'Formato de arquivo não aceito.', 422);
+      }
+      throw new ErroApi('ERRO_INTERNO', 'Falha ao enviar o arquivo.', 502);
+    }
+    return chave;
+  }
+
+  /**
+   * Apaga um arquivo.
+   *
+   * Silencioso de propósito: quem chama está trocando um vídeo ou desfazendo
+   * uma gravação, e a linha do banco já mudou. Falhar aqui deixaria o registro
+   * apontando para um arquivo que já não deveria existir — pior do que um
+   * arquivo órfão, que só ocupa espaço.
+   */
+  async removerMidia(chave: string): Promise<void> {
+    const partes = partesDaChave(chave);
+    if (!partes) return;
+    await this.db.storage.from(partes.compartimento).remove([partes.caminho]);
+  }
+
+  // --- exercícios -----------------------------------------------------------
+
+  private static readonly CAMPOS_EXERCICIO =
+    'id,nome,grupoMuscular,equipamento,instrucoes,escopo,videoChave,criadoPorId,' +
+    'passos,imagemChave,imagemCredito,videoCredito,videoExternoUrl';
+
+  /**
+   * `temDemonstracao` chega de fora porque exige uma consulta que nem toda
+   * chamada faz. O padrão é `null` — "não perguntei" —, e não `false`: quem
+   * acabou de renomear um exercício não consultou demonstração nenhuma, e
+   * afirmar que não existe seria inventar resposta.
+   */
+  private paraExercicio(
+    e: Record<string, unknown>,
+    imagemUrl: string | null = null,
+    temDemonstracao: boolean | null = null,
+  ): ExercicioResumo {
+    return {
+      id: e.id as string,
+      nome: e.nome as string,
+      grupoMuscular: e.grupoMuscular as ExercicioResumo['grupoMuscular'],
+      equipamento: (e.equipamento as string | null) ?? null,
+      instrucoes: (e.instrucoes as string | null) ?? null,
+      passos: (e.passos as string[] | null) ?? [],
+      escopo: e.escopo as ExercicioResumo['escopo'],
+      temVideo: (e.videoChave ?? null) !== null,
+      temDemonstracao,
+      criadoPorId: (e.criadoPorId as string | null) ?? null,
+      imagemUrl,
+      imagemCredito: (e.imagemCredito as string | null) ?? null,
+      videoCredito: (e.videoCredito as string | null) ?? null,
+      // Passa pela lista de hosts aqui também: o valor vira `src` de iframe.
+      videoExternoUrl: playerExternoSeguro(e.videoExternoUrl as string | null),
+    };
+  }
+
+  /**
+   * A biblioteca GLOBAL mais o que a pessoa criou.
+   *
+   * O recorte não está nesta consulta — está na política `exercicio_le`. Um
+   * `or(...)` aqui seria uma segunda cópia da mesma regra, que um dia diverge.
+   */
+  async listarExercicios(
+    consulta: Partial<ListarExerciciosQuery> = {},
+  ): Promise<ExercicioResumo[]> {
+    let q = this.db
+      .from('Exercicio')
+      .select(MotorSupabase.CAMPOS_EXERCICIO)
+      .is('deletadoEm', null)
+      .order('grupoMuscular', { ascending: true })
+      .order('nome', { ascending: true })
+      .limit(consulta.limit ?? 50);
+
+    if (consulta.grupoMuscular) q = q.eq('grupoMuscular', consulta.grupoMuscular);
+    // `ilike` com os dois curingas é o `contains` sem diferenciar maiúsculas do
+    // Prisma. O que a pessoa digita vai como valor, não como SQL.
+    if (consulta.q) q = q.ilike('nome', `%${consulta.q}%`);
+
+    const linhas = this.ou(await q) as unknown as Record<string, unknown>[];
+
+    /*
+      Uma consulta para a página inteira, e não uma por exercício: a biblioteca
+      passa de cem itens, e N+1 aqui seria sentido.
+
+      A imagem é assinada AQUI, na listagem, e não só no exercício individual —
+      diferente do laudo de exame, onde a decisão foi a oposta. O motivo é o
+      uso: a biblioteca é navegada olhando, e uma lista de nomes sem figura não
+      serve para escolher exercício.
+    */
+    const ids = linhas.map((l) => l.id as string);
+    const demonstracoes = await this.demonstracoesParaMim(ids);
+    const imagens = await this.urlsDeLeitura(
+      linhas.map((l) => l.imagemChave as string | null).filter((c): c is string => !!c),
+    );
+
+    return linhas.map((l) =>
+      this.paraExercicio(
+        l,
+        imagens.get(l.imagemChave as string) ?? null,
+        demonstracoes.has(l.id as string),
+      ),
+    );
+  }
+
+  async obterExercicio(id: string): Promise<ExercicioResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('Exercicio')
+        .select(MotorSupabase.CAMPOS_EXERCICIO)
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Exercício não encontrado.', 404);
+
+    const demonstracoes = await this.demonstracoesParaMim([id]);
+    const imagemChave = linha.imagemChave as string | null;
+    const imagem = imagemChave ? await this.urlDeLeitura(imagemChave).catch(() => null) : null;
+    return this.paraExercicio(linha, imagem?.url ?? null, demonstracoes.has(id));
+  }
+
+  /**
+   * Cria na biblioteca de quem pediu.
+   *
+   * Nem `escopo` nem `criadoPorId` vão no corpo: quem os define é o gatilho
+   * `governar_exercicio`, no banco. Mandá-los daqui só criaria a ilusão de que
+   * o cliente escolhe — ADMIN cria GLOBAL, os outros criam PRIVADO, e é o papel
+   * no token que decide.
+   */
+  async criarExercicio(dados: CriarExercicioInput): Promise<ExercicioResumo> {
+    const eu = await this.meuId();
+    const linha = this.ou(
+      await this.db
+        .from('Exercicio')
+        .insert({
+          id: `${eu}-ex-${Date.now()}`,
+          nome: dados.nome.trim(),
+          grupoMuscular: dados.grupoMuscular,
+          equipamento: dados.equipamento ?? null,
+          instrucoes: dados.instrucoes ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_EXERCICIO)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraExercicio(linha);
+  }
+
+  async atualizarExercicio(id: string, dados: AtualizarExercicioInput): Promise<ExercicioResumo> {
+    const campos: Record<string, unknown> = {};
+    if (dados.nome !== undefined) campos.nome = dados.nome.trim();
+    if (dados.grupoMuscular !== undefined) campos.grupoMuscular = dados.grupoMuscular;
+    if (dados.equipamento !== undefined) campos.equipamento = dados.equipamento;
+    if (dados.instrucoes !== undefined) campos.instrucoes = dados.instrucoes;
+
+    const linhas = this.ou(
+      await this.db
+        .from('Exercicio')
+        .update(campos)
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select(MotorSupabase.CAMPOS_EXERCICIO),
+    ) as unknown as Record<string, unknown>[];
+
+    const linha = linhas[0];
+    if (!linha) throw await this.recusaDeExercicio(id);
+    return this.paraExercicio(linha);
+  }
+
+  /**
+   * Remoção é carimbo: o exercício aparece em planos antigos, e apagar a linha
+   * levaria junto a carga que o aluno levantou.
+   */
+  async removerExercicio(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('Exercicio')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) throw await this.recusaDeExercicio(id);
+  }
+
+  /**
+   * Por que o UPDATE não pegou nada — a frase que a tela mostra.
+   *
+   * UPDATE recusado por política afeta zero linhas e responde 200, então o
+   * motivo tem de ser reconstruído. São dois, e confundi-los é o que faz o
+   * profissional achar que o app quebrou: o exercício é do acervo global (e aí
+   * só o admin cuida dele), ou não existe para ele — que é a mesma resposta
+   * para "não existe" e "é de outra pessoa", de propósito.
+   */
+  private async recusaDeExercicio(id: string): Promise<ErroApi> {
+    const linha = this.ou(
+      await this.db.from('Exercicio').select('escopo').eq('id', id).maybeSingle(),
+    ) as { escopo: string } | null;
+
+    if (linha?.escopo === 'GLOBAL') {
+      return new ErroApi(
+        'PAPEL_NAO_AUTORIZADO',
+        'Exercícios da biblioteca global só o admin edita.',
+        403,
+      );
+    }
+    return new ErroApi('RECURSO_NAO_ENCONTRADO', 'Exercício não encontrado.', 404);
+  }
+
+  /**
+   * Aponta o exercício para um vídeo já enviado.
+   *
+   * A conferência de dono está no gatilho (`exercicios/<eu>/…`), e não aqui: é
+   * a única cópia que um cliente adulterado não contorna.
+   */
+  async vincularVideo(id: string, chave: string): Promise<ExercicioResumo> {
+    const anterior = this.ou(
+      await this.db.from('Exercicio').select('videoChave').eq('id', id).maybeSingle(),
+    ) as { videoChave: string | null } | null;
+
+    const linhas = this.ou(
+      await this.db
+        .from('Exercicio')
+        .update({ videoChave: chave })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select(MotorSupabase.CAMPOS_EXERCICIO),
+    ) as unknown as Record<string, unknown>[];
+
+    const linha = linhas[0];
+    if (!linha) throw await this.recusaDeExercicio(id);
+
+    /*
+      Trocar o vídeo apaga o anterior: são até 100 MB cada, e sem isto regravar
+      algumas vezes enche o compartimento de arquivos que ninguém alcança.
+      Depois do update, para uma falha aqui não deixar o exercício apontando
+      para um arquivo que já não existe.
+    */
+    if (anterior?.videoChave && anterior.videoChave !== chave) {
+      await this.removerMidia(anterior.videoChave);
+    }
+    return this.paraExercicio(linha);
+  }
+
+  /**
+   * Link do vídeo de um exercício.
+   *
+   * A gravação de quem acompanha a pessoa vence a do acervo — a mesma ordem de
+   * `midiaDeExercicios`. Sem isso o profissional não conseguia rever a própria
+   * demonstração num exercício GLOBAL: o exercício não tem `videoChave` e o
+   * pedido morria em 404 logo depois do envio, justo quando ele quer conferir o
+   * enquadramento para regravar na hora.
+   */
+  async urlDoVideoDoExercicio(id: string): Promise<UrlAssinada> {
+    const linha = this.ou(
+      await this.db
+        .from('Exercicio')
+        .select('videoChave')
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as { videoChave: string | null } | null;
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Exercício não encontrado.', 404);
+
+    const minhas = await this.demonstracoesParaMim([id]);
+    const chave = minhas.get(id) ?? linha.videoChave;
+    if (!chave) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Vídeo do exercício não encontrado.', 404);
+    }
+    return this.urlDeLeitura(chave);
+  }
+
+  /**
+   * A mídia de vários exercícios de uma vez — o pedido do começo do treino.
+   *
+   * O plano de treino não traz `imagemUrl` de propósito: a assinatura vale
+   * pouco e o plano fica em cache offline, então o link chegaria morto. Mas
+   * quem está treinando precisa ver o movimento na hora, e pedir uma assinatura
+   * por exercício seriam seis idas à rede no meio da academia.
+   */
+  async midiaDeExercicios(ids: string[]): Promise<MidiaDeExercicios> {
+    if (ids.length === 0) return {};
+
+    const linhas = this.ou(
+      await this.db
+        .from('Exercicio')
+        .select('id,imagemChave,videoChave,videoExternoUrl')
+        .in('id', ids)
+        .is('deletadoEm', null),
+    ) as unknown as {
+      id: string;
+      imagemChave: string | null;
+      videoChave: string | null;
+      videoExternoUrl: string | null;
+    }[];
+
+    const minhas = await this.demonstracoesParaMim(ids);
+
+    const chaves: string[] = [];
+    for (const e of linhas) {
+      if (e.imagemChave) chaves.push(e.imagemChave);
+      const video = minhas.get(e.id) ?? e.videoChave;
+      if (video) chaves.push(video);
+    }
+    const urls = await this.urlsDeLeitura(chaves, MotorSupabase.VALIDADE_TREINO_SEG);
+
+    const mapa: MidiaDeExercicios = {};
+    for (const e of linhas) {
+      /*
+        A gravação do profissional que acompanha esta pessoa vence a do acervo:
+        ela mostra o aparelho da academia dele, a variação que ele prescreve e a
+        voz que o aluno reconhece. O vídeo genérico é a reserva.
+      */
+      const chaveDeVideo = minhas.get(e.id) ?? e.videoChave;
+      /*
+        O player de fora é a última reserva: só vai quando não há arquivo nosso
+        nenhum. Mandar os dois deixaria a escolha para cada tela — e bastaria
+        uma decidir diferente para o aluno ver a demonstração genérica por cima
+        da gravação do personal dele.
+      */
+      const externo = chaveDeVideo ? null : playerExternoSeguro(e.videoExternoUrl);
+      const imagemUrl = e.imagemChave ? (urls.get(e.imagemChave) ?? null) : null;
+      const videoUrl = chaveDeVideo ? (urls.get(chaveDeVideo) ?? null) : null;
+      if (!imagemUrl && !videoUrl && !externo) continue;
+      mapa[e.id] = { imagemUrl, videoUrl, videoExternoUrl: externo };
+    }
+    return mapa;
+  }
+
+  /**
+   * As demonstrações de quem acompanha esta pessoa.
+   *
+   * Para o ALUNO são as dos profissionais com vínculo ativo; para o
+   * profissional, as dele — ele precisa ver a própria gravação para conferir se
+   * ficou boa. Quem faz esse recorte é a política `demonstracao_le`, e por isso
+   * aqui não há filtro por profissional: repetir a regra no cliente seria a
+   * segunda cópia que um dia diverge.
+   *
+   * Com mais de um profissional na equipe, o desempate é pelo mais recente:
+   * quem gravou por último provavelmente gravou sabendo do outro.
+   */
+  private async demonstracoesParaMim(exercicioIds: string[]): Promise<Map<string, string>> {
+    if (exercicioIds.length === 0) return new Map();
+    const linhas = this.ou(
+      await this.db
+        .from('DemonstracaoProfissional')
+        .select('exercicioId,videoChave')
+        .in('exercicioId', exercicioIds)
+        .order('atualizadoEm', { ascending: true }),
+    ) as unknown as { exercicioId: string; videoChave: string }[];
+
+    // `asc` mais sobrescrita: o último a entrar no mapa é o mais recente.
+    const mapa = new Map<string, string>();
+    for (const d of linhas) mapa.set(d.exercicioId, d.videoChave);
+    return mapa;
+  }
+
+  /**
+   * Grava (ou regrava) a demonstração do profissional.
+   *
+   * Vale para o exercício GLOBAL também, e é esse o ponto: o personal grava o
+   * supino da academia dele sem criar um "supino do Diego", que quebraria o
+   * histórico de carga do aluno — indexado por exercício.
+   */
+  async gravarDemonstracao(exercicioId: string, chave: string): Promise<void> {
+    const eu = await this.meuId();
+
+    const anterior = this.ou(
+      await this.db
+        .from('DemonstracaoProfissional')
+        .select('videoChave')
+        .eq('profissionalId', eu)
+        .eq('exercicioId', exercicioId)
+        .maybeSingle(),
+    ) as { videoChave: string | null } | null;
+
+    const r = await this.db
+      .from('DemonstracaoProfissional')
+      .upsert(
+        { profissionalId: eu, exercicioId, videoChave: chave },
+        { onConflict: 'profissionalId,exercicioId' },
+      )
+      .select('exercicioId');
+    if (r.error) throw erroDoSupabase(r.error);
+    if ((r.data ?? []).length === 0) {
+      throw new ErroApi('ACESSO_NEGADO', 'Você não pode gravar neste exercício.', 403);
+    }
+
+    // Regravar apaga o arquivo anterior — até 100 MB cada. Depois da gravação,
+    // para uma falha aqui não deixar o registro apontando para o vazio.
+    if (anterior?.videoChave && anterior.videoChave !== chave) {
+      await this.removerMidia(anterior.videoChave);
+    }
+  }
+
+  async removerDemonstracao(exercicioId: string): Promise<void> {
+    const eu = await this.meuId();
+    const linhas = this.ou(
+      await this.db
+        .from('DemonstracaoProfissional')
+        .delete()
+        .eq('profissionalId', eu)
+        .eq('exercicioId', exercicioId)
+        .select('videoChave'),
+    ) as unknown as { videoChave: string }[];
+
+    const removida = linhas[0];
+    if (!removida) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Demonstração não encontrada.', 404);
+    }
+    await this.removerMidia(removida.videoChave);
+  }
+
+  /**
+   * O que gravar primeiro.
+   *
+   * Gravar o acervo inteiro é um projeto que ninguém termina; gravar as quinze
+   * que aparecem em todos os planos é uma tarde. A ordem é pelo número de
+   * prescrições do próprio profissional, porque o exercício que ele mais
+   * receita é o que mais aluno executa sem ninguém olhando — e é onde a falta
+   * de referência visual vira risco de lesão.
+   *
+   * Só entra o que ainda não tem demonstração dele: a lista é de trabalho
+   * pendente, e item já feito sumindo dela é o que faz a fila encurtar.
+   */
+  async planoDeGravacao(): Promise<ExercicioAGravar[]> {
+    const eu = await this.usuarioAtual();
+    if (!eu) throw new ErroApi('NAO_AUTENTICADO', 'Sua sessão expirou. Entre de novo.', 401);
+    if (eu.papel === 'ALUNO') {
+      throw new ErroApi('PAPEL_NAO_AUTORIZADO', 'Só profissionais gravam demonstração.', 403);
+    }
+
+    /*
+      Conta prescrições nos planos DELE. Um exercício que ele nunca receitou não
+      é urgente por mais popular que seja no acervo — quem grava é ele, e o
+      tempo dele é o recurso escasso aqui.
+
+      A contagem é uma função do banco porque pelo PostgREST seria trazer todos
+      os itens de todos os planos para contar no celular.
+    */
+    const contagens = await this.rpc<{ exercicioId: string; vezes: number }[]>(
+      'prescricoes_por_exercicio',
+    );
+    const vezes = new Map(contagens.map((c) => [c.exercicioId, Number(c.vezes)]));
+
+    const jaGravados = this.ou(
+      await this.db
+        .from('DemonstracaoProfissional')
+        .select('exercicioId')
+        .eq('profissionalId', eu.id),
+    ) as unknown as { exercicioId: string }[];
+    const gravados = new Set(jaGravados.map((d) => d.exercicioId));
+
+    const linhas = this.ou(
+      await this.db
+        .from('Exercicio')
+        .select('id,nome,grupoMuscular,equipamento,escopo,videoChave,imagemChave,videoExternoUrl')
+        .is('deletadoEm', null),
+    ) as unknown as {
+      id: string;
+      nome: string;
+      grupoMuscular: string;
+      equipamento: string | null;
+      escopo: 'GLOBAL' | 'PRIVADO';
+      videoChave: string | null;
+      imagemChave: string | null;
+      videoExternoUrl: string | null;
+    }[];
+
+    return linhas
+      .filter((e) => {
+        if (gravados.has(e.id)) return false;
+        /*
+          No exercício PRIVADO o vídeo vai para o exercício em si, não para a
+          tabela de demonstrações. Sem esta linha ele nunca sairia da fila — o
+          profissional gravaria, veria o item continuar lá e gravaria de novo.
+        */
+        if (e.escopo === 'PRIVADO' && e.videoChave !== null) return false;
+        return true;
+      })
+      .map((e) => ({
+        id: e.id,
+        nome: e.nome,
+        grupoMuscular: e.grupoMuscular as ExercicioAGravar['grupoMuscular'],
+        equipamento: e.equipamento,
+        escopo: e.escopo,
+        vezesPrescrito: vezes.get(e.id) ?? 0,
+        /*
+          Ter figura ou vídeo do acervo não dispensa gravar, mas muda a
+          urgência: o aluno pelo menos vê o movimento. Sem nada, ele executa por
+          adivinhação — e foi por isso que a gravação virou prioridade.
+        */
+        temAlgumaReferencia:
+          e.videoChave !== null || e.imagemChave !== null || e.videoExternoUrl !== null,
+      }))
+      .sort(
+        (a, b) =>
+          b.vezesPrescrito - a.vezesPrescrito ||
+          Number(a.temAlgumaReferencia) - Number(b.temAlgumaReferencia) ||
+          a.nome.localeCompare(b.nome, 'pt-BR'),
+      );
   }
 }
 

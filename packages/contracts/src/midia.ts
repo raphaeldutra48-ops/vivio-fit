@@ -210,3 +210,99 @@ export function videoDeMaiorPrioridade(v: {
   const player = playerExternoSeguro(v.playerUrl);
   return player ? { tipo: 'PLAYER', url: comoDemonstracao(player) } : null;
 }
+
+/**
+ * Em que compartimento do Storage cada tipo de mídia mora.
+ *
+ * O nome do compartimento é o primeiro pedaço da chave que o banco guarda
+ * (`evolucao/<aluno>/<arquivo>`), e é isso que fez a migração não precisar
+ * reescrever nenhuma linha: o endereço antigo continua descrevendo o novo.
+ */
+export const COMPARTIMENTO_POR_TIPO: Readonly<Record<TipoMidia, string>> = {
+  VIDEO_EXERCICIO: 'exercicios',
+  FOTO_EVOLUCAO: 'evolucao',
+  AVATAR: 'avatares',
+  MATERIAL: 'materiais',
+  LAUDO_EXAME: 'exames',
+};
+
+const EXTENSAO_POR_MIME: Readonly<Record<string, string>> = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'application/pdf': 'pdf',
+  'audio/mpeg': 'mp3',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/csv': 'csv',
+};
+
+/** Bytes aleatórios em hexadecimal, do gerador do sistema quando existe. */
+function sorteio(bytes: number): string {
+  /*
+    Descrito pela forma, e não por `Crypto`: os contratos compilam sem as
+    definições do navegador (rodam também no Node e no React Native), e o nome
+    do tipo só existe lá.
+  */
+  const c = (globalThis as { crypto?: { getRandomValues?<T>(a: T): T } }).crypto;
+  if (c?.getRandomValues) {
+    return [...c.getRandomValues(new Uint8Array(bytes))]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  /*
+    Sem gerador do sistema o nome fica previsível, e por isso ele NÃO é o que
+    protege o arquivo — quem protege é a política do compartimento, que exige
+    ser o dono ou ter vínculo e consentimento. O sorteio serve para dois envios
+    no mesmo milissegundo não se atropelarem.
+  */
+  return Array.from({ length: bytes }, () =>
+    Math.floor(Math.random() * 256)
+      .toString(16)
+      .padStart(2, '0'),
+  ).join('');
+}
+
+/**
+ * O caminho do arquivo DENTRO do compartimento: `<dono>/<hora>-<sorteio>.ext`.
+ *
+ * A primeira pasta é o dono, e não enfeite: é ela que a política lê para
+ * decidir quem pode gravar ali. Antes o servidor gerava a chave inteira e o
+ * cliente não escolhia onde escrevia; agora o cliente escolhe, e o banco
+ * recusa o que estiver fora da pasta dele.
+ */
+export function caminhoDeMidia(donoId: string, mimeType: string): string {
+  const extensao = EXTENSAO_POR_MIME[mimeType] ?? 'bin';
+  return `${donoId}/${Date.now()}-${sorteio(16)}.${extensao}`;
+}
+
+/** A chave como o banco guarda: compartimento + caminho. */
+export function chaveDeMidia(tipo: TipoMidia, donoId: string, mimeType: string): string {
+  return `${COMPARTIMENTO_POR_TIPO[tipo]}/${caminhoDeMidia(donoId, mimeType)}`;
+}
+
+/**
+ * Desmonta a chave guardada em compartimento e caminho.
+ *
+ * `null` para chave vazia ou sem barra — o que sobra de um registro antigo,
+ * meio gravado, não pode virar um pedido de arquivo com caminho vazio.
+ */
+export function partesDaChave(
+  chave: string | null | undefined,
+): { compartimento: string; caminho: string } | null {
+  if (!chave) return null;
+  const corte = chave.indexOf('/');
+  if (corte <= 0 || corte === chave.length - 1) return null;
+  return { compartimento: chave.slice(0, corte), caminho: chave.slice(corte + 1) };
+}
+
+/** O compartimento do catálogo é público: a URL é direta e não expira. */
+export function urlPublicaDoCatalogo(urlDoSupabase: string, chave: string): string | null {
+  const partes = partesDaChave(chave);
+  if (!partes || partes.compartimento !== 'catalogo') return null;
+  return `${urlDoSupabase.replace(/\/$/, '')}/storage/v1/object/public/catalogo/${partes.caminho}`;
+}

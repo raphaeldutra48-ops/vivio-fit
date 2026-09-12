@@ -1,5 +1,5 @@
 import { seriesDeTrabalho } from './metricas-treino';
-import type { AcaoSugerida, SugestaoDeCarga } from './execucoes';
+import type { SugestaoDeCarga } from './execucoes';
 
 /**
  * Sugestão de progressão de carga.

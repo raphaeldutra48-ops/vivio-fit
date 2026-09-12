@@ -74,14 +74,9 @@ export default function ResultadoDoExame() {
     setErro(null);
     try {
       // O arquivo vai direto para o armazenamento — não passa pela API.
-      const autorizacao = await sdk.midia.autorizarUpload({
-        tipo: TipoMidia.LAUDO_EXAME,
-        mimeType: arquivo.type,
-        tamanhoBytes: arquivo.size,
-      });
-      await sdk.midia.enviarArquivo(autorizacao, arquivo);
+      const chave = await sdk.midia.enviar(TipoMidia.LAUDO_EXAME, arquivo);
       await sdk.exames.anexarLaudo(alunoId, exameId, {
-        chave: autorizacao.chave,
+        chave,
         mimeType: arquivo.type,
       });
       await carregar();

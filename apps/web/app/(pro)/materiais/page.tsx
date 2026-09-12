@@ -102,18 +102,13 @@ export default function Materiais() {
         });
       } else {
         // Upload direto para o armazenamento: o arquivo não passa pela API.
-        const autorizacao = await sdk.midia.autorizarUpload({
-          tipo: 'MATERIAL',
-          mimeType: arquivo!.type,
-          tamanhoBytes: arquivo!.size,
-        });
-        await sdk.midia.enviarArquivo(autorizacao, arquivo!);
+        const chave = await sdk.midia.enviar('MATERIAL', arquivo!);
 
         await sdk.materiais.criar({
           titulo: titulo.trim(),
           descricao: descricao.trim() || undefined,
           tipo: 'ARQUIVO',
-          chave: autorizacao.chave,
+          chave,
           nomeArquivo: arquivo!.name,
           mimeType: arquivo!.type,
           tamanhoBytes: arquivo!.size,

@@ -91,17 +91,12 @@ export default function Fotos() {
         return;
       }
 
-      const autorizacao = await sdk.midia.autorizarUpload({
-        tipo: TipoMidia.FOTO_EVOLUCAO,
-        mimeType,
-        tamanhoBytes: blob.size,
-      });
-      await sdk.midia.enviarArquivo(autorizacao, blob);
+      const chave = await sdk.midia.enviar(TipoMidia.FOTO_EVOLUCAO, blob, mimeType);
 
       // A foto nasce visível só para o aluno. Liberar é um ato consciente,
       // feito depois, foto a foto.
       await sdk.fotos.registrar(usuario.id, {
-        chave: autorizacao.chave,
+        chave,
         mimeType,
         tamanhoBytes: blob.size,
         data: new Date(),

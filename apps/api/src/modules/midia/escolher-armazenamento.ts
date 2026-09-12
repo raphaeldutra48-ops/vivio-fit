@@ -19,7 +19,14 @@ export const VARIAVEIS_R2 = [
   'R2_SECRET_ACCESS_KEY',
 ] as const;
 
-export type DriverDeMidia = 'R2' | 'LOCAL';
+export type DriverDeMidia = 'SUPABASE' | 'R2' | 'LOCAL';
+
+/** As duas variáveis do Supabase Storage. */
+export const VARIAVEIS_SUPABASE = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE'] as const;
+
+export function faltandoParaSupabase(config: ConfigService): string[] {
+  return VARIAVEIS_SUPABASE.filter((v) => !config.get<string>(v));
+}
 
 /**
  * O disco local sobrevive ao deploy?
@@ -76,6 +83,18 @@ export function faltandoParaR2(config: ConfigService): string[] {
 export function escolherDriverDeMidia(config: ConfigService, logger: Logger): DriverDeMidia {
   const faltando = faltandoParaR2(config);
   const producao = config.get<string>('NODE_ENV') === 'production';
+
+  /*
+    O Supabase vem primeiro, e não é preferência de gosto: é onde o CLIENTE
+    escreve. Quem envia foto, laudo e vídeo hoje é o aparelho da pessoa, direto
+    para o compartimento. Se a API ficasse no R2, o servidor procuraria o PDF
+    da dieta num bucket onde ele nunca foi gravado — e o erro apareceria só na
+    hora de ler, com cara de arquivo corrompido.
+
+    Sem as variáveis do Supabase a escolha antiga vale inteira, o que mantém de
+    pé quem roda a API sozinha contra um banco local.
+  */
+  if (faltandoParaSupabase(config).length === 0) return 'SUPABASE';
 
   if (faltando.length === 0) return 'R2';
 
