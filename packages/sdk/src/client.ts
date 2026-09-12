@@ -656,14 +656,11 @@ export class VivioClient {
 
   readonly avaliacoes = {
     listar: (alunoId: string): Promise<AvaliacaoResumo[]> =>
-      this.requisicao<AvaliacaoResumo[]>(`/alunos/${alunoId}/avaliacoes`),
+      this.supabase.listarAvaliacoes(alunoId),
 
     /** Salva e já atualiza a medida do dia — os gráficos refletem na hora. */
     registrar: (alunoId: string, dados: RegistrarAvaliacaoInput): Promise<AvaliacaoResumo> =>
-      this.requisicao<AvaliacaoResumo>(`/alunos/${alunoId}/avaliacoes`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarAvaliacao(alunoId, dados),
   };
 
   // --- exames laboratoriais ---------------------------------------------------
@@ -862,30 +859,30 @@ export class VivioClient {
 
   readonly calorimetrias = {
     listar: (alunoId: string): Promise<CalorimetriaResumo[]> =>
-      this.requisicao<CalorimetriaResumo[]>(`/alunos/${alunoId}/calorimetrias`),
+      this.supabase.listarCalorimetrias(alunoId),
 
     registrar: (alunoId: string, dados: RegistrarCalorimetriaInput): Promise<CalorimetriaResumo> =>
-      this.requisicao<CalorimetriaResumo>(`/alunos/${alunoId}/calorimetrias`, { metodo: 'POST', corpo: dados }),
+      this.supabase.registrarCalorimetria(alunoId, dados),
 
     remover: (alunoId: string, id: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/calorimetrias/${id}`, { metodo: 'DELETE' }),
+      this.supabase.removerCalorimetria(alunoId, id),
   };
 
   readonly cardio = {
     /** Atividades do período, cada uma com a estimativa de caloria. */
     listar: (alunoId: string, dias = 30): Promise<CardioResumo[]> =>
-      this.requisicao<CardioResumo[]>(`/alunos/${alunoId}/cardio`, { query: { dias } }),
+      this.supabase.listarCardio(alunoId, dias),
 
     /** Musculação e cardio separados; `null` onde faltou peso para estimar. */
     calorias: (alunoId: string, dias = 30): Promise<ResumoDeCalorias> =>
-      this.requisicao<ResumoDeCalorias>(`/alunos/${alunoId}/cardio/calorias`, { query: { dias } }),
+      this.supabase.resumoDeCalorias(alunoId, dias),
 
     /** Só o próprio aluno registra a atividade dele. */
     registrar: (alunoId: string, dados: RegistrarCardioInput): Promise<CardioResumo> =>
-      this.requisicao<CardioResumo>(`/alunos/${alunoId}/cardio`, { metodo: 'POST', corpo: dados }),
+      this.supabase.registrarCardio(alunoId, dados),
 
     remover: (alunoId: string, id: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/cardio/${id}`, { metodo: 'DELETE' }),
+      this.supabase.removerCardio(alunoId, id),
   };
 
   readonly checkins = {

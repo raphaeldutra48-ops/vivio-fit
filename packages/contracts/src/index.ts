@@ -30,6 +30,7 @@ export * from './midia';
 export * from './notificacoes';
 export * from './nutricao';
 export * from './evolucao';
+export * from './composicao';
 export * from './chat';
 export * from './agenda';
 export * from './avaliacao';

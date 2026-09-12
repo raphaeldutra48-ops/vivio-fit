@@ -40,6 +40,15 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  ErroDeCalculo,
+  calcularPorBioimpedancia,
+  calcularPorDobras,
+  estimarCalorias,
+  gastoDiario,
+  idadeEmAnos,
+  metDe,
+  validadeDaCalorimetria,
+  MET_MUSCULACAO,
   podePrescrever,
   ROTULO_TIPO_PRESCRITIVEL,
   montarReceita,
@@ -51,6 +60,18 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  Dobra,
+  ResultadoComposicao,
+  RegistrarAvaliacaoInput,
+  AvaliacaoResumo,
+  RegistrarCalorimetriaInput,
+  CalorimetriaResumo,
+  TipoCardio,
+  Intensidade,
+  DadosParaTmb,
+  ResumoDeCalorias,
+  RegistrarCardioInput,
+  CardioResumo,
   CriarModeloPrescricaoInput,
   ModeloPrescricaoResumo,
   CriarPrescritivelInput,
@@ -5390,6 +5411,600 @@ export class MotorSupabase {
     if (linhas.length === 0) {
       throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de prescrição não encontrado.', 404);
     }
+  }
+
+  // --- cardio ---------------------------------------------------------------
+
+  private static readonly CAMPOS_CARDIO =
+    'id,tipo,intensidade,duracaoMin,distanciaKm,data,observacao,execucaoId,criadoEm';
+
+  /**
+   * O peso mais recente do aluno, ou `null`.
+   *
+   * Toda a estimativa calórica pende disto, e a ausência não vira um peso
+   * médio: um peso chutado erra a conta em 30% para quem foge da média, e é
+   * justamente quem foge da média que mais olha esse número.
+   *
+   * A consulta é a mesma para todo mundo, e o recorte é da política `medida_le`
+   * — EVOLUCAO. Quem não tem consentimento não recebe linha nenhuma e a caloria
+   * sai nula, que é exatamente o que a API fazia conferindo o consentimento em
+   * código. É a mesma regra, num lugar onde o cliente não a contorna.
+   */
+  private async pesoAtual(alunoId: string): Promise<number | null> {
+    const linhas = this.ou(
+      await this.db
+        .from('Medida')
+        .select('pesoKg')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .not('pesoKg', 'is', null)
+        .order('data', { ascending: false })
+        .limit(1),
+    ) as unknown as { pesoKg: string | number }[];
+    return linhas.length > 0 ? n(linhas[0]!.pesoKg) : null;
+  }
+
+  private paraCardio(a: Record<string, unknown>, pesoKg: number | null): CardioResumo {
+    const tipo = a.tipo as TipoCardio;
+    const intensidade = a.intensidade as Intensidade;
+    const duracaoMin = Number(a.duracaoMin);
+    return {
+      id: a.id as string,
+      tipo,
+      intensidade,
+      duracaoMin,
+      distanciaKm: n(a.distanciaKm),
+      data: String(a.data).slice(0, 10),
+      observacao: (a.observacao as string | null) ?? null,
+      /*
+        A caloria só existe para quem alcança o peso. Não é preciosismo:
+        `kcal = MET × 3,5 × peso / 200 × min` se inverte com uma divisão, e o
+        tipo, a intensidade e a duração estão na mesma resposta. Entregá-la a
+        quem só autorizou treino seria entregar o peso por caminho indireto — o
+        aluno teria autorizado uma coisa e revelado outra.
+      */
+      caloriasEstimadas: estimarCalorias(metDe(tipo, intensidade), duracaoMin, pesoKg),
+      execucaoId: (a.execucaoId as string | null) ?? null,
+      criadoEm: instante(a.criadoEm),
+    };
+  }
+
+  async listarCardio(alunoId: string, dias: number): Promise<CardioResumo[]> {
+    const de = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    /*
+      As duas consultas saem juntas, e não uma depois da outra: o `await` dentro
+      do vetor resolveria a primeira antes de a segunda começar, e `Promise.all`
+      só enfileiraria o que já estava pronto. São duas idas à rede que valem uma.
+    */
+    const [resposta, peso] = await Promise.all([
+      this.db
+        .from('AtividadeCardio')
+        .select(MotorSupabase.CAMPOS_CARDIO)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .gte('data', de)
+        .order('data', { ascending: false }),
+      this.pesoAtual(alunoId),
+    ]);
+    const linhas = this.ou(resposta) as unknown as Record<string, unknown>[];
+    return linhas.map((a) => this.paraCardio(a, peso));
+  }
+
+  async registrarCardio(alunoId: string, dados: RegistrarCardioInput): Promise<CardioResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('AtividadeCardio')
+        .insert({
+          alunoId,
+          execucaoId: dados.execucaoId ?? null,
+          tipo: dados.tipo,
+          intensidade: dados.intensidade,
+          duracaoMin: dados.duracaoMin,
+          distanciaKm: dados.distanciaKm ?? null,
+          // `date` no banco: a atividade é do DIA, e o fuso de quem registra não
+          // pode fazer o mesmo treino cair em dois dias diferentes.
+          data: dados.data,
+          observacao: dados.observacao ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_CARDIO)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraCardio(linha, await this.pesoAtual(alunoId));
+  }
+
+  /** Carimbo: a atividade entra no gasto do período, e o período passado não muda. */
+  async removerCardio(alunoId: string, id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('AtividadeCardio')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Atividade não encontrada.', 404);
+    }
+  }
+
+  /**
+   * O que a taxa metabólica precisa, cada peça de onde ela já mora.
+   *
+   * A massa magra vem da medida mais recente QUE A TENHA — e não da mais
+   * recente de todas. Quem se pesou ontem e fez bioimpedância mês passado ainda
+   * tem composição medida; ignorá-la jogaria a conta de volta para a fórmula
+   * que depende de sexo, a menos precisa das duas.
+   */
+  private async dadosParaTmb(alunoId: string): Promise<DadosParaTmb> {
+    const [comPeso, respostaMagra, respostaPerfil, respostaCalorimetria] = await Promise.all([
+      this.pesoAtual(alunoId),
+      this.db
+        .from('Medida')
+        .select('massaMagraKg')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .not('massaMagraKg', 'is', null)
+        .order('data', { ascending: false })
+        .limit(1),
+      this.db
+        .from('PerfilAluno')
+        .select('alturaCm,dataNascimento,sexoBiologico')
+        .eq('userId', alunoId)
+        .maybeSingle(),
+      /*
+        A calorimetria mais recente. Quem tiver duas, a nova manda — e se ela já
+        não valer, `taxaMetabolicaBasal` cai sozinha para a fórmula e diz o
+        motivo. Buscar a "mais recente que ainda vale" aqui esconderia da tela a
+        informação de que houve uma e ela expirou.
+      */
+      this.db
+        .from('CalorimetriaIndireta')
+        .select('tmbMedidaKcal,data,pesoNoExameKg')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false })
+        .limit(1),
+    ]);
+
+    const comMassaMagra = this.ou(respostaMagra) as unknown as {
+      massaMagraKg: string | number;
+    }[];
+    const perfil = this.ou(respostaPerfil) as {
+      alturaCm: number | null;
+      dataNascimento: string | null;
+      sexoBiologico: string | null;
+    } | null;
+    const calorimetria = this.ou(respostaCalorimetria) as unknown as {
+      tmbMedidaKcal: number;
+      data: string;
+      pesoNoExameKg: string | null;
+    }[];
+
+    const c = calorimetria[0];
+    return {
+      pesoKg: comPeso,
+      alturaCm: perfil?.alturaCm ?? null,
+      // A coluna é `date` e chega como texto; `idadeEmAnos` espera a data.
+      idade: idadeEmAnos(perfil?.dataNascimento ? new Date(perfil.dataNascimento) : null),
+      sexo: (perfil?.sexoBiologico as SexoBiologico | null) ?? null,
+      massaMagraKg: comMassaMagra.length > 0 ? n(comMassaMagra[0]!.massaMagraKg) : null,
+      calorimetria: c
+        ? {
+            tmbMedidaKcal: Number(c.tmbMedidaKcal),
+            data: String(c.data).slice(0, 10),
+            pesoNoExameKg: n(c.pesoNoExameKg),
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Gasto calórico do período, separado entre musculação e cardio.
+   *
+   * Separado porque responde a perguntas diferentes: o cardio diz se o aluno
+   * cumpriu o que foi combinado fora da sala, a musculação diz se o treino tem o
+   * volume prescrito. Somados, nenhuma das duas dá para responder.
+   */
+  async resumoDeCalorias(alunoId: string, dias: number): Promise<ResumoDeCalorias> {
+    const de = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+
+    const [dadosDoCorpo, respostaExecucoes, respostaCardios] = await Promise.all([
+      this.dadosParaTmb(alunoId),
+      this.db
+        .from('ExecucaoTreino')
+        .select('duracaoSeg,feedback:FeedbackTreino(dificuldade)')
+        .eq('alunoId', alunoId)
+        .gte('iniciadoEm', de.toISOString()),
+      this.db
+        .from('AtividadeCardio')
+        .select('tipo,intensidade,duracaoMin')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .gte('data', de.toISOString().slice(0, 10)),
+    ]);
+
+    const execucoes = this.ou(respostaExecucoes) as unknown as {
+      duracaoSeg: number | null;
+      feedback: unknown;
+    }[];
+    const cardios = this.ou(respostaCardios) as unknown as {
+      tipo: string;
+      intensidade: string;
+      duracaoMin: number;
+    }[];
+
+    const peso = dadosDoCorpo.pesoKg;
+
+    /*
+      A dificuldade relatada vira a intensidade da musculação: quem terminou
+      dizendo "muito difícil" gastou mais que quem achou leve, e é a única
+      leitura de esforço que temos. Sem feedback, assume moderada — o meio da
+      escala erra menos que qualquer extremo.
+    */
+    const intensidadeDoTreino = (dificuldade?: number): number => {
+      if (dificuldade === undefined) return MET_MUSCULACAO.MODERADA;
+      if (dificuldade <= 2) return MET_MUSCULACAO.LEVE;
+      if (dificuldade >= 4) return MET_MUSCULACAO.INTENSA;
+      return MET_MUSCULACAO.MODERADA;
+    };
+
+    let minutosMusculacao = 0;
+    let kcalMusculacao = 0;
+    let temAlgumaKcalDeMusculacao = false;
+
+    for (const e of execucoes) {
+      const minutos = Math.round((e.duracaoSeg ?? 0) / 60);
+      if (minutos <= 0) continue;
+      minutosMusculacao += minutos;
+      const fb = umSo(e.feedback) as { dificuldade?: number } | null;
+      const kcal = estimarCalorias(intensidadeDoTreino(fb?.dificuldade), minutos, peso);
+      if (kcal !== null) {
+        kcalMusculacao += kcal;
+        temAlgumaKcalDeMusculacao = true;
+      }
+    }
+
+    let minutosCardio = 0;
+    let kcalCardio = 0;
+    let temAlgumaKcalDeCardio = false;
+
+    for (const c of cardios) {
+      minutosCardio += Number(c.duracaoMin);
+      const kcal = estimarCalorias(
+        metDe(c.tipo as TipoCardio, c.intensidade as Intensidade),
+        Number(c.duracaoMin),
+        peso,
+      );
+      if (kcal !== null) {
+        kcalCardio += kcal;
+        temAlgumaKcalDeCardio = true;
+      }
+    }
+
+    /*
+      Duas ausências diferentes, e por muito tempo elas foram a mesma aqui.
+
+      Não houve sessão nenhuma na janela: a resposta é ZERO. "Você não queimou
+      nada esta semana" é um fato, e é o que o contador precisa dizer para
+      servir de cobrança. `null` faz a tela mostrar um travessão, que se lê como
+      "não carregou" — e quem passou a semana parado via o app quebrado em vez
+      da própria semana parada.
+
+      Houve sessão mas não deu para estimar (falta o peso): aí sim é `null`.
+      Somar como zero afirmaria que ela treinou de graça.
+    */
+    const kcalOuZero = (sessoes: number, temAlguma: boolean, soma: number): number | null => {
+      if (sessoes === 0) return 0;
+      return temAlguma ? soma : null;
+    };
+
+    const musculacao = {
+      sessoes: execucoes.length,
+      minutos: minutosMusculacao,
+      kcal: kcalOuZero(execucoes.length, temAlgumaKcalDeMusculacao, kcalMusculacao),
+    };
+    const cardio = {
+      sessoes: cardios.length,
+      minutos: minutosCardio,
+      kcal: kcalOuZero(cardios.length, temAlgumaKcalDeCardio, kcalCardio),
+    };
+
+    /*
+      Basta UMA parte desconhecida para o total ser desconhecido: somar o que se
+      sabe com o que não se sabe e chamar de total dá um número menor que o real,
+      com cara de exato.
+    */
+    const totalKcal =
+      musculacao.kcal === null || cardio.kcal === null ? null : musculacao.kcal + cardio.kcal;
+
+    return {
+      dias,
+      pesoUsadoKg: peso,
+      musculacao,
+      cardio,
+      totalKcal,
+      gastoDiario: gastoDiario(dadosDoCorpo, totalKcal, dias),
+    };
+  }
+
+  // --- calorimetria indireta ------------------------------------------------
+
+  private static readonly CAMPOS_CALORIMETRIA =
+    'id,data,tmbMedidaKcal,pesoNoExameKg,equipamento,observacao,criadoEm,' +
+    'registradoPor:User!CalorimetriaIndireta_registradoPorId_fkey(id,nome)';
+
+  private paraCalorimetria(
+    e: Record<string, unknown>,
+    pesoAtual: number | null,
+  ): CalorimetriaResumo {
+    const pesoNoExameKg = n(e.pesoNoExameKg);
+    const data = String(e.data).slice(0, 10);
+    return {
+      id: e.id as string,
+      data,
+      tmbMedidaKcal: Number(e.tmbMedidaKcal),
+      pesoNoExameKg,
+      equipamento: (e.equipamento as string | null) ?? null,
+      observacao: (e.observacao as string | null) ?? null,
+      registradoPor: umSo(e.registradoPor) as unknown as CalorimetriaResumo['registradoPor'],
+      /*
+        A validade é calculada NA LEITURA, e não gravada: ela depende do peso de
+        hoje. Quem perdeu quinze quilos em quatro meses tem uma medição mais
+        velha, na prática, do que quem manteve o peso por um ano — e um campo
+        gravado envelheceria sem ninguém tocar nele.
+      */
+      validade: validadeDaCalorimetria(
+        { tmbMedidaKcal: Number(e.tmbMedidaKcal), data, pesoNoExameKg },
+        pesoAtual,
+      ),
+      criadoEm: instante(e.criadoEm),
+    };
+  }
+
+  async listarCalorimetrias(alunoId: string): Promise<CalorimetriaResumo[]> {
+    const [resposta, peso] = await Promise.all([
+      this.db
+        .from('CalorimetriaIndireta')
+        .select(MotorSupabase.CAMPOS_CALORIMETRIA)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false }),
+      this.pesoAtual(alunoId),
+    ]);
+    const linhas = this.ou(resposta) as unknown as Record<string, unknown>[];
+    return linhas.map((e) => this.paraCalorimetria(e, peso));
+  }
+
+  /**
+   * Lançam o aluno, com o laudo na mão, e o profissional que pediu o exame.
+   *
+   * Diferente do check-in e do cardio, que são autorrelato e só o aluno
+   * escreve: aqui o dado é de um laboratório, não da percepção de ninguém, e
+   * quem digitou fica gravado — é o gatilho que carimba.
+   */
+  async registrarCalorimetria(
+    alunoId: string,
+    dados: RegistrarCalorimetriaInput,
+  ): Promise<CalorimetriaResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('CalorimetriaIndireta')
+        .insert({
+          alunoId,
+          data: dados.data,
+          tmbMedidaKcal: dados.tmbMedidaKcal,
+          pesoNoExameKg: dados.pesoNoExameKg ?? null,
+          equipamento: dados.equipamento ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_CALORIMETRIA)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraCalorimetria(linha, await this.pesoAtual(alunoId));
+  }
+
+  async removerCalorimetria(alunoId: string, id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('CalorimetriaIndireta')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Calorimetria não encontrada.', 404);
+    }
+  }
+
+  // --- avaliação física -----------------------------------------------------
+
+  private static readonly CAMPOS_AVALIACAO =
+    'id,data,metodo,protocolo,pesoKg,alturaCm,dobras,bioimpedancia,percentualGordura,' +
+    'massaGordaKg,massaMagraKg,densidadeCorporal,somaDobrasMm,imc,observacao,' +
+    'avaliador:User!AvaliacaoFisica_avaliadorId_fkey(id,nome)';
+
+  private paraAvaliacao(
+    a: Record<string, unknown>,
+    anterior?: Record<string, unknown>,
+  ): AvaliacaoResumo {
+    const percentual = n(a.percentualGordura) ?? 0;
+    const magra = n(a.massaMagraKg) ?? 0;
+    const peso = n(a.pesoKg) ?? 0;
+    const arredondar = (v: number, casas: number): number =>
+      Math.round(v * 10 ** casas) / 10 ** casas;
+
+    return {
+      id: a.id as string,
+      data: String(a.data).slice(0, 10),
+      metodo: a.metodo as AvaliacaoResumo['metodo'],
+      protocolo: (a.protocolo as AvaliacaoResumo['protocolo']) ?? null,
+      pesoKg: peso,
+      alturaCm: a.alturaCm === null ? null : Number(a.alturaCm),
+      resultado: {
+        percentualGordura: percentual,
+        massaGordaKg: n(a.massaGordaKg) ?? 0,
+        massaMagraKg: magra,
+        densidadeCorporal: n(a.densidadeCorporal) ?? undefined,
+        somaDobrasMm: n(a.somaDobrasMm) ?? undefined,
+        imc: n(a.imc) ?? undefined,
+      },
+      dobras: (a.dobras as AvaliacaoResumo['dobras']) ?? null,
+      bioimpedancia: (a.bioimpedancia as Record<string, number> | null) ?? null,
+      observacao: (a.observacao as string | null) ?? null,
+      avaliador: umSo(a.avaliador) as unknown as AvaliacaoResumo['avaliador'],
+      variacao: anterior
+        ? {
+            percentualGordura: arredondar(percentual - (n(anterior.percentualGordura) ?? 0), 1),
+            massaMagraKg: arredondar(magra - (n(anterior.massaMagraKg) ?? 0), 2),
+            pesoKg: arredondar(peso - (n(anterior.pesoKg) ?? 0), 2),
+          }
+        : null,
+    };
+  }
+
+  async listarAvaliacoes(alunoId: string): Promise<AvaliacaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('AvaliacaoFisica')
+        .select(MotorSupabase.CAMPOS_AVALIACAO)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false })
+        .limit(60),
+    ) as unknown as Record<string, unknown>[];
+
+    // A variação é sempre contra a avaliação imediatamente anterior — é a
+    // comparação que o profissional faz na consulta.
+    return linhas.map((a, i) => this.paraAvaliacao(a, linhas[i + 1]));
+  }
+
+  /**
+   * Registra a avaliação E atualiza a `Medida` do dia.
+   *
+   * É a segunda parte que faz a avaliação valer: os gráficos de composição
+   * corporal leem de `Medida`, então uma adipometria feita hoje aparece na curva
+   * do aluno sem ninguém digitar nada de novo.
+   *
+   * A conta em si mora em `@vivio/contracts` — as equações porque a tela as
+   * executa enquanto o profissional digita, e a CONFERÊNCIA (protocolo
+   * completo, resultado plausível) porque duas cópias dela aceitariam coisas
+   * diferentes, e o número entraria no histórico com cara de medido.
+   */
+  async registrarAvaliacao(
+    alunoId: string,
+    dados: RegistrarAvaliacaoInput,
+  ): Promise<AvaliacaoResumo> {
+    let resultado: ResultadoComposicao;
+    try {
+      resultado =
+        dados.metodo === 'ADIPOMETRIA'
+          ? calcularPorDobras({
+              protocolo: dados.protocolo,
+              sexo: dados.sexo,
+              idade: dados.idade,
+              pesoKg: dados.pesoKg,
+              alturaCm: dados.alturaCm,
+              dobras: dados.dobras as Partial<Record<Dobra, number>>,
+            })
+          : calcularPorBioimpedancia({
+              pesoKg: dados.pesoKg,
+              alturaCm: dados.alturaCm,
+              percentualGordura: dados.percentualGordura,
+              massaMagraKg: dados.massaMagraKg,
+            });
+    } catch (erro) {
+      // Erro de cálculo é problema do que foi digitado, não falha do servidor:
+      // a frase diz o que conferir, e a tela a mostra tal como veio.
+      if (erro instanceof ErroDeCalculo) throw new ErroApi('CONFLITO', erro.message, 409);
+      throw erro;
+    }
+
+    const dia = dados.data.toISOString().slice(0, 10);
+    const ehAdipometria = dados.metodo === 'ADIPOMETRIA';
+
+    const criada = this.ou(
+      await this.db
+        .from('AvaliacaoFisica')
+        .insert({
+          alunoId,
+          data: dia,
+          metodo: dados.metodo,
+          protocolo: ehAdipometria ? dados.protocolo : null,
+          sexo: ehAdipometria ? dados.sexo : null,
+          idade: ehAdipometria ? dados.idade : null,
+          pesoKg: dados.pesoKg,
+          alturaCm: dados.alturaCm ?? null,
+          dobras: ehAdipometria ? dados.dobras : null,
+          bioimpedancia: ehAdipometria
+            ? null
+            : {
+                aguaCorporalPercentual: dados.aguaCorporalPercentual,
+                massaOsseaKg: dados.massaOsseaKg,
+                taxaMetabolicaBasal: dados.taxaMetabolicaBasal,
+                gorduraVisceral: dados.gorduraVisceral,
+              },
+          percentualGordura: resultado.percentualGordura,
+          massaGordaKg: resultado.massaGordaKg,
+          massaMagraKg: resultado.massaMagraKg,
+          densidadeCorporal: resultado.densidadeCorporal ?? null,
+          somaDobrasMm: resultado.somaDobrasMm ?? null,
+          imc: resultado.imc ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_AVALIACAO)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+
+    /*
+      A medida do dia vem junto, por `upsert`: duas avaliações no mesmo dia
+      corrigem a mesma linha em vez de criarem duas, e uma medida apagada antes
+      volta a valer (`deletadoEm: null`) — foi a avaliação que a repôs.
+    */
+    this.ou(
+      await this.db.from('Medida').upsert(
+        {
+          /*
+            O mesmo id determinístico de `registrarMedida`: a chave única é
+            (aluno, data), e um id sorteado aqui faria a correção pela avaliação
+            trocar a chave primária de uma linha que já existia. Duas convenções
+            de id na mesma tabela é o tipo de coisa que só machuca depois.
+          */
+          id: `${alunoId}-${dia}`,
+          alunoId,
+          data: dia,
+          // Quem mediu assina a medida também: a coluna é NOT NULL, e o gatilho
+          // de `Medida` a congela depois — a autoria da linha é de quem a criou.
+          registradoPorId: await this.meuId(),
+          pesoKg: dados.pesoKg,
+          percentualGordura: resultado.percentualGordura,
+          massaMagraKg: resultado.massaMagraKg,
+          fonte: ehAdipometria ? 'MANUAL' : 'BIOIMPEDANCIA',
+          deletadoEm: null,
+        },
+        { onConflict: 'alunoId,data' },
+      ),
+    );
+
+    /*
+      A anterior é buscada DEPOIS de gravar, e por data estritamente menor: a
+      variação que a tela mostra é contra a avaliação que veio antes desta, não
+      contra ela mesma.
+    */
+    const anteriores = this.ou(
+      await this.db
+        .from('AvaliacaoFisica')
+        .select('percentualGordura,massaMagraKg,pesoKg')
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .lt('data', dia)
+        .order('data', { ascending: false })
+        .limit(1),
+    ) as unknown as Record<string, unknown>[];
+
+    return this.paraAvaliacao(criada, anteriores[0]);
   }
 }
 
