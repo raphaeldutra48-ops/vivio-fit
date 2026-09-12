@@ -40,6 +40,10 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  compararPorAtencao,
+  marcarSequenciasDeDor,
+  montarListaDeCompras,
+  precisaDeOlhar,
   ErroDeCalculo,
   calcularPorBioimpedancia,
   calcularPorDobras,
@@ -60,6 +64,10 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  FeedbackDoAluno,
+  PainelDeFeedback,
+  ListaDeCompras,
+  ResumoAluno,
   RespostaResumo,
   AplicarAnamneseInput,
   AnamneseResumo,
@@ -6252,6 +6260,185 @@ export class MotorSupabase {
     if (linhas.length === 0) {
       throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Anamnese não encontrada.', 404);
     }
+  }
+
+  // --- cabeçalho do aluno ---------------------------------------------------
+
+  /**
+   * Identificação, dados básicos e a equipe de cuidado.
+   *
+   * Não traz nada clínico — é o que o profissional vê ao abrir a ficha, antes
+   * de qualquer aba com dado sensível. Por isso não pede consentimento nenhum:
+   * quem tem vínculo alcança, e é a política de `User` que diz isso.
+   */
+  async resumoDoAluno(alunoId: string): Promise<ResumoAluno> {
+    const linha = this.ou(
+      await this.db
+        .from('User')
+        .select(
+          'id,nome,email,avatarUrl,' +
+            'perfilAluno:PerfilAluno(dataNascimento,alturaCm,objetivo),' +
+            'vinculosComoAluno:Vinculo!Vinculo_alunoId_fkey(tipo,status,' +
+            'profissional:User!Vinculo_profissionalId_fkey(id,nome,email,avatarUrl))',
+        )
+        .eq('id', alunoId)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Aluno não encontrado.', 404);
+
+    const perfil = umSo(linha.perfilAluno) as {
+      dataNascimento: string | null;
+      alturaCm: number | null;
+      objetivo: string | null;
+    } | null;
+
+    const equipe = ((linha.vinculosComoAluno as Record<string, unknown>[] | null) ?? [])
+      .filter((v) => v.status === 'ATIVO')
+      .map((v) => ({
+        tipo: v.tipo as ResumoAluno['equipe'][number]['tipo'],
+        profissional: umSo(v.profissional) as unknown as ResumoAluno['equipe'][number]['profissional'],
+      }))
+      // Vínculo cujo profissional a política não deixa ler viria com o embed
+      // nulo, e a tela mostraria um cartão sem nome.
+      .filter((v) => v.profissional !== null);
+
+    return {
+      id: linha.id as string,
+      nome: linha.nome as string,
+      email: linha.email as string,
+      avatarUrl: (linha.avatarUrl as string | null) ?? null,
+      idade: idadeEmAnos(perfil?.dataNascimento ? new Date(perfil.dataNascimento) : null),
+      alturaCm: perfil?.alturaCm ?? null,
+      objetivo: perfil?.objetivo ?? null,
+      equipe,
+    };
+  }
+
+  // --- lista de compras -----------------------------------------------------
+
+  /**
+   * A lista de compras do plano ativo.
+   *
+   * Não existe tabela de lista: ela é calculada do plano no momento em que é
+   * pedida. Guardar uma cópia seria manter duas verdades — e o aluno iria ao
+   * mercado comprar o que já não está prescrito.
+   */
+  async listaDeCompras(alunoId: string, dias: number): Promise<ListaDeCompras> {
+    const linha = this.ou(
+      await this.db
+        .from('PlanoDieta')
+        .select(MotorSupabase.CAMPOS_DIETA)
+        .eq('alunoId', alunoId)
+        .eq('status', 'ATIVO')
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Plano alimentar ativo não encontrado.', 404);
+    }
+
+    const plano = this.paraLinhaDeDieta(linha);
+    return montarListaDeCompras(
+      {
+        nome: plano.nome,
+        refeicoes: plano.refeicoes.map((r) => ({
+          nome: r.nome,
+          itens: r.itens.map((i) => ({
+            quantidadeG: i.quantidadeG,
+            alimento: {
+              id: i.alimento.id,
+              nome: i.alimento.nome,
+              grupo: i.alimento.grupo,
+              medidaCaseira: i.alimento.medidaCaseira,
+              medidaGramas: i.alimento.medidaGramas,
+            },
+          })),
+        })),
+      },
+      dias,
+    );
+  }
+
+  // --- painel de feedback ---------------------------------------------------
+
+  /**
+   * O que os alunos disseram depois de treinar.
+   *
+   * O recorte por consentimento é POR ALUNO, e não por tela: feedback é dado de
+   * treino, e um aluno pode ter autorizado nutrição sem autorizar treino. Quem
+   * faz esse recorte agora é a política de `ExecucaoTreino` — a consulta pede
+   * tudo e o banco devolve só o que pode, aluno a aluno. Era exatamente o tipo
+   * de tela em que a regra costuma ser esquecida, porque não há um `:alunoId` na
+   * rota para conferir.
+   */
+  async painelDeFeedback(dias: number, apenasAtencao: boolean): Promise<PainelDeFeedback> {
+    const agora = Date.now();
+    const de = new Date(agora - dias * 24 * 60 * 60 * 1000);
+    /*
+      Uma folga além da janela pedida, só para contar sequência de dor.
+
+      Sem isso, o aluno que vem com dor há três treinos apareceria como
+      "primeira vez" toda vez que o profissional trocasse o filtro para 7 dias —
+      e "primeira vez" é exatamente a leitura que faz não agir.
+    */
+    const inicioDaBusca = new Date(de.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const linhasBrutas = this.ou(
+      await this.db
+        .from('ExecucaoTreino')
+        .select(
+          'id,alunoId,iniciadoEm,' +
+            'aluno:User!ExecucaoTreino_alunoId_fkey(id,nome),' +
+            'sessao:SessaoTreino(nome),' +
+            'feedback:FeedbackTreino(dificuldade,teveDor,localDor,sensacao,comentario)',
+        )
+        .gte('iniciadoEm', inicioDaBusca.toISOString())
+        .not('feedback', 'is', null)
+        .order('iniciadoEm', { ascending: true }),
+    ) as unknown as Record<string, unknown>[];
+
+    // Por aluno, do mais antigo ao mais novo: é a ordem que a contagem de
+    // sequência exige.
+    const porAluno = new Map<string, FeedbackDoAluno[]>();
+    for (const e of linhasBrutas) {
+      const fb = umSo(e.feedback) as Record<string, unknown> | null;
+      if (!fb) continue;
+      const alunoId = e.alunoId as string;
+      const lista = porAluno.get(alunoId) ?? [];
+      lista.push({
+        execucaoId: e.id as string,
+        aluno: umSo(e.aluno) as unknown as FeedbackDoAluno['aluno'],
+        sessaoNome: ((umSo(e.sessao) as { nome?: string } | null)?.nome ?? 'Treino avulso'),
+        // Quando o treino aconteceu — não quando o celular conseguiu enviar.
+        treinoEm: instante(e.iniciadoEm),
+        dificuldade: Number(fb.dificuldade),
+        teveDor: Boolean(fb.teveDor),
+        localDor: (fb.localDor as string | null) ?? null,
+        sensacao: (fb.sensacao as string | null) ?? null,
+        comentario: (fb.comentario as string | null) ?? null,
+        sequenciaDeDor: null,
+      });
+      porAluno.set(alunoId, lista);
+    }
+
+    const linhas: FeedbackDoAluno[] = [];
+    for (const daPessoa of porAluno.values()) {
+      // Só agora a folga é descartada: ela já cumpriu o papel de dar contexto à
+      // sequência.
+      linhas.push(
+        ...marcarSequenciasDeDor(daPessoa).filter((f) => new Date(f.treinoEm) >= de),
+      );
+    }
+
+    const precisamDeOlhar = linhas.filter(precisaDeOlhar).length;
+    const visiveis = apenasAtencao ? linhas.filter(precisaDeOlhar) : linhas;
+
+    return {
+      dias,
+      total: linhas.length,
+      precisamDeOlhar,
+      linhas: visiveis.sort(compararPorAtencao),
+    };
   }
 }
 

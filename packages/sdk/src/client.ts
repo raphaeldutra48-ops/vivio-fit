@@ -437,7 +437,7 @@ export class VivioClient {
 
   readonly alunos = {
     resumo: (alunoId: string): Promise<ResumoAluno> =>
-      this.requisicao<ResumoAluno>(`/alunos/${alunoId}/resumo`),
+      this.supabase.resumoDoAluno(alunoId),
   };
 
   // --- consentimentos -----------------------------------------------------
@@ -774,9 +774,7 @@ export class VivioClient {
 
   readonly listaDeCompras = {
     gerar: (alunoId: string, dias = 7): Promise<ListaDeCompras> =>
-      this.requisicao<ListaDeCompras>(`/alunos/${alunoId}/lista-de-compras`, {
-        query: { dias },
-      }),
+      this.supabase.listaDeCompras(alunoId, dias),
   };
 
   // --- chat -----------------------------------------------------------------
@@ -805,7 +803,7 @@ export class VivioClient {
   readonly feedback = {
     /** Feedback pos-treino da carteira, o mais grave primeiro. */
     daCarteira: (dias = DIAS_PADRAO_FEEDBACK, apenasAtencao = false): Promise<PainelDeFeedback> =>
-      this.requisicao<PainelDeFeedback>('/feedback', { query: { dias, apenasAtencao } }),
+      this.supabase.painelDeFeedback(dias, apenasAtencao),
   };
 
   readonly comparativo = {
