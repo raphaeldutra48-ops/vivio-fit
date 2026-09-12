@@ -505,8 +505,7 @@ export class VivioClient {
       chave: string;
       mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
       alunoId?: string | null;
-    }): Promise<LeituraDeDieta> =>
-      this.requisicao<LeituraDeDieta>('/importacao-dieta', { metodo: 'POST', corpo: dados }),
+    }): Promise<LeituraDeDieta> => this.supabase.importarDieta(dados),
 
     /** A fila de gravação: o que falta, do mais prescrito para o menos. */
     planoDeGravacao: (): Promise<ExercicioAGravar[]> => this.supabase.planoDeGravacao(),

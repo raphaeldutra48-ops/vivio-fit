@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAXIMO_DE_CANDIDATOS,
   PONTUACAO_MINIMA_PARA_SUGERIR,
   deveSugerir,
+  montarLeituraDeDieta,
   normalizarParaBusca,
   palavrasSignificativas,
   pontuarCandidato,
+  type AlimentoCandidato,
+  type DietaExtraida,
 } from './importacao-dieta';
 
 /**
@@ -133,5 +137,121 @@ describe('deveSugerir', () => {
 
   it('sem candidato não sugere', () => {
     expect(deveSugerir([])).toBe(false);
+  });
+});
+
+describe('montarLeituraDeDieta', () => {
+  const alimento = (id: string, nome: string): AlimentoCandidato => ({
+    id,
+    nome,
+    medidaCaseira: null,
+    medidaGramas: null,
+    kcalPor100g: 100,
+  });
+
+  const CATALOGO: AlimentoCandidato[] = [
+    alimento('a1', 'Arroz, branco, cozido'),
+    alimento('a2', 'Arroz, integral, cozido'),
+    alimento('a3', 'Feijão, carioca, cozido'),
+    alimento('a4', 'Frango, peito, grelhado'),
+  ];
+
+  const dieta = (nomeLido: string, extras: Partial<DietaExtraida> = {}): DietaExtraida => ({
+    nome: 'Plano da prova',
+    observacao: null,
+    kcalAlvo: null,
+    proteinaAlvoG: null,
+    carboAlvoG: null,
+    gorduraAlvoG: null,
+    avisos: [],
+    refeicoes: [
+      {
+        nome: 'Almoço',
+        horarioSugerido: '12:00',
+        itens: [
+          {
+            textoOriginal: `150g de ${nomeLido}`,
+            nomeLido,
+            quantidadeG: 150,
+            medidaCaseiraLida: null,
+            observacao: null,
+          },
+        ],
+      },
+    ],
+    ...extras,
+  });
+
+  it('sugere quando um candidato se destaca', () => {
+    const r = montarLeituraDeDieta(dieta('frango grelhado'), CATALOGO);
+    const item = r.refeicoes[0]!.itens[0]!;
+
+    expect(item.alimentoIdSugerido).toBe('a4');
+    expect(item.candidatos[0]!.nome).toContain('Frango');
+    // O texto do papel viaja intacto: é o que a pessoa confere contra o
+    // documento, e ele não pode ser reescrito pela nossa interpretação.
+    expect(item.textoOriginal).toBe('150g de frango grelhado');
+    expect(item.quantidadeG).toBe(150);
+  });
+
+  it('não sugere quando dois candidatos empatam', () => {
+    /*
+      "arroz cozido" casa igualmente com o branco e o integral. Sugerir um dos
+      dois faria o profissional aceitar com um toque um alimento que o papel não
+      diz — e é justamente o toque rápido que a tela incentiva.
+    */
+    const r = montarLeituraDeDieta(dieta('arroz cozido'), CATALOGO);
+    const item = r.refeicoes[0]!.itens[0]!;
+
+    expect(item.candidatos.length).toBeGreaterThan(1);
+    expect(item.alimentoIdSugerido).toBeNull();
+  });
+
+  it('conta quantos itens ficaram sem candidato', () => {
+    const r = montarLeituraDeDieta(dieta('quiabo refogado'), CATALOGO);
+    const item = r.refeicoes[0]!.itens[0]!;
+
+    expect(item.candidatos).toEqual([]);
+    expect(item.alimentoIdSugerido).toBeNull();
+    // O tamanho do trabalho manual, dito de uma vez em vez de a pessoa
+    // descobrir item a item.
+    expect(r.itensSemCandidato).toBe(1);
+  });
+
+  it('mostra no máximo cinco candidatos', () => {
+    const muitos = Array.from({ length: 12 }, (_, i) => alimento(`x${i}`, `Arroz tipo ${i}`));
+    const r = montarLeituraDeDieta(dieta('arroz'), muitos);
+    // Mais que isso vira lista para rolar, não escolha.
+    expect(r.refeicoes[0]!.itens[0]!.candidatos.length).toBeLessThanOrEqual(MAXIMO_DE_CANDIDATOS);
+  });
+
+  it('os avisos e as metas do documento passam intactos', () => {
+    const r = montarLeituraDeDieta(
+      dieta('frango grelhado', {
+        avisos: ['A quantidade do jantar está rasurada.'],
+        kcalAlvo: 2200,
+        proteinaAlvoG: 160,
+      }),
+      CATALOGO,
+    );
+
+    // O aviso é o que faz a pessoa olhar duas vezes naquele ponto; perdê-lo
+    // seria entregar a leitura como se fosse certa.
+    expect(r.avisos).toEqual(['A quantidade do jantar está rasurada.']);
+    expect(r.kcalAlvo).toBe(2200);
+    expect(r.proteinaAlvoG).toBe(160);
+    expect(r.refeicoes[0]!.horarioSugerido).toBe('12:00');
+  });
+
+  it('dieta sem refeição nenhuma não quebra a montagem', () => {
+    // É o caso do documento que não era um plano alimentar: o modelo devolve
+    // vazio e explica em `avisos`.
+    const r = montarLeituraDeDieta(
+      { ...dieta('x'), refeicoes: [], avisos: ['Isto não parece um plano alimentar.'] },
+      CATALOGO,
+    );
+    expect(r.refeicoes).toEqual([]);
+    expect(r.itensSemCandidato).toBe(0);
+    expect(r.avisos).toHaveLength(1);
   });
 });

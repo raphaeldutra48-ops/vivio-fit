@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { EscopoDado, Papel, Prisma, StatusVinculo } from '@prisma/client';
 import {
-  MAXIMO_DE_CANDIDATOS,
-  deveSugerir,
+  montarLeituraDeDieta,
   palavrasSignificativas,
-  pontuarCandidato,
   type AlimentoCandidato,
   type DietaExtraida,
-  type ItemLido,
   type LeituraDeDieta,
   type UsuarioAutenticado,
 } from '@vivio/contracts';
@@ -97,9 +94,12 @@ export class ImportacaoDietaService {
   /**
    * Cada nome lido vira candidatos do catálogo.
    *
-   * A busca é por palavra significativa, e não por `contains` do texto inteiro:
-   * "arroz branco cozido" não casaria com "Arroz, branco, cozido" num LIKE, e o
-   * documento nunca escreve igual ao catálogo.
+   * A pontuação e a decisão de sugerir moram em `@vivio/contracts`: são dois
+   * consumidores lendo a mesma leitura, e duas pontuações diferentes
+   * sugeririam alimentos diferentes para o mesmo documento — sem ninguém
+   * perceber, porque as duas parecem plausíveis.
+   *
+   * O que sobra aqui é a busca, que é de quem tem banco.
    */
   private async casarComCatalogo(
     extraida: DietaExtraida,
@@ -107,49 +107,9 @@ export class ImportacaoDietaService {
   ): Promise<LeituraDeDieta> {
     const nomes = extraida.refeicoes.flatMap((r) => r.itens.map((i) => i.nomeLido));
     const catalogo = await this.buscarCandidatos(nomes, profissionalId);
-
-    let semCandidato = 0;
-    const refeicoes = extraida.refeicoes.map((r) => ({
-      nome: r.nome,
-      horarioSugerido: r.horarioSugerido,
-      itens: r.itens.map((i): ItemLido => {
-        const candidatos = this.melhoresCandidatos(i.nomeLido, catalogo);
-        if (candidatos.length === 0) semCandidato += 1;
-
-        const pontuacoes = candidatos.map((c) => pontuarCandidato(i.nomeLido, c.nome));
-
-        return {
-          textoOriginal: i.textoOriginal,
-          nomeLido: i.nomeLido,
-          quantidadeG: i.quantidadeG,
-          medidaCaseiraLida: i.medidaCaseiraLida,
-          observacao: i.observacao,
-          candidatos,
-          alimentoIdSugerido: deveSugerir(pontuacoes) ? candidatos[0]!.id : null,
-        };
-      }),
-    }));
-
-    return {
-      nome: extraida.nome,
-      observacao: extraida.observacao,
-      kcalAlvo: extraida.kcalAlvo,
-      proteinaAlvoG: extraida.proteinaAlvoG,
-      carboAlvoG: extraida.carboAlvoG,
-      gorduraAlvoG: extraida.gorduraAlvoG,
-      refeicoes,
-      avisos: extraida.avisos,
-      itensSemCandidato: semCandidato,
-    };
+    return montarLeituraDeDieta(extraida, catalogo);
   }
 
-  /**
-   * Uma consulta só para a dieta inteira.
-   *
-   * Uma dieta tem umas 25 linhas; consultar por linha seriam 25 idas ao banco
-   * para montar uma tela. Buscamos o conjunto das palavras de todos os itens e
-   * pontuamos em memória.
-   */
   private async buscarCandidatos(
     nomes: string[],
     profissionalId: string,
@@ -189,17 +149,5 @@ export class ImportacaoDietaService {
       medidaGramas: a.medidaGramas === null ? null : Number(a.medidaGramas),
       kcalPor100g: Number(a.kcal),
     }));
-  }
-
-  private melhoresCandidatos(
-    nomeLido: string,
-    catalogo: AlimentoCandidato[],
-  ): AlimentoCandidato[] {
-    return catalogo
-      .map((a) => ({ alimento: a, pontos: pontuarCandidato(nomeLido, a.nome) }))
-      .filter((c) => c.pontos > 0)
-      .sort((a, b) => b.pontos - a.pontos || a.alimento.nome.localeCompare(b.alimento.nome, 'pt-BR'))
-      .slice(0, MAXIMO_DE_CANDIDATOS)
-      .map((c) => c.alimento);
   }
 }

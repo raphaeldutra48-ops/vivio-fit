@@ -217,3 +217,72 @@ export function deveSugerir(pontuacoesOrdenadas: number[]): boolean {
 
 /** Quantos candidatos mostrar. Mais que isso vira lista para rolar, não escolha. */
 export const MAXIMO_DE_CANDIDATOS = 5;
+
+/**
+ * Cruza o que o modelo leu com o catálogo de alimentos.
+ *
+ * Mora aqui porque são dois consumidores lendo a mesma leitura — a API e o SDK
+ * sobre o Postgres — e a sugestão é o que o profissional aceita com um toque.
+ * Duas pontuações diferentes sugeririam alimentos diferentes para o mesmo
+ * documento, e ninguém perceberia: as duas parecem plausíveis.
+ *
+ * O catálogo chega pronto de quem consultou. A busca por palavra significativa
+ * é de quem tem banco; o que é regra — pontuar, ordenar, decidir se sugere —
+ * é isto aqui.
+ */
+export function montarLeituraDeDieta(
+  extraida: DietaExtraida,
+  catalogo: AlimentoCandidato[],
+): LeituraDeDieta {
+  let semCandidato = 0;
+
+  const melhores = (nomeLido: string): AlimentoCandidato[] =>
+    catalogo
+      .map((a) => ({ alimento: a, pontos: pontuarCandidato(nomeLido, a.nome) }))
+      .filter((c) => c.pontos > 0)
+      .sort(
+        (a, b) =>
+          b.pontos - a.pontos || a.alimento.nome.localeCompare(b.alimento.nome, 'pt-BR'),
+      )
+      .slice(0, MAXIMO_DE_CANDIDATOS)
+      .map((c) => c.alimento);
+
+  const refeicoes: RefeicaoLida[] = extraida.refeicoes.map((r) => ({
+    nome: r.nome,
+    horarioSugerido: r.horarioSugerido,
+    itens: r.itens.map((i): ItemLido => {
+      const candidatos = melhores(i.nomeLido);
+      if (candidatos.length === 0) semCandidato += 1;
+      const pontuacoes = candidatos.map((c) => pontuarCandidato(i.nomeLido, c.nome));
+
+      return {
+        textoOriginal: i.textoOriginal,
+        nomeLido: i.nomeLido,
+        quantidadeG: i.quantidadeG,
+        medidaCaseiraLida: i.medidaCaseiraLida,
+        observacao: i.observacao,
+        candidatos,
+        /*
+          A sugestão só sai quando o primeiro candidato se destaca. Sugerir o
+          "menos pior" faria o profissional aceitar com um toque um alimento que
+          não é o do papel — e é justamente o toque rápido que a tela incentiva.
+        */
+        alimentoIdSugerido: deveSugerir(pontuacoes) ? (candidatos[0]?.id ?? null) : null,
+      };
+    }),
+  }));
+
+  return {
+    nome: extraida.nome,
+    observacao: extraida.observacao,
+    kcalAlvo: extraida.kcalAlvo,
+    proteinaAlvoG: extraida.proteinaAlvoG,
+    carboAlvoG: extraida.carboAlvoG,
+    gorduraAlvoG: extraida.gorduraAlvoG,
+    refeicoes,
+    avisos: extraida.avisos,
+    // O tamanho do trabalho manual que sobra, dito de uma vez em vez de a
+    // pessoa descobrir item a item.
+    itensSemCandidato: semCandidato,
+  };
+}

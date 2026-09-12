@@ -40,6 +40,9 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  dietaExtraidaSchema,
+  montarLeituraDeDieta,
+  palavrasSignificativas,
   ESCOPOS_ESSENCIAIS,
   estaSumido,
   compararPorAtencao,
@@ -66,6 +69,9 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  CodigoErro,
+  AlimentoCandidato,
+  LeituraDeDieta,
   ListarProfissionaisQuery,
   ProfissionalParaVerificar,
   LinhaDoRelatorio,
@@ -6999,6 +7005,102 @@ export class MotorSupabase {
     const achado = todos.find((p) => p.id === id);
     if (!achado) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Profissional não encontrado.', 404);
     return achado;
+  }
+
+  // --- leitura de dieta por IA ----------------------------------------------
+
+  /**
+   * Lê a dieta do papel e cruza com o catálogo.
+   *
+   * A leitura em si acontece numa função de borda (`ler-dieta`), e não aqui,
+   * porque precisa de uma chave de API e de uma chamada à internet — nenhuma
+   * das duas cabe no navegador nem no Postgres. O que é regra ficou nos dois
+   * lugares certos: a autorização, no banco (`falta_para_ler_dieta`); o
+   * casamento com o catálogo, em `@vivio/contracts`.
+   *
+   * A validação contra o contrato é feita AQUI, e não lá: a saída estruturada
+   * garante o FORMATO, não os limites do domínio, e nada impede o modelo de
+   * devolver 9000 g num item. O zod é a segunda porta.
+   */
+  async importarDieta(dados: {
+    chave: string;
+    mimeType: string;
+    alunoId?: string | null;
+  }): Promise<LeituraDeDieta> {
+    const { data, error } = await this.db.functions.invoke('ler-dieta', {
+      body: { chave: dados.chave, mimeType: dados.mimeType, alunoId: dados.alunoId ?? null },
+    });
+
+    if (error) {
+      /*
+        A função devolve `{ codigo, mensagem }` no corpo, inclusive nos erros —
+        é o que permite a tela dizer "o aluno ainda não autorizou a leitura
+        automática" em vez de "erro inesperado". O `supabase-js` embrulha a
+        resposta, e o corpo sai daqui.
+      */
+      const resposta = (error as { context?: Response }).context;
+      if (resposta) {
+        const corpo = (await resposta.json().catch(() => null)) as
+          | { codigo?: string; mensagem?: string; detalhes?: Record<string, unknown> }
+          | null;
+        if (corpo?.mensagem) {
+          throw new ErroApi(
+            (corpo.codigo ?? 'ERRO_INTERNO') as CodigoErro,
+            corpo.mensagem,
+            resposta.status,
+            corpo.detalhes,
+          );
+        }
+      }
+      throw new ErroApi('ERRO_INTERNO', 'A leitura falhou. Tente de novo.', 502);
+    }
+
+    const analisado = dietaExtraidaSchema.safeParse(data);
+    if (!analisado.success) {
+      throw new ErroApi(
+        'CONFLITO',
+        'A leitura veio com dados fora do esperado. Tente uma foto mais nítida ou o PDF original.',
+        409,
+      );
+    }
+
+    const catalogo = await this.candidatosDoCatalogo(
+      analisado.data.refeicoes.flatMap((r) => r.itens.map((i) => i.nomeLido)),
+    );
+    return montarLeituraDeDieta(analisado.data, catalogo);
+  }
+
+  /**
+   * Uma consulta só para a dieta inteira.
+   *
+   * Uma dieta tem umas 25 linhas; consultar por linha seriam 25 idas ao banco
+   * para montar uma tela. Busca o conjunto das palavras de todos os itens e
+   * pontua em memória.
+   */
+  private async candidatosDoCatalogo(nomes: string[]): Promise<AlimentoCandidato[]> {
+    const palavras = [...new Set(nomes.flatMap(palavrasSignificativas))];
+    if (palavras.length === 0) return [];
+
+    const linhas = this.ou(
+      await this.db
+        .from('Alimento')
+        .select('id,nome,medidaCaseira,medidaGramas,kcal')
+        // `or` com um `ilike` por palavra: o documento nunca escreve igual ao
+        // catálogo, e um `contains` do texto inteiro não casaria
+        // "arroz branco cozido" com "Arroz, branco, cozido".
+        .or(palavras.map((p) => `nome.ilike.%${p}%`).join(','))
+        // Teto largo: passando de mil, a pontuação em memória fica cara e a
+        // busca por palavra estava larga demais para servir de sugestão.
+        .limit(1000),
+    ) as unknown as Record<string, unknown>[];
+
+    return linhas.map((a) => ({
+      id: a.id as string,
+      nome: a.nome as string,
+      medidaCaseira: (a.medidaCaseira as string | null) ?? null,
+      medidaGramas: n(a.medidaGramas),
+      kcalPor100g: n(a.kcal) ?? 0,
+    }));
   }
 }
 

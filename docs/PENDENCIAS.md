@@ -423,6 +423,41 @@ não sobre data.
 
 ## Resolvidas
 
+### O aplicativo não estava instalável, e nada avisava — resolvida em 2026-09-12
+**O que era:** o Worker da Cloudflare redireciona `/sem-conexao.html` para
+`/sem-conexao` (307), e `cache.addAll` **rejeita** resposta redirecionada. O
+trabalhador de fundo falhava ao instalar, e falhava em silêncio: sem erro na
+tela, sem nada no console de quem usa. O Android simplesmente não oferecia
+"instalar", e a página de sem conexão nunca existia.
+
+**Como apareceu:** conferindo o site no ar, por `curl`, um caminho de cada vez.
+Nenhum teste pegaria — o redirecionamento é do host, não do código.
+
+**O que foi feito:** o caminho perdeu o `.html`, e a instalação deixou de ser
+tudo-ou-nada (`addAll` derruba o trabalhador inteiro se um arquivo falhar, e
+nada ali é essencial a esse ponto). `apps/web/teste/trabalhador-de-fundo.test.ts`
+roda o `sw.js` de verdade contra um `fetch` que imita o Worker.
+
+**Conferido no ar depois do deploy:** trabalhador registrado e ativo, cache
+`vivio-v2-casca` com a página de sem conexão dentro.
+
+### As funções do banco estavam abertas a quem não entrou no app — resolvida em 2026-09-12
+**O que era:** toda função no Postgres nasce com `EXECUTE` para **PUBLIC**, e
+`anon` herda de PUBLIC. O arquivo 11 revogava de `anon` com todas as letras — e
+isso não tirava nada. As linhas estavam lá, dizendo que a porta estava fechada.
+
+**Quanto valia:** 32 funções ao alcance do `anon`, e **nenhuma sem guarda** — as
+que tocam dado começam perguntando `usuario_atual()`, nulo sem sessão. Não havia
+vazamento. O que havia era o padrão errado: a próxima função escrita sem a
+pergunta nasceria alcançável por quem não entrou no app.
+
+**O que foi feito:** a varredura entrou no arquivo 99, que roda sempre por
+último. Função nova nasce fechada ao `anon`; as duas exceções são a página
+pública do profissional e o formulário de contato dela. A auditoria ganhou a
+seção e ela **reprova** — `rls:auditar` sai com erro se alguém criar uma função
+e não rodar o aplicador.
+
+
 ### O SDK deixou de falar com a API — resolvida em 2026-09-12
 **O que era:** o SDK fazia 63 chamadas HTTP à API NestJS, espalhadas por 22
 grupos. A API guardava, em TypeScript, as regras que decidem quem lê e quem
@@ -482,14 +517,22 @@ aparecia:
 contra o banco de verdade, e `pnpm --filter @vivio/api rls:auditar` compara o
 que o SDK usa com o que o banco deixa — e sai com erro quando divergem.
 
-**O que falta para a API sumir de vez:**
+**A última chamada também saiu**, para uma função de borda:
+`supabase/functions/ler-dieta`. O SDK não chama mais a API em lugar nenhum — o
+`requisicao()` ficou sem quem o chame.
 
-1. A Edge Function da leitura de dieta por IA (a única chamada restante).
-2. Conferir se sobrou mídia no volume do Railway antes de desligar o serviço —
-   desligá-lo leva o volume junto.
-3. Apagar `apps/api`. O que vive lá e ainda serve: as ferramentas de importação
-   (`src/ferramentas/`), o aplicador e o auditor de regras (`prisma/`). Essas
-   mudam de casa, não somem.
+**O que falta para a API sumir de vez (ação sua):**
+
+1. **Implantar a função e pôr o segredo** (`supabase/README.md` tem os três
+   comandos). A chave da Anthropic é sua e vai direto da sua máquina para o
+   projeto; enquanto ela não existe, a tela diz "a leitura automática não está
+   configurada" e o resto do app segue inteiro.
+2. **Conferir se sobrou mídia no volume do Railway** antes de desligar o
+   serviço — desligá-lo leva o volume junto.
+3. **Apagar `apps/api`**, junto com o `requisicao()` do SDK e o `baseUrl` que
+   34 arquivos de teste ainda passam. O que vive lá e ainda serve muda de casa,
+   não some: as ferramentas de importação (`src/ferramentas/`), o aplicador e o
+   auditor de regras (`prisma/`).
 
 
 ### A foto de evolução voltou a ter as três travas — resolvida em 2026-09-11
