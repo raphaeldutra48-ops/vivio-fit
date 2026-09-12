@@ -22,15 +22,51 @@
   - Todo o resto: rede, sem cache.
 */
 
-const VERSAO = 'vivio-v1';
+const VERSAO = 'vivio-v2';
 const ESTATICOS = `${VERSAO}-estaticos`;
 const CASCA = `${VERSAO}-casca`;
-const SEM_CONEXAO = '/sem-conexao.html';
+
+/*
+  Sem o `.html`, e isso não é estilo.
+
+  O Worker que serve o site redireciona `/sem-conexao.html` para `/sem-conexao`
+  (307), e `cache.addAll` REJEITA resposta redirecionada — a instalação inteira
+  falhava por causa disso. Sem trabalhador instalado não há página de sem
+  conexão e o Android não oferece "instalar": o app deixava de ser instalável em
+  silêncio, porque nada disso dá erro visível.
+*/
+const SEM_CONEXAO = '/sem-conexao';
+
+/*
+  Guarda um a um, e não em lote.
+
+  `addAll` é tudo ou nada: um arquivo que falhe derruba a instalação e leva
+  junto o resto do trabalhador. Nada aqui é essencial a ponto de justificar
+  isso — a página de sem conexão é uma cortesia, e o app funciona sem ela. O
+  `catch` vazio é a decisão, não um descuido.
+*/
+async function guardarCasca() {
+  const cache = await caches.open(CASCA);
+  await Promise.all(
+    [SEM_CONEXAO, '/icone-192.png'].map(async (caminho) => {
+      try {
+        const resposta = await fetch(caminho, { cache: 'reload' });
+        if (!resposta.ok) return;
+        // `resposta.redirected` também é recusado pelo `put`: copiar o corpo
+        // para uma resposta nova tira essa marca.
+        await cache.put(caminho, new Response(await resposta.blob(), {
+          status: 200,
+          headers: resposta.headers,
+        }));
+      } catch {
+        /* rede ruim na primeira visita não pode impedir a instalação. */
+      }
+    }),
+  );
+}
 
 self.addEventListener('install', (evento) => {
-  evento.waitUntil(
-    caches.open(CASCA).then((cache) => cache.addAll([SEM_CONEXAO, '/icone-192.png'])),
-  );
+  evento.waitUntil(guardarCasca());
   // Assume o controle na primeira visita, em vez de só na próxima aba.
   self.skipWaiting();
 });

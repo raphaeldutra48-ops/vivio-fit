@@ -29,6 +29,9 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/.next/**',
+      // Empacotamento da Cloudflare: milhares de arquivos gerados, e o `eslint .`
+      // dentro de `apps/web` parava neles antes de chegar ao código nosso.
+      '**/.open-next/**',
       '**/node_modules/**',
       '**/build/**',
       '**/.expo/**',

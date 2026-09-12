@@ -423,6 +423,75 @@ não sobre data.
 
 ## Resolvidas
 
+### O SDK deixou de falar com a API — resolvida em 2026-09-12
+**O que era:** o SDK fazia 63 chamadas HTTP à API NestJS, espalhadas por 22
+grupos. A API guardava, em TypeScript, as regras que decidem quem lê e quem
+escreve cada coisa — e essas regras não existiam no banco. Enquanto a API fosse
+o único caminho, funcionava; com o cliente falando direto com o Postgres, cada
+regra que só morava lá deixaria de existir.
+
+**O que ficou:** UMA chamada, `exercicios.importarDieta`, que depende de um
+modelo de IA e espera uma Edge Function. Todo o resto fala com o banco.
+
+**O que foi para o banco, por família:**
+
+| arquivo | o que passou a valer lá |
+| --- | --- |
+| `32-armazenamento.sql` | seis compartimentos, cada um com teto e formatos |
+| `33-exercicio.sql` | escopo pelo papel, procedência congelada, vídeo do dono |
+| `34-foto-evolucao.sql` | a terceira trava: `visivelPara`, foto a foto |
+| `35-exame-laudo.sql` | o laudo é do médico e do aluno, e a chave não circula |
+| `36-conteudo-do-profissional.sql` | um gatilho para cinco tabelas; competência profissional |
+| `37-corpo-e-gasto.sql` | autorrelato, laudo de laboratório e medição, cada um com seu dono |
+| `38-prescricao-e-anamnese.sql` | registro clínico atômico, com nome congelado |
+| `39-painel-do-profissional.sql` | agregações com o recorte de consentimento dentro |
+| `40-verificacao-de-profissional.sql` | a fila do admin, com alcance amplo em porta estreita |
+
+**O que a migração ACHOU pelo caminho** — cada um é um defeito que existia e não
+aparecia:
+
+1. **A foto de evolução perdeu a terceira trava** (entrada própria abaixo). O
+   pior dos achados: qualquer profissional com consentimento de EVOLUCAO lia a
+   linha de toda foto do aluno, e com a chave em mãos, o arquivo.
+2. **Ninguém conseguia apagar o próprio laudo.** `exames_le` não tinha a
+   condição de dono que os outros compartimentos têm, e o Storage SELECIONA
+   antes de apagar: a exclusão respondia 200 com lista vazia e o arquivo ficava.
+   Cada troca de laudo deixava até 25 MB de dado clínico órfão, sem nada no log.
+3. **A competência profissional só existia no cliente.** A tabela que diz que
+   medicamento é privativo do médico vivia em `@vivio/contracts`, onde um
+   `insert` pelo console do navegador passa por cima.
+4. **`arquivoUrl` do exame vinha nulo desde a migração dos exames**, e a tela
+   dizia ao médico da equipe que o laudo é "acessível apenas ao médico da
+   equipe".
+5. **O tipo do arquivo não chegava ao Storage.** O `supabase-js` manda Blob como
+   multipart e lê o tipo do próprio Blob; foto vinda de `fetch().blob()` no
+   celular não tem tipo, e era recusada como "formato não aceito" sendo um JPEG
+   aceito. Quebrava todo envio de foto pelo aplicativo.
+6. **Colunas que o Prisma preenchia e o banco não.** `@default(cuid())` e
+   `@updatedAt` são do CLIENTE Prisma: pelo PostgREST não há quem os preencha, e
+   o INSERT morre em violação de nulo na primeira gravação de verdade. A
+   auditoria ganhou uma seção para essa família inteira.
+7. **Um gatilho meu redirecionava em silêncio.** Forçar `alunoId` no INSERT de
+   cardio fazia o profissional que tentasse lançar no nome do aluno gravar no
+   nome DELE — a política aprovava, porque o valor já tinha sido reescrito.
+8. **O 42501 engolia a frase dos nossos gatilhos.** "Chave de arquivo não
+   pertence a você." virava "Você não tem acesso a este conteúdo.", e a pessoa
+   via a recusa sobre um botão a que tem acesso.
+
+**Como se prova:** `packages/sdk/teste/` tem 34 arquivos e 276 casos rodando
+contra o banco de verdade, e `pnpm --filter @vivio/api rls:auditar` compara o
+que o SDK usa com o que o banco deixa — e sai com erro quando divergem.
+
+**O que falta para a API sumir de vez:**
+
+1. A Edge Function da leitura de dieta por IA (a única chamada restante).
+2. Conferir se sobrou mídia no volume do Railway antes de desligar o serviço —
+   desligá-lo leva o volume junto.
+3. Apagar `apps/api`. O que vive lá e ainda serve: as ferramentas de importação
+   (`src/ferramentas/`), o aplicador e o auditor de regras (`prisma/`). Essas
+   mudam de casa, não somem.
+
+
 ### A foto de evolução voltou a ter as três travas — resolvida em 2026-09-11
 **O que estava errado:** a foto de evolução sempre teve TRÊS travas — vínculo,
 consentimento de EVOLUCAO e a lista `visivelPara`, que o aluno define **foto a
