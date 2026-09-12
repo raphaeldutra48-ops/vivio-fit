@@ -66,6 +66,8 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  ListarProfissionaisQuery,
+  ProfissionalParaVerificar,
   LinhaDoRelatorio,
   RelatorioDaCarteira,
   CompromissoDeHoje,
@@ -6917,6 +6919,86 @@ export class MotorSupabase {
         comTreino.length > 0 ? arredondar1(treinosNoPeriodo / comTreino.length) : 0,
       linhas,
     };
+  }
+
+  // --- verificação de profissional ------------------------------------------
+
+  /**
+   * A fila de verificação de registro no conselho.
+   *
+   * Passa por função do banco, e não por consulta direta, por causa do alcance:
+   * esta tela lê o cadastro de profissionais que não têm relação nenhuma com
+   * quem olha. Abrir isso numa política significaria afrouxar a regra que
+   * protege todo o resto do app para servir uma tela que só o admin abre.
+   *
+   * `status` é derivado lá, e não uma coluna: verificado vence recusa, porque
+   * reaprovar depois de recusar é caminho normal — o profissional corrige o
+   * registro e reenvia.
+   */
+  async listarProfissionaisParaVerificar(
+    consulta: Partial<ListarProfissionaisQuery> = {},
+  ): Promise<ProfissionalParaVerificar[]> {
+    const linhas = await this.rpc<Record<string, unknown>[]>('profissionais_para_verificar', {
+      p_status: consulta.status ?? null,
+      p_busca: consulta.q ?? null,
+      p_limite: consulta.limit ?? 50,
+    });
+
+    return linhas.map((p) => ({
+      id: p.id as string,
+      nome: p.nome as string,
+      email: p.email as string,
+      telefone: (p.telefone as string | null) ?? null,
+      tipo: p.tipo as ProfissionalParaVerificar['tipo'],
+      registroConselho: p.registroConselho as string,
+      ufRegistro: p.ufRegistro as string,
+      especialidades: (p.especialidades as string[] | null) ?? [],
+      bio: (p.bio as string | null) ?? null,
+      emailVerificado: Boolean(p.emailVerificado),
+      status: p.status as ProfissionalParaVerificar['status'],
+      criadoEm: instante(p.criadoEm),
+      verificadoEm: p.verificadoEm ? instante(p.verificadoEm) : null,
+      // O nome de quem aprovou viaja junto: liberar acesso a dado de saúde é
+      // ato de responsabilidade, e responsabilidade sem nome não existe.
+      verificadoPor: p.verificadoPorId
+        ? { id: p.verificadoPorId as string, nome: (p.verificadoPorNome as string) ?? '' }
+        : null,
+      recusadoEm: p.recusadoEm ? instante(p.recusadoEm) : null,
+      motivoRecusa: (p.motivoRecusa as string | null) ?? null,
+    }));
+  }
+
+  async contarProfissionaisPendentes(): Promise<number> {
+    return Number(await this.rpc<number>('contar_profissionais_pendentes'));
+  }
+
+  /**
+   * Aprova o registro e destrava a conta — duas tabelas, uma função.
+   *
+   * Perfil verificado com conta travada deixa o profissional vendo "aprovado"
+   * numa tela que não abre; conta ativa com perfil pendente o faz receber
+   * vínculo sem ninguém ter conferido o registro dele no conselho. Nenhum dos
+   * dois estados pode existir nem por um instante.
+   */
+  async verificarProfissional(id: string): Promise<ProfissionalParaVerificar> {
+    await this.rpc<void>('verificar_profissional', { p_profissional_id: id });
+    return this.umProfissional(id);
+  }
+
+  /** Recusar exige motivo: o profissional precisa saber o que corrigir. */
+  async recusarProfissional(id: string, motivo: string): Promise<ProfissionalParaVerificar> {
+    await this.rpc<void>('recusar_profissional', {
+      p_profissional_id: id,
+      p_motivo: motivo,
+    });
+    return this.umProfissional(id);
+  }
+
+  private async umProfissional(id: string): Promise<ProfissionalParaVerificar> {
+    const todos = await this.listarProfissionaisParaVerificar({ limit: 100 });
+    const achado = todos.find((p) => p.id === id);
+    if (!achado) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Profissional não encontrado.', 404);
+    return achado;
   }
 }
 

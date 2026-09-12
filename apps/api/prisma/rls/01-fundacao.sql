@@ -215,6 +215,23 @@ $$;
   posição é a regra inteira: um colega pode suprir a autorização do aluno para
   um escopo, e ninguém pode suprir o fato de você atender aquela pessoa.
 */
+/*
+  Sou admin?
+
+  Um ajudante de uma linha, e vale a pena ter: `papel_atual() = 'ADMIN'` escrito
+  em cada lugar que precisa dele é a duplicação que um dia perde uma cópia — e
+  as cópias aqui guardam o cadastro inteiro de profissionais e o acervo global.
+*/
+create or replace function public.sou_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.papel_atual() = 'ADMIN';
+$$;
+
 create or replace function public.pode_ler_do_aluno(p_aluno_id text, p_escopo text)
 returns boolean
 language sql

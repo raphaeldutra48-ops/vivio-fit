@@ -1170,22 +1170,16 @@ export class VivioClient {
     listarProfissionais: (
       consulta: Partial<ListarProfissionaisQuery> = {},
     ): Promise<ProfissionalParaVerificar[]> =>
-      this.requisicao<ProfissionalParaVerificar[]>('/admin/profissionais', {
-        query: { status: consulta.status, q: consulta.q, limit: consulta.limit },
-      }),
+      this.supabase.listarProfissionaisParaVerificar(consulta),
 
-    contarPendentes: (): Promise<{ total: number }> =>
-      this.requisicao<{ total: number }>('/admin/profissionais/pendentes/total'),
+    contarPendentes: async (): Promise<{ total: number }> => ({
+      total: await this.supabase.contarProfissionaisPendentes(),
+    }),
 
     verificar: (id: string): Promise<ProfissionalParaVerificar> =>
-      this.requisicao<ProfissionalParaVerificar>(`/admin/profissionais/${id}/verificar`, {
-        metodo: 'PATCH',
-      }),
+      this.supabase.verificarProfissional(id),
 
     recusar: (id: string, dados: RecusarProfissionalInput): Promise<ProfissionalParaVerificar> =>
-      this.requisicao<ProfissionalParaVerificar>(`/admin/profissionais/${id}/recusar`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.recusarProfissional(id, dados.motivo),
   };
 }

@@ -43,12 +43,35 @@ begin
     E-mail idem: ele é a ponte com o Supabase Auth enquanto os ids antigos
     forem cuid. Trocá-lo aqui, e não lá, quebraria o login em silêncio.
   */
-  if new.papel is distinct from old.papel
-     or new.status is distinct from old.status
-     or new.email is distinct from old.email
-     or new."emailVerifEm" is distinct from old."emailVerifEm"
-     or new."senhaHash" is distinct from old."senhaHash"
-     or new."deletadoEm" is distinct from old."deletadoEm" then
+  /*
+    A exceção: o admin muda o STATUS de OUTRA conta, e só isso.
+
+    É o que aprovar um registro faz — a conta sai de PENDENTE_VERIFICACAO. Era
+    feito por um processo sem sessão enquanto a API existia, e por isso a regra
+    podia recusar toda sessão sem distinguir ninguém.
+
+    A exceção é estreita de propósito: `papel` continua intocável até para o
+    admin, porque é o que TODA política lê para decidir e trocá-lo seria
+    escalonamento de privilégio pela porta da frente. E `new.id <> eu` fecha o
+    caminho mais curto de todos — um admin destravando a própria conta.
+  */
+  if not (
+       public.sou_admin()
+       and new.id is distinct from public.usuario_atual()
+       and new.papel is not distinct from old.papel
+       and new.email is not distinct from old.email
+       and new."emailVerifEm" is not distinct from old."emailVerifEm"
+       and new."senhaHash" is not distinct from old."senhaHash"
+       and new."deletadoEm" is not distinct from old."deletadoEm"
+     )
+     and (
+       new.papel is distinct from old.papel
+    or new.status is distinct from old.status
+    or new.email is distinct from old.email
+    or new."emailVerifEm" is distinct from old."emailVerifEm"
+    or new."senhaHash" is distinct from old."senhaHash"
+    or new."deletadoEm" is distinct from old."deletadoEm"
+  ) then
     raise exception 'Este campo do cadastro não se edita por aqui.' using errcode = '42501';
   end if;
 
@@ -128,13 +151,24 @@ begin
     or new."ufRegistro" is distinct from old."ufRegistro";
 
   /*
-    Ninguém se verifica.
+    Ninguém se verifica — exceto quem verifica.
 
     Estes quatro campos são do admin. Do lado do profissional eles só podem ir
-    para nulo, e só como CONSEQUÊNCIA de trocar o registro — nunca como
-    escolha.
+    para nulo, e só como CONSEQUÊNCIA de trocar o registro — nunca como escolha.
+
+    O `sou_admin()` entrou quando a verificação saiu da API: antes, quem
+    carimbava era um processo sem sessão, e o gatilho podia recusar toda sessão
+    sem distinguir ninguém. Agora quem carimba é o admin, logado, pela função
+    `verificar_profissional` — e a recusa cega bloqueava justamente a única
+    pessoa que tem esse direito.
+
+    Continua valendo para o admin a parte que importa: ele não se verifica. Se
+    um dia um administrador tiver perfil profissional, aprovar o próprio
+    registro seria exatamente o que esta regra existe para impedir.
   */
-  if not mudou_registro and (
+  if not mudou_registro
+     and not (public.sou_admin() and new."userId" is distinct from eu)
+     and (
        new."verificadoEm" is distinct from old."verificadoEm"
     or new."verificadoPorId" is distinct from old."verificadoPorId"
     or new."recusadoEm" is distinct from old."recusadoEm"
