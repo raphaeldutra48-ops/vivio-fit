@@ -237,9 +237,8 @@ drop policy if exists foto_escreve on public."FotoEvolucao";
 create policy foto_escreve on public."FotoEvolucao" for insert
   with check ("alunoId" = public.usuario_atual());
 
-drop policy if exists foto_apaga on public."FotoEvolucao";
-create policy foto_apaga on public."FotoEvolucao" for delete
-  using ("alunoId" = public.usuario_atual());
+-- Apagar foto é carimbo, não DELETE: o registro responde "quem viu esta foto",
+-- e a política de alteração está no arquivo 34, junto do gatilho.
 
 drop policy if exists cardio_escreve on public."AtividadeCardio";
 create policy cardio_escreve on public."AtividadeCardio" for insert

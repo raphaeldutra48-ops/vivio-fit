@@ -583,14 +583,10 @@ export class VivioClient {
   // --- fotos de evolução ----------------------------------------------------
 
   readonly fotos = {
-    listar: (alunoId: string): Promise<FotoEvolucaoResumo[]> =>
-      this.requisicao<FotoEvolucaoResumo[]>(`/alunos/${alunoId}/fotos`),
+    listar: (alunoId: string): Promise<FotoEvolucaoResumo[]> => this.supabase.listarFotos(alunoId),
 
     registrar: (alunoId: string, dados: RegistrarFotoInput): Promise<FotoEvolucaoResumo> =>
-      this.requisicao<FotoEvolucaoResumo>(`/alunos/${alunoId}/fotos`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.registrarFoto(alunoId, dados),
 
     /** O aluno escolhe quais profissionais veem esta foto. */
     definirVisibilidade: (
@@ -598,13 +594,10 @@ export class VivioClient {
       fotoId: string,
       visivelPara: string[],
     ): Promise<FotoEvolucaoResumo> =>
-      this.requisicao<FotoEvolucaoResumo>(`/alunos/${alunoId}/fotos/${fotoId}/visibilidade`, {
-        metodo: 'PATCH',
-        corpo: { visivelPara },
-      }),
+      this.supabase.definirVisibilidadeDaFoto(alunoId, fotoId, visivelPara),
 
     remover: (alunoId: string, fotoId: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/fotos/${fotoId}`, { metodo: 'DELETE' }),
+      this.supabase.removerFoto(alunoId, fotoId),
   };
 
   // --- lembretes e notificações --------------------------------------------

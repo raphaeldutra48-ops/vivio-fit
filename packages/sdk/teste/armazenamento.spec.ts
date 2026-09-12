@@ -111,6 +111,7 @@ describe.skipIf(!url || !anon || !servico)('armazenamento sem API', () => {
 
   afterAll(async () => {
     await admin.storage.from('evolucao').remove([caminho, `${outraId}/invasao.png`]);
+    await admin.from('FotoEvolucao').delete().eq('alunoId', alunaId);
     await admin.from('Consentimento').delete().eq('alunoId', alunaId);
     await admin.from('Vinculo').delete().eq('alunoId', alunaId);
     for (const id of [alunaId, outraId]) {
@@ -120,11 +121,43 @@ describe.skipIf(!url || !anon || !servico)('armazenamento sem API', () => {
     }
   });
 
+  /**
+   * A linha que a foto precisa ter para o profissional alcançá-la.
+   *
+   * A política do compartimento não para em vínculo e consentimento: ela exige
+   * a linha em `FotoEvolucao`, com o papel de quem pede na lista `visivelPara`
+   * — a terceira trava, que o aluno controla foto a foto. Arquivo solto no
+   * compartimento, sem linha, só o dono alcança.
+   *
+   * Por isso os casos abaixo registram a linha: sem ela, "o personal não lê"
+   * passaria por falta de linha, e não pela regra que o teste diz medir.
+   */
+  const registrarLinha = async (
+    chaveArquivo: string,
+    visivelPara: string[],
+    sufixo: string,
+  ): Promise<void> => {
+    erro(
+      await admin.from('FotoEvolucao').insert({
+        id: `${marca}-foto-${sufixo}`,
+        alunoId: alunaId,
+        data: '2026-03-15',
+        chaveArquivo: `evolucao/${chaveArquivo}`,
+        mimeType: 'image/png',
+        tamanhoBytes: PNG.byteLength,
+        angulo: 'FRENTE',
+        visivelPara,
+      }),
+      `linha da foto ${sufixo}`,
+    );
+  };
+
   it('a aluna sobe a própria foto e lê de volta', async () => {
     const envio = await aluna.storage
       .from('evolucao')
       .upload(caminho, PNG, { contentType: 'image/png' });
     expect(envio.error).toBeNull();
+    await registrarLinha(caminho, ['PERSONAL'], '1');
 
     const leitura = await aluna.storage.from('evolucao').download(caminho);
     expect(leitura.error).toBeNull();
@@ -175,6 +208,9 @@ describe.skipIf(!url || !anon || !servico)('armazenamento sem API', () => {
     */
     const outroArquivo = `${alunaId}/${marca}-2.png`;
     await aluna.storage.from('evolucao').upload(outroArquivo, PNG, { contentType: 'image/png' });
+    // Liberada para o personal: assim a recusa abaixo é a do consentimento
+    // revogado, e não a da foto que ele nunca poderia ver.
+    await registrarLinha(outroArquivo, ['PERSONAL'], '2');
 
     await admin
       .from('Consentimento')

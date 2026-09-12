@@ -423,6 +423,41 @@ não sobre data.
 
 ## Resolvidas
 
+### A foto de evolução voltou a ter as três travas — resolvida em 2026-09-11
+**O que estava errado:** a foto de evolução sempre teve TRÊS travas — vínculo,
+consentimento de EVOLUCAO e a lista `visivelPara`, que o aluno define **foto a
+foto**. As duas primeiras estavam no banco. A terceira estava em JavaScript,
+dentro de `fotos.service.ts`, que trazia todas as fotos do aluno e filtrava
+depois de receber.
+
+Enquanto a API era o único caminho, funcionava. Com a consulta passando a ser do
+cliente, o filtro em JavaScript deixa de existir: qualquer profissional com
+consentimento de EVOLUCAO lia a linha de **toda** foto do aluno, inclusive as
+que ele nunca compartilhou. E a linha carrega `chaveArquivo` — a política do
+compartimento também parava em vínculo e consentimento, então a chave em mãos
+abria o arquivo.
+
+**Por que passou:** a regra nunca esteve escrita em SQL. A tradução das
+políticas partiu do que o banco já sabia responder (vínculo, consentimento) e do
+que as políticas existentes diziam; a trava que morava só no serviço não
+aparecia em lugar nenhum para ser traduzida. Achada ao migrar o grupo `fotos`,
+lendo o serviço linha a linha antes de reescrevê-lo.
+
+**O que foi feito:** `34-foto-evolucao.sql`. A pergunta virou uma função,
+`posso_ver_a_foto(alunoId, visivelPara)`, usada nos dois lugares — a política da
+tabela e a do compartimento. A do compartimento agora exige a LINHA da foto:
+existir, não estar removida, e ter o papel de quem pede na lista. O titular
+continua alcançando o arquivo direto, sem depender de linha, porque o arquivo
+sobe antes de a linha existir.
+
+**Como se prova:** `packages/sdk/teste/fotos.spec.ts`, com vínculo e
+consentimento abertos para DOIS profissionais de propósito — só a terceira trava
+decide. A prova vai até o arquivo, e mede a revogação com **sessão nova**: o
+Storage guarda a decisão por par (sessão, arquivo) por cerca de 15 minutos, e
+com a sessão reaproveitada todo caso de revogação passaria verde sem revogar
+nada.
+
+
 ### A suíte deixava alunos de mentira no banco de produção — resolvida em 2026-09-10
 
 `test/resumo.e2e.spec.ts` criava três alunos por execução e, no `afterAll`,

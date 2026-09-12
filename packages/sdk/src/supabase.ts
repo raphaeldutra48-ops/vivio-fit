@@ -47,6 +47,9 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  RegistrarFotoInput,
+  FotoEvolucaoResumo,
+  AnguloFoto,
   UrlAssinada,
   TipoMidia,
   MidiaDeExercicios,
@@ -4440,6 +4443,151 @@ export class MotorSupabase {
           a.nome.localeCompare(b.nome, 'pt-BR'),
       );
   }
+
+  // --- fotos de evolução ----------------------------------------------------
+
+  private static readonly CAMPOS_FOTO =
+    'id,alunoId,data,angulo,observacao,visivelPara,chaveArquivo,deletadoEm';
+
+  /**
+   * A lista de fotos, com o link de cada uma.
+   *
+   * As três travas ficaram no banco: vínculo, consentimento de EVOLUCAO e a
+   * lista `visivelPara`, que o aluno define foto a foto. Nenhuma delas aparece
+   * nesta consulta, e é de propósito — a que estava aqui em JavaScript (o
+   * filtro por `visivelPara`) era a que sumia quando a API saísse.
+   *
+   * A assinatura é em lote: uma tela de evolução mostra dezenas de fotos, e uma
+   * ida à rede por foto seria uma tela que demora a carregar sem motivo.
+   */
+  async listarFotos(alunoId: string): Promise<FotoEvolucaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('FotoEvolucao')
+        .select(MotorSupabase.CAMPOS_FOTO)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .order('data', { ascending: false })
+        .limit(200),
+    ) as unknown as LinhaFoto[];
+
+    const urls = await this.urlsDeLeitura(linhas.map((f) => f.chaveArquivo));
+    const expiraEm = MotorSupabase.expiraEm(MotorSupabase.VALIDADE_LEITURA_SEG);
+
+    /*
+      Foto cujo link não saiu fica de fora da lista. É o arquivo que sumiu do
+      armazenamento com a linha ainda no banco — mostrar o quadro quebrado não
+      ajuda ninguém, e derrubar a tela inteira por causa de uma ajudaria menos.
+    */
+    return linhas
+      .filter((f) => urls.has(f.chaveArquivo))
+      .map((f) => this.paraFoto(f, urls.get(f.chaveArquivo)!, expiraEm));
+  }
+
+  private paraFoto(f: LinhaFoto, url: string, urlExpiraEm: string): FotoEvolucaoResumo {
+    return {
+      id: f.id,
+      // A coluna é `date`, e o PostgREST já a devolve como `AAAA-MM-DD`. Passar
+      // por `new Date()` aqui traria o fuso de volta, e com ele o dia errado.
+      data: f.data,
+      angulo: f.angulo as AnguloFoto,
+      observacao: f.observacao,
+      visivelPara: f.visivelPara,
+      url,
+      urlExpiraEm,
+    };
+  }
+
+  /**
+   * Registra a foto que já subiu para o armazenamento.
+   *
+   * Nasce visível só para o titular quando `visivelPara` vem vazio, que é o
+   * padrão do contrato: foto de evolução é o dado mais íntimo do app, e
+   * liberar é um ato consciente, feito depois, foto a foto.
+   */
+  async registrarFoto(alunoId: string, dados: RegistrarFotoInput): Promise<FotoEvolucaoResumo> {
+    const eu = await this.meuId();
+    if (alunoId !== eu) {
+      throw new ErroApi('PAPEL_NAO_AUTORIZADO', 'Somente o aluno envia as próprias fotos.', 403);
+    }
+
+    const linha = this.ou(
+      await this.db
+        .from('FotoEvolucao')
+        .insert({
+          alunoId: eu,
+          // `date` no banco: o dia, sem hora e sem fuso. Mandar o instante
+          // inteiro faria a foto tirada às 22h de Brasília cair no dia seguinte.
+          data: dados.data.toISOString().slice(0, 10),
+          chaveArquivo: dados.chave,
+          mimeType: dados.mimeType,
+          tamanhoBytes: dados.tamanhoBytes,
+          angulo: dados.angulo,
+          observacao: dados.observacao ?? null,
+          visivelPara: dados.visivelPara,
+        })
+        .select(MotorSupabase.CAMPOS_FOTO)
+        .single(),
+    ) as unknown as LinhaFoto;
+
+    const { url, expiraEm } = await this.urlDeLeitura(linha.chaveArquivo);
+    return this.paraFoto(linha, url, expiraEm);
+  }
+
+  /**
+   * Quem vê esta foto.
+   *
+   * O caminho de volta importa tanto quanto o de ida: tirar um papel da lista
+   * tem de fechar a porta de verdade. Fecha — a política lê a lista a cada
+   * consulta, e o link já assinado morre no prazo dele.
+   */
+  async definirVisibilidadeDaFoto(
+    alunoId: string,
+    fotoId: string,
+    visivelPara: string[],
+  ): Promise<FotoEvolucaoResumo> {
+    const linhas = this.ou(
+      await this.db
+        .from('FotoEvolucao')
+        .update({ visivelPara })
+        .eq('id', fotoId)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .select(MotorSupabase.CAMPOS_FOTO),
+    ) as unknown as LinhaFoto[];
+
+    const linha = linhas[0];
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Foto não encontrada.', 404);
+
+    const { url, expiraEm } = await this.urlDeLeitura(linha.chaveArquivo);
+    return this.paraFoto(linha, url, expiraEm);
+  }
+
+  /**
+   * Apaga a foto: o arquivo sai, o registro fica carimbado.
+   *
+   * O registro fica porque é ele que responde "quem viu esta foto" — direito do
+   * titular pela LGPD, e a pergunta continua valendo depois de a pessoa apagar
+   * a imagem. O que some é o que ela quis que sumisse: a imagem.
+   */
+  async removerFoto(alunoId: string, fotoId: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('FotoEvolucao')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', fotoId)
+        .eq('alunoId', alunoId)
+        .is('deletadoEm', null)
+        .select('chaveArquivo'),
+    ) as unknown as { chaveArquivo: string }[];
+
+    const removida = linhas[0];
+    if (!removida) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Foto não encontrada.', 404);
+
+    // Depois do carimbo, para uma falha aqui não deixar a foto de pé com a
+    // linha dizendo que ela foi apagada.
+    await this.removerMidia(removida.chaveArquivo);
+  }
 }
 
 /** Janela usada para aferir frequência semanal, em dias. */
@@ -4609,4 +4757,16 @@ interface LinhaAuditoria {
   escopo: string | null;
   criadoEm: string;
   ator: AcessoRegistrado['ator'];
+}
+
+/** A foto como o banco a devolve. */
+interface LinhaFoto {
+  id: string;
+  alunoId: string;
+  data: string;
+  angulo: string;
+  observacao: string | null;
+  visivelPara: string[];
+  chaveArquivo: string;
+  deletadoEm: string | null;
 }
