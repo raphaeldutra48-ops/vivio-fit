@@ -239,6 +239,24 @@ export function macrosDaPorcao(por100g: Macros, quantidadeG: number): Macros {
   };
 }
 
+/**
+ * Multiplica cada macro por um fator, com o mesmo arredondamento do resto.
+ *
+ * Duas porções de uma receita, meia dose de um item: a conta é trivial, e é
+ * justamente por isso que ela precisa morar aqui. Escrita de novo em quem
+ * chama, arredondaria em outro passo — e o total da refeição deixaria de bater
+ * com a soma dos itens, que é o critério de aceite da nutrição.
+ */
+export function escalarMacros(m: Macros, fator: number): Macros {
+  return {
+    kcal: arredondar(m.kcal * fator),
+    proteinaG: arredondar(m.proteinaG * fator),
+    carboidratoG: arredondar(m.carboidratoG * fator),
+    gorduraG: arredondar(m.gorduraG * fator),
+    fibraG: arredondar(m.fibraG * fator),
+  };
+}
+
 export function somarMacros(lista: Macros[]): Macros {
   const total = lista.reduce(
     (soma, m) => ({

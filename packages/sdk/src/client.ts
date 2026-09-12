@@ -992,29 +992,21 @@ export class VivioClient {
   /** Catálogo do profissional: suplementos, fitoterápicos, medicamentos. */
   readonly prescritiveis = {
     listar: (consulta: Partial<ListarPrescritiveisQuery> = {}): Promise<PrescritivelResumo[]> =>
-      this.requisicao<PrescritivelResumo[]>('/prescritiveis', {
-        query: { q: consulta.q, tipo: consulta.tipo, limit: consulta.limit },
-      }),
+      this.supabase.listarPrescritiveis(consulta),
 
     criar: (dados: CriarPrescritivelInput): Promise<PrescritivelResumo> =>
-      this.requisicao<PrescritivelResumo>('/prescritiveis', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarPrescritivel(dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/prescritiveis/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerPrescritivel(id),
   };
 
   readonly modelosPrescricao = {
-    listar: (): Promise<ModeloPrescricaoResumo[]> =>
-      this.requisicao<ModeloPrescricaoResumo[]>('/modelos-prescricao'),
+    listar: (): Promise<ModeloPrescricaoResumo[]> => this.supabase.listarModelosDePrescricao(),
 
     criar: (dados: CriarModeloPrescricaoInput): Promise<ModeloPrescricaoResumo> =>
-      this.requisicao<ModeloPrescricaoResumo>('/modelos-prescricao', {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.criarModeloDePrescricao(dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/modelos-prescricao/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerModeloDePrescricao(id),
   };
 
   readonly prescricoes = {
@@ -1052,31 +1044,27 @@ export class VivioClient {
   // --- receitas e refeições --------------------------------------------------
 
   readonly receitas = {
-    listar: (q?: string): Promise<ReceitaResumo[]> =>
-      this.requisicao<ReceitaResumo[]>('/receitas', { query: { q } }),
+    listar: (q?: string): Promise<ReceitaResumo[]> => this.supabase.listarReceitas(q),
 
     criar: (dados: SalvarReceitaInput): Promise<ReceitaResumo> =>
-      this.requisicao<ReceitaResumo>('/receitas', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarReceita(dados),
 
     atualizar: (id: string, dados: SalvarReceitaInput): Promise<ReceitaResumo> =>
-      this.requisicao<ReceitaResumo>(`/receitas/${id}`, { metodo: 'PATCH', corpo: dados }),
+      this.supabase.atualizarReceita(id, dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/receitas/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerReceita(id),
   };
 
   readonly refeicoesSalvas = {
-    listar: (): Promise<RefeicaoSalvaResumo[]> =>
-      this.requisicao<RefeicaoSalvaResumo[]>('/refeicoes'),
+    listar: (): Promise<RefeicaoSalvaResumo[]> => this.supabase.listarRefeicoesSalvas(),
 
     criar: (dados: SalvarRefeicaoInput): Promise<RefeicaoSalvaResumo> =>
-      this.requisicao<RefeicaoSalvaResumo>('/refeicoes', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarRefeicaoSalva(dados),
 
     atualizar: (id: string, dados: SalvarRefeicaoInput): Promise<RefeicaoSalvaResumo> =>
-      this.requisicao<RefeicaoSalvaResumo>(`/refeicoes/${id}`, { metodo: 'PATCH', corpo: dados }),
+      this.supabase.atualizarRefeicaoSalva(id, dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/refeicoes/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerRefeicaoSalva(id),
   };
 
   // --- site profissional ----------------------------------------------------
@@ -1170,20 +1158,15 @@ export class VivioClient {
 
   /** Questionários do profissional. O modelo em si não é dado de aluno. */
   readonly modelosAnamnese = {
-    listar: (): Promise<ModeloAnamneseResumo[]> =>
-      this.requisicao<ModeloAnamneseResumo[]>('/modelos-anamnese'),
+    listar: (): Promise<ModeloAnamneseResumo[]> => this.supabase.listarModelosDeAnamnese(),
 
     criar: (dados: SalvarModeloAnamneseInput): Promise<ModeloAnamneseResumo> =>
-      this.requisicao<ModeloAnamneseResumo>('/modelos-anamnese', { metodo: 'POST', corpo: dados }),
+      this.supabase.criarModeloDeAnamnese(dados),
 
     atualizar: (id: string, dados: SalvarModeloAnamneseInput): Promise<ModeloAnamneseResumo> =>
-      this.requisicao<ModeloAnamneseResumo>(`/modelos-anamnese/${id}`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.atualizarModeloDeAnamnese(id, dados),
 
-    remover: (id: string): Promise<void> =>
-      this.requisicao<void>(`/modelos-anamnese/${id}`, { metodo: 'DELETE' }),
+    remover: (id: string): Promise<void> => this.supabase.removerModeloDeAnamnese(id),
   };
 
   readonly anamneses = {

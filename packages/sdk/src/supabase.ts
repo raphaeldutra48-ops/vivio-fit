@@ -40,6 +40,10 @@ import {
   montarModeloCardapioCompleto,
   planoAPartirDoModelo,
   playerExternoSeguro,
+  podePrescrever,
+  ROTULO_TIPO_PRESCRITIVEL,
+  montarReceita,
+  montarRefeicaoSalva,
   chaveDeMidia,
   partesDaChave,
   urlPublicaDoCatalogo,
@@ -47,6 +51,20 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  CriarModeloPrescricaoInput,
+  ModeloPrescricaoResumo,
+  CriarPrescritivelInput,
+  ListarPrescritiveisQuery,
+  PrescritivelResumo,
+  SalvarModeloAnamneseInput,
+  ModeloAnamneseResumo,
+  PerguntaResumo,
+  SalvarRefeicaoInput,
+  SalvarReceitaInput,
+  RefeicaoSalvaResumo,
+  ReceitaResumo,
+  LinhaDeRefeicaoSalva,
+  LinhaDeReceita,
   RegistrarFotoInput,
   FotoEvolucaoResumo,
   AnguloFoto,
@@ -4694,6 +4712,684 @@ export class MotorSupabase {
       .is('vistoEm', null);
 
     return this.urlDeLeitura(material.chave);
+  }
+
+  // --- receitas e refeições salvas ------------------------------------------
+
+  private static readonly CAMPOS_RECEITA =
+    'id,nome,descricao,modoPreparo,rendePorcoes,nomeDaPorcao,tempoMinutos,' +
+    `ingredientes:IngredienteReceita(id,alimentoId,quantidadeG,observacao,ordem,alimento:Alimento(${MotorSupabase.CAMPOS_ALIMENTO}))`;
+
+  /**
+   * A linha do banco no formato que a montagem espera.
+   *
+   * A conta mora em `@vivio/contracts` porque a mesma receita é montada em dois
+   * lugares, e dois arredondamentos dariam dois totais para a mesma tela. Aqui
+   * só se converte: o PostgREST devolve `numeric` como TEXTO, e um texto
+   * escapando até a soma vira concatenação em vez de adição.
+   */
+  private paraLinhaDeReceita(r: Record<string, unknown>): LinhaDeReceita {
+    const ingredientes = ((r.ingredientes as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.ordem) - Number(b.ordem))
+      .map((i) => {
+        const a = (i.alimento as Record<string, unknown> | null) ?? {};
+        return {
+          id: i.id as string,
+          alimentoId: i.alimentoId as string,
+          nome: (a.nome as string | undefined) ?? 'Item removido',
+          quantidadeG: n(i.quantidadeG) ?? 0,
+          observacao: (i.observacao as string | null) ?? null,
+          porcao100g: {
+            kcal: n(a.kcal) ?? 0,
+            proteinaG: n(a.proteinaG) ?? 0,
+            carboidratoG: n(a.carboidratoG) ?? 0,
+            gorduraG: n(a.gorduraG) ?? 0,
+            fibraG: n(a.fibraG) ?? 0,
+          },
+        };
+      });
+
+    return {
+      id: r.id as string,
+      nome: r.nome as string,
+      descricao: (r.descricao as string | null) ?? null,
+      modoPreparo: (r.modoPreparo as string | null) ?? null,
+      rendePorcoes: n(r.rendePorcoes) ?? 1,
+      nomeDaPorcao: (r.nomeDaPorcao as string | null) ?? null,
+      tempoMinutos: r.tempoMinutos === null ? null : Number(r.tempoMinutos),
+      ingredientes,
+    };
+  }
+
+  async listarReceitas(busca?: string): Promise<ReceitaResumo[]> {
+    let q = this.db
+      .from('Receita')
+      .select(MotorSupabase.CAMPOS_RECEITA)
+      .is('deletadoEm', null)
+      .order('atualizadoEm', { ascending: false })
+      .limit(100);
+    // O que a pessoa digita vai como VALOR, não como SQL.
+    if (busca) q = q.ilike('nome', `%${busca}%`);
+
+    const linhas = this.ou(await q) as unknown as Record<string, unknown>[];
+    return linhas.map((r) => montarReceita(this.paraLinhaDeReceita(r)));
+  }
+
+  async criarReceita(dados: SalvarReceitaInput): Promise<ReceitaResumo> {
+    const criada = this.ou(
+      await this.db
+        .from('Receita')
+        .insert({
+          nome: dados.nome.trim(),
+          descricao: dados.descricao ?? null,
+          modoPreparo: dados.modoPreparo ?? null,
+          rendePorcoes: dados.rendePorcoes,
+          nomeDaPorcao: dados.nomeDaPorcao ?? null,
+          tempoMinutos: dados.tempoMinutos ?? null,
+        })
+        .select('id')
+        .single(),
+    ) as unknown as { id: string };
+
+    await this.gravarIngredientes(criada.id, dados);
+    return this.obterReceita(criada.id);
+  }
+
+  /**
+   * Salvar reescreve a lista de ingredientes inteira.
+   *
+   * Apaga e recria em vez de casar item a item: a tela devolve a lista como
+   * ficou, sem dizer o que saiu, o que entrou e o que mudou de lugar. Tentar
+   * adivinhar isso aqui daria um algoritmo de casamento que erra em silêncio —
+   * e o ingrediente é uma linha barata, sem histórico próprio para preservar.
+   *
+   * O `ordem` vem do índice do vetor, e é o que a leitura usa para reconstituir
+   * a sequência: o PostgREST não garante ordem em relação embutida.
+   */
+  private async gravarIngredientes(receitaId: string, dados: SalvarReceitaInput): Promise<void> {
+    this.ou(await this.db.from('IngredienteReceita').delete().eq('receitaId', receitaId));
+    this.ou(
+      await this.db.from('IngredienteReceita').insert(
+        dados.ingredientes.map((i, ordem) => ({
+          receitaId,
+          alimentoId: i.alimentoId,
+          quantidadeG: i.quantidadeG,
+          observacao: i.observacao ?? null,
+          ordem,
+        })),
+      ),
+    );
+  }
+
+  private async obterReceita(id: string): Promise<ReceitaResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('Receita')
+        .select(MotorSupabase.CAMPOS_RECEITA)
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Receita não encontrada.', 404);
+    return montarReceita(this.paraLinhaDeReceita(linha));
+  }
+
+  async atualizarReceita(id: string, dados: SalvarReceitaInput): Promise<ReceitaResumo> {
+    const linhas = this.ou(
+      await this.db
+        .from('Receita')
+        .update({
+          nome: dados.nome.trim(),
+          descricao: dados.descricao ?? null,
+          modoPreparo: dados.modoPreparo ?? null,
+          rendePorcoes: dados.rendePorcoes,
+          nomeDaPorcao: dados.nomeDaPorcao ?? null,
+          tempoMinutos: dados.tempoMinutos ?? null,
+        })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Receita não encontrada.', 404);
+    }
+
+    await this.gravarIngredientes(id, dados);
+    return this.obterReceita(id);
+  }
+
+  /** Carimbo: refeições salvas e planos alimentares apontam para ela. */
+  async removerReceita(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('Receita')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Receita não encontrada.', 404);
+    }
+  }
+
+  private static readonly CAMPOS_REFEICAO_SALVA =
+    'id,nome,horarioSugerido,observacao,' +
+    'itens:ItemRefeicaoSalva(id,ordem,alimentoId,receitaId,quantidadeG,porcoes,observacao,' +
+    `alimento:Alimento(${MotorSupabase.CAMPOS_ALIMENTO}),` +
+    `receita:Receita(${MotorSupabase.CAMPOS_RECEITA}))`;
+
+  private paraLinhaDeRefeicao(r: Record<string, unknown>): LinhaDeRefeicaoSalva {
+    const itens = ((r.itens as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.ordem) - Number(b.ordem))
+      .map((i) => {
+        const a = i.alimento as Record<string, unknown> | null;
+        const rc = i.receita as Record<string, unknown> | null;
+        return {
+          id: i.id as string,
+          alimentoId: (i.alimentoId as string | null) ?? null,
+          receitaId: (i.receitaId as string | null) ?? null,
+          quantidadeG: n(i.quantidadeG),
+          porcoes: n(i.porcoes),
+          observacao: (i.observacao as string | null) ?? null,
+          alimento: a
+            ? {
+                nome: a.nome as string,
+                porcao100g: {
+                  kcal: n(a.kcal) ?? 0,
+                  proteinaG: n(a.proteinaG) ?? 0,
+                  carboidratoG: n(a.carboidratoG) ?? 0,
+                  gorduraG: n(a.gorduraG) ?? 0,
+                  fibraG: n(a.fibraG) ?? 0,
+                },
+              }
+            : null,
+          receita: rc ? this.paraLinhaDeReceita(rc) : null,
+        };
+      });
+
+    return {
+      id: r.id as string,
+      nome: r.nome as string,
+      horarioSugerido: (r.horarioSugerido as string | null) ?? null,
+      observacao: (r.observacao as string | null) ?? null,
+      itens,
+    };
+  }
+
+  async listarRefeicoesSalvas(): Promise<RefeicaoSalvaResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('RefeicaoSalva')
+        .select(MotorSupabase.CAMPOS_REFEICAO_SALVA)
+        .is('deletadoEm', null)
+        .order('horarioSugerido', { ascending: true })
+        .order('atualizadoEm', { ascending: false })
+        .limit(100),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((r) => montarRefeicaoSalva(this.paraLinhaDeRefeicao(r)));
+  }
+
+  async criarRefeicaoSalva(dados: SalvarRefeicaoInput): Promise<RefeicaoSalvaResumo> {
+    const criada = this.ou(
+      await this.db
+        .from('RefeicaoSalva')
+        .insert({
+          nome: dados.nome.trim(),
+          horarioSugerido: dados.horarioSugerido ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .select('id')
+        .single(),
+    ) as unknown as { id: string };
+
+    await this.gravarItensDaRefeicao(criada.id, dados);
+    return this.obterRefeicaoSalva(criada.id);
+  }
+
+  /**
+   * A receita citada tem de ser do próprio autor — e quem confere é a política.
+   *
+   * A API conferia aqui, antes de gravar. Sem a conferência no banco, um
+   * cliente adulterado poria a receita de outro profissional dentro de uma
+   * refeição própria e leria a composição inteira pela consulta que traz os
+   * itens embutidos.
+   */
+  private async gravarItensDaRefeicao(
+    refeicaoId: string,
+    dados: SalvarRefeicaoInput,
+  ): Promise<void> {
+    this.ou(await this.db.from('ItemRefeicaoSalva').delete().eq('refeicaoId', refeicaoId));
+    if (dados.itens.length === 0) return;
+    this.ou(
+      await this.db.from('ItemRefeicaoSalva').insert(
+        dados.itens.map((i, ordem) => ({
+          refeicaoId,
+          alimentoId: i.alimentoId ?? null,
+          receitaId: i.receitaId ?? null,
+          quantidadeG: i.quantidadeG ?? null,
+          porcoes: i.porcoes ?? null,
+          observacao: i.observacao ?? null,
+          ordem,
+        })),
+      ),
+    );
+  }
+
+  private async obterRefeicaoSalva(id: string): Promise<RefeicaoSalvaResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('RefeicaoSalva')
+        .select(MotorSupabase.CAMPOS_REFEICAO_SALVA)
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Refeição não encontrada.', 404);
+    return montarRefeicaoSalva(this.paraLinhaDeRefeicao(linha));
+  }
+
+  async atualizarRefeicaoSalva(
+    id: string,
+    dados: SalvarRefeicaoInput,
+  ): Promise<RefeicaoSalvaResumo> {
+    const linhas = this.ou(
+      await this.db
+        .from('RefeicaoSalva')
+        .update({
+          nome: dados.nome.trim(),
+          horarioSugerido: dados.horarioSugerido ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Refeição não encontrada.', 404);
+    }
+
+    await this.gravarItensDaRefeicao(id, dados);
+    return this.obterRefeicaoSalva(id);
+  }
+
+  async removerRefeicaoSalva(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('RefeicaoSalva')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Refeição não encontrada.', 404);
+    }
+  }
+
+  // --- modelos de anamnese --------------------------------------------------
+
+  private static readonly CAMPOS_MODELO_ANAMNESE =
+    'id,nome,descricao,atualizadoEm,' +
+    'perguntas:PerguntaAnamnese(id,texto,tipo,opcoes,obrigatoria,ajuda,ordem)';
+
+  private paraModeloAnamnese(m: Record<string, unknown>): ModeloAnamneseResumo {
+    // O PostgREST não garante ordem em relação embutida, e um questionário fora
+    // de ordem é um formulário que pergunta o fim antes do começo.
+    const perguntas = ((m.perguntas as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.ordem) - Number(b.ordem))
+      .map((p) => ({
+        id: p.id as string,
+        texto: p.texto as string,
+        tipo: p.tipo as PerguntaResumo['tipo'],
+        opcoes: (p.opcoes as string[] | null) ?? [],
+        obrigatoria: Boolean(p.obrigatoria),
+        ajuda: (p.ajuda as string | null) ?? null,
+        ordem: Number(p.ordem),
+      }));
+
+    return {
+      id: m.id as string,
+      nome: m.nome as string,
+      descricao: (m.descricao as string | null) ?? null,
+      totalPerguntas: perguntas.length,
+      perguntas,
+      atualizadoEm: instante(m.atualizadoEm),
+    };
+  }
+
+  async listarModelosDeAnamnese(): Promise<ModeloAnamneseResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloAnamnese')
+        .select(MotorSupabase.CAMPOS_MODELO_ANAMNESE)
+        .is('deletadoEm', null)
+        .order('atualizadoEm', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((m) => this.paraModeloAnamnese(m));
+  }
+
+  /**
+   * Salvar troca as perguntas inteiras.
+   *
+   * Seguro porque a resposta guarda `perguntaNoMomento` e `tipoNoMomento`: uma
+   * anamnese já respondida continua legível mesmo depois de a pergunta sumir
+   * daqui. Sem esse congelamento, editar o modelo reescreveria o passado das
+   * anamneses aplicadas — e é sobre isso que o profissional decide conduta.
+   */
+  private async gravarPerguntas(
+    modeloId: string,
+    dados: SalvarModeloAnamneseInput,
+  ): Promise<void> {
+    this.ou(await this.db.from('PerguntaAnamnese').delete().eq('modeloId', modeloId));
+    this.ou(
+      await this.db.from('PerguntaAnamnese').insert(
+        dados.perguntas.map((p, ordem) => ({
+          modeloId,
+          texto: p.texto.trim(),
+          tipo: p.tipo,
+          // Opção só existe em pergunta de escolha; guardá-la em outro tipo
+          // confunde quem lê o dado depois.
+          opcoes: p.tipo === 'ESCOLHA_UNICA' || p.tipo === 'ESCOLHA_MULTIPLA' ? p.opcoes : [],
+          obrigatoria: p.obrigatoria,
+          ajuda: p.ajuda ?? null,
+          ordem,
+        })),
+      ),
+    );
+  }
+
+  private async obterModeloDeAnamnese(id: string): Promise<ModeloAnamneseResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('ModeloAnamnese')
+        .select(MotorSupabase.CAMPOS_MODELO_ANAMNESE)
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as unknown as Record<string, unknown> | null;
+    if (!linha) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de anamnese não encontrado.', 404);
+    }
+    return this.paraModeloAnamnese(linha);
+  }
+
+  async criarModeloDeAnamnese(
+    dados: SalvarModeloAnamneseInput,
+  ): Promise<ModeloAnamneseResumo> {
+    const criado = this.ou(
+      await this.db
+        .from('ModeloAnamnese')
+        .insert({ nome: dados.nome.trim(), descricao: dados.descricao ?? null })
+        .select('id')
+        .single(),
+    ) as unknown as { id: string };
+
+    await this.gravarPerguntas(criado.id, dados);
+    return this.obterModeloDeAnamnese(criado.id);
+  }
+
+  async atualizarModeloDeAnamnese(
+    id: string,
+    dados: SalvarModeloAnamneseInput,
+  ): Promise<ModeloAnamneseResumo> {
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloAnamnese')
+        .update({ nome: dados.nome.trim(), descricao: dados.descricao ?? null })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de anamnese não encontrado.', 404);
+    }
+
+    await this.gravarPerguntas(id, dados);
+    return this.obterModeloDeAnamnese(id);
+  }
+
+  /** Carimbo: anamneses aplicadas apontam para ele. */
+  async removerModeloDeAnamnese(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloAnamnese')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de anamnese não encontrado.', 404);
+    }
+  }
+
+  // --- catálogo de prescritíveis --------------------------------------------
+
+  private static readonly CAMPOS_PRESCRITIVEL =
+    'id,nome,tipo,apresentacao,principioAtivo,contraindicacoes,observacao,escopo,criadoPorId';
+
+  private paraPrescritivel(p: Record<string, unknown>): PrescritivelResumo {
+    return {
+      id: p.id as string,
+      nome: p.nome as string,
+      tipo: p.tipo as PrescritivelResumo['tipo'],
+      apresentacao: (p.apresentacao as string | null) ?? null,
+      principioAtivo: (p.principioAtivo as string | null) ?? null,
+      contraindicacoes: (p.contraindicacoes as string | null) ?? null,
+      observacao: (p.observacao as string | null) ?? null,
+      escopo: p.escopo as PrescritivelResumo['escopo'],
+      criadoPorId: (p.criadoPorId as string | null) ?? null,
+    };
+  }
+
+  /**
+   * O catálogo GLOBAL mais o que o próprio prescritor cadastrou.
+   *
+   * O recorte está na política `itemprescritivel_le`, não aqui: repeti-lo na
+   * consulta seria a segunda cópia que um dia diverge.
+   */
+  async listarPrescritiveis(
+    consulta: Partial<ListarPrescritiveisQuery> = {},
+  ): Promise<PrescritivelResumo[]> {
+    let q = this.db
+      .from('ItemPrescritivel')
+      .select(MotorSupabase.CAMPOS_PRESCRITIVEL)
+      .is('deletadoEm', null)
+      .order('tipo', { ascending: true })
+      .order('nome', { ascending: true })
+      .limit(consulta.limit ?? 50);
+
+    if (consulta.tipo) q = q.eq('tipo', consulta.tipo);
+    if (consulta.q) q = q.ilike('nome', `%${consulta.q}%`);
+
+    const linhas = this.ou(await q) as unknown as Record<string, unknown>[];
+    return linhas.map((p) => this.paraPrescritivel(p));
+  }
+
+  /**
+   * Cadastra no catálogo.
+   *
+   * Nem `escopo` nem `criadoPorId` vão no corpo — quem os define é o gatilho.
+   * E a competência é do banco também: no Brasil a prescrição de medicamento é
+   * privativa do médico, e a tabela que diz isso precisava estar do lado que um
+   * `insert` pelo console do navegador não alcança.
+   */
+  async criarPrescritivel(dados: CriarPrescritivelInput): Promise<PrescritivelResumo> {
+    const eu = await this.usuarioAtual();
+    if (!eu) throw new ErroApi('NAO_AUTENTICADO', 'Sua sessão expirou. Entre de novo.', 401);
+    if (eu.papel !== 'ADMIN' && !podePrescrever(eu.papel, dados.tipo)) {
+      throw new ErroApi(
+        'PAPEL_NAO_AUTORIZADO',
+        `Seu conselho não cobre a prescrição de ${ROTULO_TIPO_PRESCRITIVEL[dados.tipo].toLowerCase()}.`,
+        403,
+      );
+    }
+
+    const linha = this.ou(
+      await this.db
+        .from('ItemPrescritivel')
+        .insert({
+          nome: dados.nome.trim(),
+          tipo: dados.tipo,
+          apresentacao: dados.apresentacao ?? null,
+          principioAtivo: dados.principioAtivo ?? null,
+          contraindicacoes: dados.contraindicacoes ?? null,
+          observacao: dados.observacao ?? null,
+        })
+        .select(MotorSupabase.CAMPOS_PRESCRITIVEL)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraPrescritivel(linha);
+  }
+
+  /** Carimbo: o item aparece em prescrições já emitidas. */
+  async removerPrescritivel(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('ItemPrescritivel')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length > 0) return;
+
+    /*
+      Zero linhas tem dois motivos, e a frase muda a conduta de quem lê: item do
+      catálogo global é do admin, item que não existe (ou é de outro prescritor)
+      é 404 — e 404 também para o alheio, de propósito.
+    */
+    const linha = this.ou(
+      await this.db.from('ItemPrescritivel').select('escopo').eq('id', id).maybeSingle(),
+    ) as { escopo: string } | null;
+    if (linha?.escopo === 'GLOBAL') {
+      throw new ErroApi(
+        'PAPEL_NAO_AUTORIZADO',
+        'Itens do catálogo global só o admin edita.',
+        403,
+      );
+    }
+    throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Item não encontrado.', 404);
+  }
+
+  // --- modelos de prescrição ------------------------------------------------
+
+  private static readonly CAMPOS_MODELO_PRESCRICAO =
+    'id,nome,descricao,orientacoes,' +
+    'itens:ItemModeloPrescricao(id,ordem,prescritivelId,dose,unidade,frequencia,horarios,' +
+    `duracaoDias,via,observacao,prescritivel:ItemPrescritivel(${MotorSupabase.CAMPOS_PRESCRITIVEL}))`;
+
+  private paraModeloDePrescricao(m: Record<string, unknown>): ModeloPrescricaoResumo {
+    const itens = ((m.itens as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.ordem) - Number(b.ordem))
+      .map((i) => ({
+        id: i.id as string,
+        prescritivelId: i.prescritivelId as string,
+        /*
+          `undefined` e não `null`: o contrato dos itens é o próprio
+          `PosologiaInput`, onde campo ausente é opcional. Um `null` aqui
+          quebraria a validação na volta, quando a tela reenvia o modelo para
+          salvar.
+        */
+        dose: n(i.dose) ?? undefined,
+        unidade: (i.unidade as string | null) ?? undefined,
+        frequencia: (i.frequencia as string | null) ?? undefined,
+        horarios: (i.horarios as string[] | null) ?? [],
+        duracaoDias: i.duracaoDias === null ? undefined : Number(i.duracaoDias),
+        via: (i.via as string | null) ?? undefined,
+        observacao: (i.observacao as string | null) ?? undefined,
+        prescritivel: this.paraPrescritivel(
+          (i.prescritivel as Record<string, unknown> | null) ?? {},
+        ),
+      }));
+
+    return {
+      id: m.id as string,
+      nome: m.nome as string,
+      descricao: (m.descricao as string | null) ?? null,
+      orientacoes: (m.orientacoes as string | null) ?? null,
+      totalItens: itens.length,
+      itens,
+    };
+  }
+
+  async listarModelosDePrescricao(): Promise<ModeloPrescricaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloPrescricao')
+        .select(MotorSupabase.CAMPOS_MODELO_PRESCRICAO)
+        .is('deletadoEm', null)
+        .order('atualizadoEm', { ascending: false }),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((m) => this.paraModeloDePrescricao(m));
+  }
+
+  async criarModeloDePrescricao(
+    dados: CriarModeloPrescricaoInput,
+  ): Promise<ModeloPrescricaoResumo> {
+    const criado = this.ou(
+      await this.db
+        .from('ModeloPrescricao')
+        .insert({
+          nome: dados.nome.trim(),
+          descricao: dados.descricao ?? null,
+          orientacoes: dados.orientacoes ?? null,
+        })
+        .select('id')
+        .single(),
+    ) as unknown as { id: string };
+
+    /*
+      A competência é conferida de novo na política do item: o catálogo global
+      tem medicamento, e um modelo é uma prescrição pronta esperando um nome. Um
+      item recusado derruba o lote inteiro — melhor que um modelo salvo pela
+      metade, que o prescritor emitiria sem reparar na falta.
+    */
+    this.ou(
+      await this.db.from('ItemModeloPrescricao').insert(
+        dados.itens.map((i, ordem) => ({
+          modeloId: criado.id,
+          prescritivelId: i.prescritivelId,
+          dose: i.dose ?? null,
+          unidade: i.unidade ?? null,
+          frequencia: i.frequencia ?? null,
+          horarios: i.horarios,
+          duracaoDias: i.duracaoDias ?? null,
+          via: i.via ?? null,
+          observacao: i.observacao ?? null,
+          ordem,
+        })),
+      ),
+    );
+
+    const linha = this.ou(
+      await this.db
+        .from('ModeloPrescricao')
+        .select(MotorSupabase.CAMPOS_MODELO_PRESCRICAO)
+        .eq('id', criado.id)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraModeloDePrescricao(linha);
+  }
+
+  /** Carimbo: modelo removido não pode sumir de uma prescrição já emitida. */
+  async removerModeloDePrescricao(id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('ModeloPrescricao')
+        .update({ deletadoEm: new Date().toISOString() })
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Modelo de prescrição não encontrado.', 404);
+    }
   }
 }
 

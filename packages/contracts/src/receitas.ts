@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import type { Macros } from './nutricao';
+import {
+  MACROS_ZERADOS,
+  escalarMacros,
+  macrosDaPorcao,
+  somarMacros,
+  type Macros,
+} from './nutricao';
 
 // --- receita ----------------------------------------------------------------
 
@@ -112,4 +118,150 @@ export function descreverItem(item: ItemRefeicaoSalvaResumo): string {
     return `${p} ${p === 1 ? 'porção' : 'porções'}`;
   }
   return `${item.quantidadeG ?? 0} g`;
+}
+
+// --- montagem ---------------------------------------------------------------
+
+/**
+ * A receita montada a partir das linhas do banco.
+ *
+ * Vive aqui, e não em quem consulta, porque são dois consumidores — a API e o
+ * SDK sobre o Postgres — e a mesma tela mostra os dois. Duas implementações do
+ * mesmo arredondamento dariam dois totais para a mesma receita, e o critério de
+ * aceite da nutrição é justamente o total bater com a soma dos itens.
+ *
+ * Espera a composição do alimento já em números: converter o `Decimal` do
+ * Prisma (ou o texto que o PostgREST devolve para `numeric`) é trabalho de quem
+ * leu o banco, e cada um o faz do seu jeito.
+ */
+export interface LinhaDeIngrediente {
+  id: string;
+  alimentoId: string;
+  nome: string;
+  quantidadeG: number;
+  observacao: string | null;
+  porcao100g: Macros;
+}
+
+export interface LinhaDeReceita {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  modoPreparo: string | null;
+  rendePorcoes: number;
+  nomeDaPorcao: string | null;
+  tempoMinutos: number | null;
+  ingredientes: LinhaDeIngrediente[];
+}
+
+/** Divide cada macro pelo rendimento. */
+function porPorcao(totais: Macros, rendePorcoes: number): Macros {
+  // Rendimento zero seria divisão por zero; o schema já barra, isto é a rede.
+  const divisor = rendePorcoes > 0 ? rendePorcoes : 1;
+  return escalarMacros(totais, 1 / divisor);
+}
+
+export function montarReceita(r: LinhaDeReceita): ReceitaResumo {
+  const ingredientes: IngredienteResumo[] = r.ingredientes.map((i) => ({
+    id: i.id,
+    alimentoId: i.alimentoId,
+    nome: i.nome,
+    quantidadeG: i.quantidadeG,
+    observacao: i.observacao,
+    macros: macrosDaPorcao(i.porcao100g, i.quantidadeG),
+  }));
+
+  const macrosTotais = somarMacros(ingredientes.map((i) => i.macros));
+
+  return {
+    id: r.id,
+    nome: r.nome,
+    descricao: r.descricao,
+    modoPreparo: r.modoPreparo,
+    rendePorcoes: r.rendePorcoes,
+    nomeDaPorcao: r.nomeDaPorcao,
+    tempoMinutos: r.tempoMinutos,
+    ingredientes,
+    macrosTotais,
+    macrosPorPorcao: porPorcao(macrosTotais, r.rendePorcoes),
+    // Duas casas, como todo o resto do módulo: somar gramas com casas decimais
+    // acumula o resto binário, e o peso total aparece na tela ao lado do rendimento.
+    pesoTotalG:
+      Math.round(ingredientes.reduce((s, i) => s + i.quantidadeG, 0) * 100) / 100,
+  };
+}
+
+export interface LinhaDeItemDeRefeicao {
+  id: string;
+  alimentoId: string | null;
+  receitaId: string | null;
+  quantidadeG: number | null;
+  porcoes: number | null;
+  observacao: string | null;
+  /** Preenchido quando o item é alimento. */
+  alimento: { nome: string; porcao100g: Macros } | null;
+  /** Preenchido quando o item é receita. */
+  receita: LinhaDeReceita | null;
+}
+
+export interface LinhaDeRefeicaoSalva {
+  id: string;
+  nome: string;
+  horarioSugerido: string | null;
+  observacao: string | null;
+  itens: LinhaDeItemDeRefeicao[];
+}
+
+export function montarRefeicaoSalva(r: LinhaDeRefeicaoSalva): RefeicaoSalvaResumo {
+  const itens: ItemRefeicaoSalvaResumo[] = r.itens.map((i) => {
+    if (i.receita) {
+      const porcoes = i.porcoes ?? 0;
+      /*
+        A receita entra pelo macro POR PORÇÃO, e não pelo total: é assim que a
+        pessoa pensa ("duas conchas de feijão", não "310 g de feijão pronto"), e
+        é o que faz a mesma receita servir a refeições de tamanhos diferentes.
+      */
+      const daReceita = montarReceita(i.receita);
+      return {
+        id: i.id,
+        nome: i.receita.nome,
+        ehReceita: true,
+        alimentoId: null,
+        receitaId: i.receitaId,
+        quantidadeG: null,
+        porcoes,
+        observacao: i.observacao,
+        macros: escalarMacros(daReceita.macrosPorPorcao, porcoes),
+      };
+    }
+
+    return {
+      id: i.id,
+      /*
+        "Item removido" e macros zerados quando o alimento sumiu do catálogo. A
+        refeição continua abrindo, com um item que a pessoa reconhece como
+        quebrado — melhor do que a tela inteira não carregar por causa de uma
+        linha.
+      */
+      nome: i.alimento?.nome ?? 'Item removido',
+      ehReceita: false,
+      alimentoId: i.alimentoId,
+      receitaId: null,
+      quantidadeG: i.quantidadeG ?? 0,
+      porcoes: null,
+      observacao: i.observacao,
+      macros: i.alimento
+        ? macrosDaPorcao(i.alimento.porcao100g, i.quantidadeG ?? 0)
+        : { ...MACROS_ZERADOS },
+    };
+  });
+
+  return {
+    id: r.id,
+    nome: r.nome,
+    horarioSugerido: r.horarioSugerido,
+    observacao: r.observacao,
+    itens,
+    macrosTotais: somarMacros(itens.map((i) => i.macros)),
+  };
 }
