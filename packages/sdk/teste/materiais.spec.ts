@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
 
 /**
@@ -26,6 +27,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
   let alunoId = '';
   let personalId = '';
   let materialId = '';
+  let arquivoId = '';
+  let chaveDoArquivo = '';
 
   const cliente = (): VivioClient =>
     new VivioClient({
@@ -97,6 +100,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
     if (meus.length > 0) {
       await admin.from('MaterialCompartilhado').delete().in('materialId', meus.map((m) => m.id));
       await admin.from('Material').delete().in('id', meus.map((m) => m.id));
+    }
+    if (chaveDoArquivo) {
+      await admin.storage.from('materiais').remove([chaveDoArquivo.replace('materiais/', '')]);
     }
     await admin.from('Vinculo').delete().eq('alunoId', alunoId);
     await admin.from('PerfilAluno').delete().eq('userId', alunoId);
@@ -213,18 +219,85 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
     expect((await aluno.materiais.meus()).map((m) => m.id)).not.toContain(materialId);
   });
 
-  it('remover é carimbo, e some das duas telas', async () => {
+  it('abrir o material entrega o arquivo — e carimba a primeira abertura', async () => {
+    const PDF = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], {
+      type: 'application/pdf',
+    });
+    chaveDoArquivo = await personal.midia.enviar('MATERIAL', PDF, 'application/pdf');
+    const m = await personal.materiais.criar({
+      titulo: `Planilha de cargas ${marca}`,
+      tipo: 'ARQUIVO',
+      chave: chaveDoArquivo,
+      nomeArquivo: 'cargas.pdf',
+      mimeType: 'application/pdf',
+      tamanhoBytes: 5,
+      etiquetas: [],
+    });
+    arquivoId = m.id;
+    await personal.materiais.compartilhar(arquivoId, { alunoIds: [alunoId] });
+
+    // O autor abre o que é dele.
+    const doAutor = await personal.materiais.abrir(arquivoId);
+    expect((await fetch(doAutor.url)).status).toBe(200);
+
+    /*
+      A primeira abertura do ALUNO marca o recebimento — é o que diz ao
+      profissional se o material chegou a ser lido. Abrir pelo autor não pode
+      carimbar nada: senão a tela diria "visto" sobre o próprio envio.
+    */
+    const antes = (await personal.materiais.listar()).find((x) => x.id === arquivoId)!;
+    expect(antes.compartilhadoCom[0]!.vistoEm).toBeNull();
+
+    const doAluno = await aluno.materiais.abrir(arquivoId);
+    expect((await fetch(doAluno.url)).status).toBe(200);
+
+    const depois = (await personal.materiais.listar()).find((x) => x.id === arquivoId)!;
+    expect(depois.compartilhadoCom[0]!.vistoEm).not.toBeNull();
+  });
+
+  it('quem não recebeu não abre — e nem sabe que existe', async () => {
+    const erro = await medico.materiais
+      .abrir(arquivoId)
+      .then(() => null)
+      .catch((e: unknown) => e as ErroApi);
+    // 404 e não 403: quem não recebeu não precisa saber que o material existe.
+    expect(erro?.status).toBe(404);
+
+    // E nem pelo caminho de baixo, com a chave na mão.
+    const caminho = chaveDoArquivo.replace('materiais/', '');
+    const r = await medico.supabase.db.storage.from('materiais').download(caminho);
+    expect(r.error).not.toBeNull();
+  });
+
+  it('material do tipo LINK não tem arquivo para abrir', async () => {
+    const erro = await personal.materiais
+      .abrir(materialId)
+      .then(() => null)
+      .catch((e: unknown) => e as ErroApi);
+    expect(erro?.status).toBe(409);
+    expect(erro?.message).toContain('link');
+  });
+
+  it('remover é carimbo na linha e exclusão de verdade no arquivo', async () => {
     await personal.materiais.compartilhar(materialId, { alunoIds: [alunoId] });
     await personal.materiais.remover(materialId);
+    await personal.materiais.remover(arquivoId);
 
     expect((await personal.materiais.listar()).map((m) => m.id)).not.toContain(materialId);
     expect((await aluno.materiais.meus()).map((m) => m.id)).not.toContain(materialId);
 
     /*
-      A linha continua no banco: o arquivo em si sai do armazenamento pela API,
-      e apagar a linha antes disso deixaria o objeto órfão lá dentro.
+      A linha fica carimbada — a entrega já feita é histórico —, mas o arquivo
+      sai: até 200 MB por material, e "apagado" que continua baixável por um
+      link assinado antigo é só aparência de exclusão.
     */
     const noBanco = await admin.from('Material').select('deletadoEm').eq('id', materialId).single();
     expect((noBanco.data as { deletadoEm: string | null }).deletadoEm).not.toBeNull();
+
+    const pasta = chaveDoArquivo.split('/')[1]!;
+    const nome = chaveDoArquivo.split('/').pop()!;
+    const restou = await admin.storage.from('materiais').list(pasta, { search: nome });
+    expect(restou.data ?? []).toHaveLength(0);
+    chaveDoArquivo = '';
   });
 });

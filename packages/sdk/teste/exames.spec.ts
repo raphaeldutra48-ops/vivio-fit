@@ -21,9 +21,13 @@ const servico = process.env.SUPABASE_SERVICE_ROLE;
 
 describe.skipIf(!url || !anon || !servico)('SDK sem API: exame', () => {
   const marca = `prova-exame-${Date.now()}`;
-  const alunoId = `${marca}-aluno`;
+  const emailAluno = `${marca}@teste.com`;
   let admin: SupabaseClient;
+  let alunoId = '';
+  let medicoId = '';
+  let nutriId = '';
   let exameId = '';
+  let chaveDoLaudo = '';
 
   const cliente = (): VivioClient =>
     new VivioClient({
@@ -34,24 +38,32 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: exame', () => {
   const medico = cliente();
   const nutri = cliente();
   const personal = cliente();
+  const aluno = cliente();
 
   beforeAll(async () => {
     admin = createClient(url!, servico!, { auth: { persistSession: false } });
     const idDe = async (email: string): Promise<string> =>
       ((await admin.from('User').select('id').eq('email', email).single()).data as { id: string })
         .id;
-    const [mId, nId, pId] = await Promise.all(
-      ['medico@viviofit.com.br', 'nutri@viviofit.com.br', 'personal@viviofit.com.br'].map(idDe),
-    );
+    const mId = await idDe('medico@viviofit.com.br');
+    const nId = await idDe('nutri@viviofit.com.br');
+    const pId = await idDe('personal@viviofit.com.br');
+    medicoId = mId;
+    nutriId = nId;
 
-    await admin.from('User').insert({
-      id: alunoId,
-      email: `${marca}@teste.com`,
-      nome: 'Aluno de Exame',
-      papel: 'ALUNO',
-      status: 'ATIVA',
-      atualizadoEm: new Date().toISOString(),
+    /*
+      Conta de verdade, e não uma linha em `User`: o laudo é o arquivo mais
+      restrito do app, e "o próprio aluno abre o dele" é metade da regra. Sem
+      poder entrar como ele, essa metade ficaria sem prova.
+    */
+    const nova = await admin.auth.admin.createUser({
+      email: emailAluno,
+      password: 'Senha@123',
+      email_confirm: true,
+      user_metadata: { nome: 'Aluno de Exame', papel: 'ALUNO' },
     });
+    if (nova.error) throw new Error(`conta: ${nova.error.message}`);
+    alunoId = nova.data.user!.id;
     await admin.from('Vinculo').insert(
       [
         ['MEDICO', mId],
@@ -79,6 +91,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: exame', () => {
       medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
       nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
       personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
+      aluno.auth.login({ email: emailAluno, senha: 'Senha@123' }),
     ]);
   });
 
@@ -88,7 +101,12 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: exame', () => {
     await admin.from('Exame').delete().eq('alunoId', alunoId);
     await admin.from('Consentimento').delete().eq('alunoId', alunoId);
     await admin.from('Vinculo').delete().eq('alunoId', alunoId);
+    await admin.from('PerfilAluno').delete().eq('userId', alunoId);
     await admin.from('User').delete().eq('id', alunoId);
+    await admin.auth.admin.deleteUser(alunoId);
+    if (chaveDoLaudo) {
+      await admin.storage.from('exames').remove([chaveDoLaudo.replace('exames/', '')]);
+    }
   });
 
   it('o médico lança o exame, e o banco classifica cada resultado', async () => {
@@ -183,15 +201,80 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: exame', () => {
     expect((guardado.data as { classificacao: string }).classificacao).toBe('CRITICO');
   });
 
-  it('a chave do arquivo não sai, e a tela sabe que existe arquivo', async () => {
-    await admin
-      .from('Exame')
-      .update({ chaveArquivo: 'privado/laudo.pdf', mimeType: 'application/pdf' })
-      .eq('id', exameId);
+  it('o médico anexa o laudo, e ele e o aluno abrem — a nutricionista não', async () => {
+    const PDF = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], {
+      type: 'application/pdf',
+    });
+    chaveDoLaudo = await medico.midia.enviar('LAUDO_EXAME', PDF, 'application/pdf');
+    await medico.exames.anexarLaudo(alunoId, exameId, {
+      chave: chaveDoLaudo,
+      mimeType: 'application/pdf',
+    });
 
-    const e = await medico.exames.obter(alunoId, exameId);
-    expect(e.temArquivo).toBe(true);
-    // Assinar a URL depende do armazenamento, que ainda não migrou.
-    expect(e.arquivoUrl).toBeNull();
+    // Quem pode: o link sai assinado e leva ao arquivo.
+    const doMedico = await medico.exames.obter(alunoId, exameId);
+    expect(doMedico.temArquivo).toBe(true);
+    expect(doMedico.arquivoUrl).toBeTruthy();
+    expect((await fetch(doMedico.arquivoUrl!)).status).toBe(200);
+
+    const doAluno = await aluno.exames.obter(alunoId, exameId);
+    expect(doAluno.arquivoUrl).toBeTruthy();
+
+    /*
+      A regra dura da especificação: o nutricionista lê os marcadores do exame
+      e **nunca** o arquivo. Ela sabe que existe um laudo — isso muda a conduta
+      dela — e não recebe link nenhum.
+    */
+    const daNutri = await nutri.exames.obter(alunoId, exameId);
+    expect(daNutri.temArquivo).toBe(true);
+    expect(daNutri.arquivoUrl).toBeNull();
+
+    // E nem pelo caminho de baixo: o compartimento recusa a ela.
+    const caminho = chaveDoLaudo.replace('exames/', '');
+    expect((await nutri.supabase.db.storage.from('exames').download(caminho)).error).not.toBeNull();
+  });
+
+  it('anexar o laudo de outra pessoa é recusado pelo banco', async () => {
+    /*
+      Sem esta conferência, quem pode anexar apontaria o exame para o laudo de
+      outra pessoa e o leria pelo link: a política olha a LINHA do exame, não a
+      origem do arquivo.
+    */
+    const erro = await medico.exames
+      .anexarLaudo(alunoId, exameId, {
+        chave: `exames/${nutriId}/roubado.pdf`,
+        mimeType: 'application/pdf',
+      })
+      .then(() => null)
+      .catch((e: unknown) => e as ErroApi);
+
+    expect(erro?.message).toContain('não pertence a você');
+  });
+
+  it('substituir o laudo apaga o anterior', async () => {
+    const antigo = chaveDoLaudo;
+    const PDF = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x32])], {
+      type: 'application/pdf',
+    });
+    chaveDoLaudo = await medico.midia.enviar('LAUDO_EXAME', PDF, 'application/pdf');
+    await medico.exames.anexarLaudo(alunoId, exameId, {
+      chave: chaveDoLaudo,
+      mimeType: 'application/pdf',
+    });
+
+    /*
+      São até 25 MB cada. Sem apagar, corrigir o laudo algumas vezes deixa o
+      compartimento cheio de arquivos que nenhuma linha alcança — e laudo órfão
+      é dado clínico ocupando espaço sem dono.
+    */
+    const restou = await admin.storage
+      .from('exames')
+      .list(medicoId, { search: antigo.split('/').pop() });
+    expect(restou.data ?? []).toHaveLength(0);
+  });
+
+  it('o personal não recebe nem o link nem a notícia do arquivo', async () => {
+    // Ele nem alcança o exame: a recusa vem antes, e é a mesma de sempre.
+    await expect(personal.exames.obter(alunoId, exameId)).rejects.toBeInstanceOf(ErroApi);
   });
 });

@@ -1323,7 +1323,29 @@ export class MotorSupabase {
     'registradoPor:User!Exame_registradoPorId_fkey(id,nome),' +
     'resultados:ResultadoMarcador(marcador,valor,classificacao)';
 
-  private paraExame(e: Record<string, unknown>): ExameResumo {
+  /**
+   * O link do laudo, para quem pode abri-lo — `null` para todo o resto.
+   *
+   * A chave do arquivo é invisível até para quem lê o exame: o nutricionista
+   * lê os marcadores e nunca o arquivo, e a coluna não tem permissão de leitura
+   * para ninguém. Quem responde quem pode é o banco, na mesma linha que a
+   * política do compartimento consulta.
+   *
+   * Só o exame individual pede o link. Na lista, `arquivoUrl` fica nulo de
+   * propósito: seriam duas idas à rede por exame numa tela que mostra o
+   * histórico inteiro, para um link que ninguém clica dali.
+   */
+  private async urlDoLaudo(exameId: string): Promise<string | null> {
+    const chave = await this.rpc<string | null>('chave_do_laudo', { p_exame_id: exameId });
+    if (!chave) return null;
+    // Arquivo que sumiu do armazenamento com a linha de pé não derruba a tela
+    // do exame — os marcadores continuam sendo o que importa ali.
+    return await this.urlDeLeitura(chave)
+      .then((r) => r.url)
+      .catch(() => null);
+  }
+
+  private paraExame(e: Record<string, unknown>, arquivoUrl: string | null = null): ExameResumo {
     const sexo = e.sexo as SexoBiologico;
     /*
       Os resultados já chegam filtrados pelo escopo de quem perguntou — a
@@ -1350,11 +1372,11 @@ export class MotorSupabase {
       resultados,
       contagem: contarClassificacoes(resultados),
       /*
-        Sempre nulo por enquanto: assinar a URL depende do armazenamento, que
-        ainda vive fora daqui. `anexarLaudo` e o link continuam na API até a
-        mídia migrar — e a tela já trata `null` como "sem arquivo para abrir".
+        Nulo na lista, assinado no exame individual: a tela só oferece "abrir o
+        laudo" no detalhe, e assinar na listagem seria pagar duas idas à rede
+        por exame para um link que ninguém clica dali.
       */
-      arquivoUrl: null,
+      arquivoUrl,
       temArquivo: e.mimeType !== null && e.mimeType !== undefined,
     };
   }
@@ -1379,7 +1401,7 @@ export class MotorSupabase {
         .eq('alunoId', alunoId)
         .single(),
     ) as unknown as Record<string, unknown>;
-    return this.paraExame(linha);
+    return this.paraExame(linha, await this.urlDoLaudo(exameId));
   }
 
   /**
@@ -2847,13 +2869,30 @@ export class MotorSupabase {
 
   /** Soft delete: o arquivo em si sai do armazenamento pela API, por enquanto. */
   async removerMaterial(id: string): Promise<void> {
-    await this.exigirLinhaAlterada(
-      this.db
+    const linhas = this.ou(
+      await this.db
         .from('Material')
         .update({ deletadoEm: new Date().toISOString() })
         .eq('id', id)
-        .select('id'),
-    );
+        .is('deletadoEm', null)
+        .select('chave'),
+    ) as unknown as { chave: string | null }[];
+
+    const removido = linhas[0];
+    if (!removido) {
+      throw new ErroApi('ACESSO_NEGADO', 'Você não tem acesso a este conteúdo.', 403);
+    }
+
+    /*
+      O arquivo sai do armazenamento junto — até 200 MB por material. Apagado
+      que continua baixável por um link assinado antigo é só aparência de
+      exclusão; e sem apagar, cada limpeza de biblioteca deixaria os arquivos
+      para trás sem ninguém para reclamar deles.
+
+      Depois do carimbo, para uma falha aqui não deixar o arquivo de pé com a
+      linha dizendo que ele foi apagado.
+    */
+    if (removido.chave) await this.removerMidia(removido.chave);
   }
 
   /**
@@ -4587,6 +4626,74 @@ export class MotorSupabase {
     // Depois do carimbo, para uma falha aqui não deixar a foto de pé com a
     // linha dizendo que ela foi apagada.
     await this.removerMidia(removida.chaveArquivo);
+  }
+
+  /**
+   * Anexa o laudo ao exame.
+   *
+   * Passa por uma função do banco, e não por um `update` direto, porque a
+   * coluna `chaveArquivo` não é legível por ninguém — personal e nutricionista
+   * nunca alcançam o laudo, e a chave crua não sai do banco. Sem poder lê-la,
+   * o cliente não descobriria qual arquivo ficou para trás ao trocar o laudo, e
+   * cada correção deixaria até 25 MB ocupados para sempre.
+   *
+   * A função devolve a chave anterior só quando ela é de quem está chamando.
+   */
+  async anexarLaudo(exameId: string, chave: string, mimeType: string): Promise<void> {
+    const anterior = await this.rpc<string | null>('anexar_laudo', {
+      p_exame_id: exameId,
+      p_chave: chave,
+      p_mime: mimeType,
+    });
+
+    // Depois de trocar, para uma falha aqui não deixar o exame apontando para
+    // um arquivo que já não existe.
+    if (anterior) await this.removerMidia(anterior);
+  }
+
+  /**
+   * O link para abrir um material.
+   *
+   * Quem pode ver já está decidido por `material_le`: o autor e quem recebeu.
+   * Material que a pessoa não recebeu simplesmente não vem na consulta, e a
+   * resposta é "não encontrado" — quem não recebeu não precisa saber que ele
+   * existe.
+   */
+  async abrirMaterial(id: string): Promise<UrlAssinada> {
+    const material = this.ou(
+      await this.db
+        .from('Material')
+        .select('id,tipo,chave')
+        .eq('id', id)
+        .is('deletadoEm', null)
+        .maybeSingle(),
+    ) as { id: string; tipo: string; chave: string | null } | null;
+
+    if (!material) throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Material não encontrado.', 404);
+    if (material.tipo !== 'ARQUIVO' || !material.chave) {
+      throw new ErroApi('CONFLITO', 'Este material é um link, não um arquivo.', 409);
+    }
+
+    /*
+      A primeira abertura marca o recebimento — é o que diz ao profissional se
+      o material chegou a ser aberto. O carimbo é do aluno que recebeu: a
+      política só deixa cada um marcar a própria entrega, e o gatilho fixa a
+      hora na PRIMEIRA vez (visto uma vez, visto para sempre).
+
+      Sem `await` no caminho crítico? Não: com. A marcação é uma ida à rede, e
+      engoli-la em segundo plano faria a tela do profissional mentir de vez em
+      quando, sem nada para investigar. Erro aqui não derruba a abertura, que é
+      o que a pessoa pediu.
+    */
+    const eu = await this.meuId();
+    await this.db
+      .from('MaterialCompartilhado')
+      .update({ vistoEm: new Date().toISOString() })
+      .eq('materialId', id)
+      .eq('alunoId', eu)
+      .is('vistoEm', null);
+
+    return this.urlDeLeitura(material.chave);
   }
 }
 

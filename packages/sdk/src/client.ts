@@ -690,19 +690,20 @@ export class VivioClient {
       this.supabase.registrarExame(alunoId, dados),
 
     /**
-     * Ainda na API: anexar o laudo depende do armazenamento, que nao migrou.
-     * Sai daqui quando a midia sair — junto com `arquivoUrl`, que por enquanto
-     * volta nulo.
+     * Anexa (ou substitui) o laudo do laboratório.
+     *
+     * `alunoId` continua no argumento porque a tela o tem na mão e a assinatura
+     * é do contrato; quem confere o vínculo e o consentimento é o banco, pelo
+     * exame.
      */
-    anexarLaudo: (
-      alunoId: string,
+    anexarLaudo: async (
+      _alunoId: string,
       exameId: string,
       dados: AnexarLaudoInput,
-    ): Promise<{ temArquivo: true }> =>
-      this.requisicao<{ temArquivo: true }>(`/alunos/${alunoId}/exames/${exameId}/laudo`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+    ): Promise<{ temArquivo: true }> => {
+      await this.supabase.anexarLaudo(exameId, dados.chave, dados.mimeType);
+      return { temArquivo: true };
+    },
   };
 
   // --- condições de saúde ------------------------------------------------------
@@ -1146,8 +1147,7 @@ export class VivioClient {
      * Continua na API: assinar depende do armazenamento, que ainda vive
      * fora do Supabase. É a mesma pendência do laudo e da foto de evolução.
      */
-    abrir: (id: string): Promise<UrlAssinada> =>
-      this.requisicao<UrlAssinada>(`/materiais/${id}/abrir`),
+    abrir: (id: string): Promise<UrlAssinada> => this.supabase.abrirMaterial(id),
 
     compartilhar: (id: string, dados: CompartilharMaterialInput): Promise<MaterialResumo> =>
       this.supabase.compartilharMaterial(id, dados.alunoIds),
