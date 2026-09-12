@@ -164,3 +164,64 @@ $enxuga$;
   política que ninguém declarou é uma decisão que ninguém revisa.
 */
 drop policy if exists notificacao_escreve on public."Notificacao";
+
+-- --------------------------------------------------------------------------
+-- As funções
+-- --------------------------------------------------------------------------
+/*
+  O mesmo descuido do `grant all`, um andar abaixo — e este ninguém percebeu
+  porque a correção parecia estar escrita.
+
+  Toda função nasce com `EXECUTE` para **PUBLIC**. `PUBLIC` não é um papel: é
+  todo mundo, e `anon` herda dele. O arquivo 11 revoga de `anon` com todas as
+  letras — `revoke execute on function public.pode_ler_do_aluno(...) from anon`
+  — e isso não faz nada: tirar de `anon` o que ele recebe por `PUBLIC` deixa o
+  acesso de pé. As linhas estavam lá, dizendo que a porta estava fechada.
+
+  Hoje nenhuma função aberta vaza dado: as que tocam dado começam perguntando
+  `usuario_atual()`, que é nulo sem sessão, e recusam. A varredura abaixo achou
+  32 funções ao alcance do `anon` e nenhuma delas sem essa guarda. O problema é
+  o dia seguinte, de novo: a próxima função escrita sem a pergunta nasce
+  alcançável por quem não entrou no app, e nada no banco vai reclamar.
+
+  A varredura inverte o padrão. Função nova nasce fechada ao `anon`; abrir vira
+  um ato explícito — que é o que as duas exceções abaixo são.
+*/
+do $funcoes$
+declare
+  f record;
+begin
+  for f in
+    select pr.oid,
+           pr.proname as nome,
+           pg_get_function_identity_arguments(pr.oid) as args
+      from pg_proc pr
+      join pg_namespace n on n.oid = pr.pronamespace
+      join pg_type t on t.oid = pr.prorettype
+     where n.nspname = 'public'
+       -- Função de extensão (btree_gist e afins) não é nossa para mexer.
+       and not exists (select 1 from pg_depend d where d.objid = pr.oid and d.deptype = 'e')
+       -- Gatilho não se chama pela API: o Postgres recusa a chamada direta, e
+       -- o `grant` nele não decide nada.
+       and t.typname <> 'trigger'
+  loop
+    execute format('revoke execute on function public.%I(%s) from public, anon', f.nome, f.args);
+    execute format('grant execute on function public.%I(%s) to authenticated', f.nome, f.args);
+  end loop;
+end;
+$funcoes$;
+
+/*
+  As duas exceções, e o motivo de cada uma.
+
+  A página pública do profissional é o cartão de visita dele: quem a abre ainda
+  não tem conta, e é essa a finalidade da tela. O pedido de contato é o
+  formulário dela — escrito por quem ainda não é usuário, que é o único jeito
+  de virar usuário.
+
+  As duas foram feitas para o anônimo, e cada uma cuida do próprio limite: a
+  página devolve só o que o profissional marcou como público, e o pedido grava
+  numa tabela que ele lê e ninguém mais.
+*/
+grant execute on function public.pagina_publica(text) to anon;
+grant execute on function public.enviar_pedido_de_contato(text, text, text, text, text) to anon;

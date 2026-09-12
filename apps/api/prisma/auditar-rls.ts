@@ -305,6 +305,39 @@ async function principal(): Promise<void> {
     itens: semQuemPreencha,
   });
 
+  /*
+    Função ao alcance de quem não entrou no app.
+
+    Toda função nasce com EXECUTE para PUBLIC, e `anon` herda de PUBLIC — um
+    `revoke ... from anon` sozinho não tira nada. O arquivo 99 inverte isso a
+    cada aplicação; esta seção existe para o caso de alguém criar uma função
+    depois e não rodar o aplicador.
+
+    Duas são abertas de propósito: a página pública do profissional e o
+    formulário de contato dela, que é escrito por quem ainda não tem conta.
+  */
+  const ABERTAS_DE_PROPOSITO = new Set(['pagina_publica', 'enviar_pedido_de_contato']);
+  const aoAlcanceDoAnonimo = await prisma.$queryRawUnsafe<{ nome: string; args: string }[]>(
+    `select pr.proname nome, pg_get_function_identity_arguments(pr.oid) args
+       from pg_proc pr
+       join pg_namespace n on n.oid = pr.pronamespace
+       join pg_type t on t.oid = pr.prorettype
+      where n.nspname = 'public'
+        and t.typname <> 'trigger'
+        and not exists (select 1 from pg_depend d where d.objid = pr.oid and d.deptype = 'e')
+        and has_function_privilege('anon', pr.oid, 'EXECUTE')
+      order by 1`,
+  );
+  achados.push({
+    titulo: 'FUNÇÃO AO ALCANCE DO ANÔNIMO',
+    explicacao:
+      'Chamável sem sessão. Hoje as que tocam dado começam perguntando `usuario_atual()` e ' +
+      'recusam; a próxima escrita sem essa pergunta não vai reclamar de nada.',
+    itens: aoAlcanceDoAnonimo
+      .filter((f) => !ABERTAS_DE_PROPOSITO.has(f.nome))
+      .map((f) => `${f.nome}(${f.args})`),
+  });
+
   achados.push({
     titulo: 'POLÍTICAS "FOR ALL"',
     explicacao: 'Concedem SELECT junto: conferir se apagam alguma regra de leitura.',
