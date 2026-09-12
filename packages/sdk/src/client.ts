@@ -1008,34 +1008,24 @@ export class VivioClient {
 
   readonly prescricoes = {
     listar: (alunoId: string): Promise<PrescricaoResumo[]> =>
-      this.requisicao<PrescricaoResumo[]>(`/alunos/${alunoId}/prescricoes`),
+      this.supabase.listarPrescricoes(alunoId),
 
     emitir: (alunoId: string, dados: EmitirPrescricaoInput): Promise<PrescricaoResumo> =>
-      this.requisicao<PrescricaoResumo>(`/alunos/${alunoId}/prescricoes`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.emitirPrescricao(alunoId, dados),
 
     /** Não edita: cria a versão seguinte e arquiva a anterior. */
     substituir: (
-      alunoId: string,
+      _alunoId: string,
       prescricaoId: string,
       dados: EmitirPrescricaoInput,
-    ): Promise<PrescricaoResumo> =>
-      this.requisicao<PrescricaoResumo>(
-        `/alunos/${alunoId}/prescricoes/${prescricaoId}/substituir`,
-        { metodo: 'POST', corpo: dados },
-      ),
+    ): Promise<PrescricaoResumo> => this.supabase.substituirPrescricao(prescricaoId, dados),
 
     mudarStatus: (
-      alunoId: string,
+      _alunoId: string,
       prescricaoId: string,
       dados: MudarStatusPrescricaoInput,
     ): Promise<PrescricaoResumo> =>
-      this.requisicao<PrescricaoResumo>(`/alunos/${alunoId}/prescricoes/${prescricaoId}/status`, {
-        metodo: 'PATCH',
-        corpo: dados,
-      }),
+      this.supabase.mudarStatusDaPrescricao(prescricaoId, dados),
   };
 
   // --- receitas e refeições --------------------------------------------------
@@ -1168,16 +1158,13 @@ export class VivioClient {
 
   readonly anamneses = {
     listar: (alunoId: string): Promise<AnamneseResumo[]> =>
-      this.requisicao<AnamneseResumo[]>(`/alunos/${alunoId}/anamneses`),
+      this.supabase.listarAnamneses(alunoId),
 
     aplicar: (alunoId: string, dados: AplicarAnamneseInput): Promise<AnamneseResumo> =>
-      this.requisicao<AnamneseResumo>(`/alunos/${alunoId}/anamneses`, {
-        metodo: 'POST',
-        corpo: dados,
-      }),
+      this.supabase.aplicarAnamnese(alunoId, dados),
 
     remover: (alunoId: string, id: string): Promise<void> =>
-      this.requisicao<void>(`/alunos/${alunoId}/anamneses/${id}`, { metodo: 'DELETE' }),
+      this.supabase.removerAnamnese(alunoId, id),
   };
 
   // --- administração --------------------------------------------------------

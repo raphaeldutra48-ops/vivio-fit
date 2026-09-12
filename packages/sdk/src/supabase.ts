@@ -60,6 +60,14 @@ import {
 } from '@vivio/contracts';
 import type {
   AcessoRegistrado,
+  RespostaResumo,
+  AplicarAnamneseInput,
+  AnamneseResumo,
+  PosologiaInput,
+  MudarStatusPrescricaoInput,
+  EmitirPrescricaoInput,
+  ItemPrescricaoResumo,
+  PrescricaoResumo,
   Dobra,
   ResultadoComposicao,
   RegistrarAvaliacaoInput,
@@ -6005,6 +6013,245 @@ export class MotorSupabase {
     ) as unknown as Record<string, unknown>[];
 
     return this.paraAvaliacao(criada, anteriores[0]);
+  }
+
+  // --- prescrição emitida ---------------------------------------------------
+
+  private static readonly CAMPOS_PRESCRICAO =
+    'id,data,validaAte,orientacoes,versao,status,motivoEncerramento,' +
+    'prescritor:User!Prescricao_prescritorId_fkey(id,nome,papel),' +
+    'itens:ItemPrescricao(id,ordem,prescritivelId,nomeNoMomento,dose,unidade,frequencia,' +
+    'horarios,duracaoDias,via,observacao,prescritivel:ItemPrescritivel(tipo,apresentacao))';
+
+  private paraPrescricao(p: Record<string, unknown>): PrescricaoResumo {
+    const itens = ((p.itens as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.ordem) - Number(b.ordem))
+      .map((i) => {
+        const cat = (umSo(i.prescritivel) ?? {}) as Record<string, unknown>;
+        return {
+          id: i.id as string,
+          prescritivelId: i.prescritivelId as string,
+          // O nome congelado na emissão, e não o do catálogo de hoje: é o que a
+          // pessoa leu na receita.
+          nome: i.nomeNoMomento as string,
+          tipo: cat.tipo as ItemPrescricaoResumo['tipo'],
+          dose: n(i.dose),
+          unidade: (i.unidade as string | null) ?? null,
+          frequencia: (i.frequencia as string | null) ?? null,
+          horarios: (i.horarios as string[] | null) ?? [],
+          duracaoDias: i.duracaoDias === null ? null : Number(i.duracaoDias),
+          via: (i.via as string | null) ?? null,
+          observacao: (i.observacao as string | null) ?? null,
+          apresentacao: (cat.apresentacao as string | null) ?? null,
+        };
+      });
+
+    return {
+      id: p.id as string,
+      // Colunas `date`: o PostgREST as devolve como `AAAA-MM-DD`, e o corte é
+      // defensivo. Passar por `new Date()` traria o fuso de volta, e com ele o
+      // dia errado — uma receita emitida às 22h mudaria de data na tela.
+      data: (p.data as string).slice(0, 10),
+      validaAte: (p.validaAte as string | null)?.slice(0, 10) ?? null,
+      orientacoes: (p.orientacoes as string | null) ?? null,
+      versao: Number(p.versao),
+      status: p.status as PrescricaoResumo['status'],
+      motivoEncerramento: (p.motivoEncerramento as string | null) ?? null,
+      itens,
+      prescritor: umSo(p.prescritor) as unknown as PrescricaoResumo['prescritor'],
+    };
+  }
+
+  async listarPrescricoes(alunoId: string): Promise<PrescricaoResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('Prescricao')
+        .select(MotorSupabase.CAMPOS_PRESCRICAO)
+        .eq('alunoId', alunoId)
+        .order('data', { ascending: false })
+        .order('versao', { ascending: false })
+        .limit(60),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((p) => this.paraPrescricao(p));
+  }
+
+  private async obterPrescricao(id: string): Promise<PrescricaoResumo> {
+    const linha = this.ou(
+      await this.db
+        .from('Prescricao')
+        .select(MotorSupabase.CAMPOS_PRESCRICAO)
+        .eq('id', id)
+        .single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraPrescricao(linha);
+  }
+
+  /** A posologia como a função do banco a espera. */
+  private static itensDaPrescricao(itens: PosologiaInput[]): Record<string, unknown>[] {
+    return itens.map((i) => ({
+      prescritivelId: i.prescritivelId,
+      dose: i.dose ?? null,
+      unidade: i.unidade ?? null,
+      frequencia: i.frequencia ?? null,
+      horarios: i.horarios,
+      duracaoDias: i.duracaoDias ?? null,
+      via: i.via ?? null,
+      observacao: i.observacao ?? null,
+    }));
+  }
+
+  /**
+   * Emite a prescrição.
+   *
+   * Passa por uma função do banco porque são dois passos — a linha e os itens —
+   * e uma prescrição gravada sem item nenhum é pior do que nenhuma prescrição:
+   * aparece na tela do paciente como receita vazia. Dentro da função, ou tudo
+   * entra ou nada entra.
+   *
+   * É lá que o nome de cada item é congelado, lido do catálogo: renomear o item
+   * depois não altera o que foi prescrito. E é lá que a competência
+   * profissional é conferida pela terceira vez — aqui é a receita que vai para a
+   * mão da pessoa.
+   */
+  async emitirPrescricao(
+    alunoId: string,
+    dados: EmitirPrescricaoInput,
+  ): Promise<PrescricaoResumo> {
+    const id = await this.rpc<string>('emitir_prescricao', {
+      p_aluno_id: alunoId,
+      p_data: dados.data.toISOString().slice(0, 10),
+      p_valida_ate: dados.validaAte ? dados.validaAte.toISOString().slice(0, 10) : null,
+      p_orientacoes: dados.orientacoes ?? null,
+      p_itens: MotorSupabase.itensDaPrescricao(dados.itens),
+    });
+    return this.obterPrescricao(id);
+  }
+
+  /**
+   * Mudar a conduta cria uma versão nova e marca a anterior como substituída.
+   *
+   * Prescrição é registro clínico: editar no lugar apagaria o que estava valendo
+   * quando o paciente tomou o que tomou. As duas metades acontecem juntas dentro
+   * da função — a anterior marcada sem a sucessora seria um paciente sem
+   * prescrição válida, do nada.
+   */
+  async substituirPrescricao(
+    prescricaoId: string,
+    dados: EmitirPrescricaoInput,
+  ): Promise<PrescricaoResumo> {
+    const id = await this.rpc<string>('substituir_prescricao', {
+      p_prescricao_id: prescricaoId,
+      p_data: dados.data.toISOString().slice(0, 10),
+      p_valida_ate: dados.validaAte ? dados.validaAte.toISOString().slice(0, 10) : null,
+      p_orientacoes: dados.orientacoes ?? null,
+      p_itens: MotorSupabase.itensDaPrescricao(dados.itens),
+    });
+    return this.obterPrescricao(id);
+  }
+
+  async mudarStatusDaPrescricao(
+    prescricaoId: string,
+    dados: MudarStatusPrescricaoInput,
+  ): Promise<PrescricaoResumo> {
+    await this.rpc<void>('mudar_status_da_prescricao', {
+      p_prescricao_id: prescricaoId,
+      p_status: dados.status,
+      p_motivo: dados.motivo ?? null,
+    });
+    return this.obterPrescricao(prescricaoId);
+  }
+
+  // --- anamnese aplicada ----------------------------------------------------
+
+  private static readonly CAMPOS_ANAMNESE =
+    'id,nomeNoMomento,observacao,respondidaEm,' +
+    'profissional:User!Anamnese_profissionalId_fkey(id,nome),' +
+    'respostas:RespostaAnamnese(id,ordem,perguntaNoMomento,tipoNoMomento,valor,valores)';
+
+  private paraAnamnese(a: Record<string, unknown>): AnamneseResumo {
+    const respostas = ((a.respostas as Record<string, unknown>[] | null) ?? [])
+      .slice()
+      .sort((x, y) => Number(x.ordem) - Number(y.ordem))
+      .map((r) => ({
+        id: r.id as string,
+        // Pergunta e tipo congelados: editar o modelo não reescreve o que a
+        // pessoa respondeu, nem muda como a resposta deve ser lida.
+        pergunta: r.perguntaNoMomento as string,
+        tipo: r.tipoNoMomento as RespostaResumo['tipo'],
+        valor: (r.valor as string | null) ?? null,
+        valores: (r.valores as string[] | null) ?? [],
+        ordem: Number(r.ordem),
+      }));
+
+    return {
+      id: a.id as string,
+      nome: a.nomeNoMomento as string,
+      observacao: (a.observacao as string | null) ?? null,
+      respondidaEm: instante(a.respondidaEm),
+      profissional: umSo(a.profissional) as unknown as AnamneseResumo['profissional'],
+      respostas,
+    };
+  }
+
+  async listarAnamneses(alunoId: string): Promise<AnamneseResumo[]> {
+    const linhas = this.ou(
+      await this.db
+        .from('Anamnese')
+        .select(MotorSupabase.CAMPOS_ANAMNESE)
+        .eq('alunoId', alunoId)
+        .order('respondidaEm', { ascending: false })
+        .limit(50),
+    ) as unknown as Record<string, unknown>[];
+    return linhas.map((a) => this.paraAnamnese(a));
+  }
+
+  /**
+   * Aplica o questionário ao aluno.
+   *
+   * Função do banco pelo mesmo motivo da prescrição — a anamnese e suas
+   * respostas são um registro só —, e por mais um: é lá que as perguntas
+   * obrigatórias são conferidas, e a frase diz QUAIS faltam. Sem isso, a pessoa
+   * corrigiria uma, salvaria, e descobriria a próxima.
+   */
+  async aplicarAnamnese(alunoId: string, dados: AplicarAnamneseInput): Promise<AnamneseResumo> {
+    const id = await this.rpc<string>('aplicar_anamnese', {
+      p_aluno_id: alunoId,
+      p_modelo_id: dados.modeloId,
+      p_respondida_em: paraIso(dados.respondidaEm),
+      p_observacao: dados.observacao ?? null,
+      p_respostas: dados.respostas.map((r) => ({
+        perguntaId: r.perguntaId,
+        valor: r.valor ?? null,
+        valores: r.valores,
+      })),
+    });
+
+    const linha = this.ou(
+      await this.db.from('Anamnese').select(MotorSupabase.CAMPOS_ANAMNESE).eq('id', id).single(),
+    ) as unknown as Record<string, unknown>;
+    return this.paraAnamnese(linha);
+  }
+
+  /**
+   * Apaga de verdade, e só quem aplicou.
+   *
+   * Diferente da prescrição: um questionário respondido por engano — modelo
+   * errado, aluno errado — é ruído no prontuário, não histórico. As respostas
+   * vão junto por cascata, porque fora da anamnese elas não querem dizer nada.
+   */
+  async removerAnamnese(alunoId: string, id: string): Promise<void> {
+    const linhas = this.ou(
+      await this.db
+        .from('Anamnese')
+        .delete()
+        .eq('id', id)
+        .eq('alunoId', alunoId)
+        .select('id'),
+    ) as unknown as { id: string }[];
+    if (linhas.length === 0) {
+      throw new ErroApi('RECURSO_NAO_ENCONTRADO', 'Anamnese não encontrada.', 404);
+    }
   }
 }
 
