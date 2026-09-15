@@ -1,0 +1,39 @@
+{
+  "name": "@vivio/banco",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "seed": "tsx prisma/seed.ts",
+    "semear-auth": "tsx prisma/semear-auth.ts",
+    "semear-catalogo": "tsx prisma/semear-catalogo.ts",
+    "importar-taco": "tsx prisma/importar-taco.ts",
+    "exportar-regras": "tsx prisma/exportar-regras.ts",
+    "revisao-clinica": "tsx scripts/gerar-revisao-clinica.ts",
+    "importar-wger": "tsx --env-file=.env.supabase ferramentas/importar-wger.ts",
+    "vincular-prime": "tsx ferramentas/vincular-prime.ts",
+    "subir-catalogo": "tsx --env-file=.env.supabase ferramentas/subir-catalogo.ts",
+    "rls:aplicar": "tsx prisma/aplicar-rls.ts",
+    "rls:conferir": "tsx prisma/conferir-rls.ts",
+    "rls:auditar": "tsx prisma/auditar-rls.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "@supabase/supabase-js": "^2.112.4",
+    "@vivio/contracts": "workspace:*",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@vivio/config": "workspace:*",
+    "prisma": "^6.2.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  }
+}

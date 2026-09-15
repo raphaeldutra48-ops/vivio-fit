@@ -38,6 +38,10 @@ export default tseslint.config(
       'apps/mobile/dist/**',
       // Gerado pelo Next a cada build; editar não adianta.
       'apps/web/next-env.d.ts',
+      // Edge Functions rodam no Deno, com imports por URL e `Deno.*` global:
+      // nenhum tsconfig do Node as descreve, e o analisador de tipos daqui só
+      // produziria erro falso. Quem as confere é o `supabase functions deploy`.
+      'supabase/functions/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -134,7 +138,7 @@ export default tseslint.config(
   },
   {
     // Testes e scripts de manutenção: `$queryRawUnsafe` e afins são o trabalho.
-    files: ['**/*.spec.ts', '**/*.test.tsx', 'apps/api/test/**', 'apps/api/prisma/**'],
+    files: ['**/*.spec.ts', '**/*.test.tsx', 'packages/banco/teste/**', 'packages/banco/prisma/**'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/require-await': 'off',

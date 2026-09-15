@@ -6,7 +6,7 @@ import { VivioClient } from '../src/client';
 /**
  * Os grupos do SDK que já não passam pela API, exercitados PELO SDK.
  *
- * Os testes de RLS que vivem em `apps/api` entram pelo Postgres ou pelo
+ * Os testes de RLS que vivem em `packages/banco` entram pelo Postgres ou pelo
  * `supabase-js` cru. Este entra pelo `VivioClient` — a mesma classe que as 158
  * chamadas das telas usam — e por isso é o único que prova o contrato inteiro:
  * que o método existe, que devolve a forma que a tela espera, e que o erro
@@ -16,7 +16,7 @@ import { VivioClient } from '../src/client';
  * dependesse dela, o teste nem compilaria — que é uma prova mais forte do que a
  * conexão recusada que este comentário prometia antes.
  *
- * Vive aqui, e não em `apps/api`, porque o que está sob teste é o SDK — e ele
+ * Vive aqui, e não em `packages/banco`, porque o que está sob teste é o SDK — e ele
  * precisa continuar existindo depois que a API for demolida.
  */
 const url = process.env.SUPABASE_URL;

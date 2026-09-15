@@ -309,7 +309,7 @@ e só o player deles busca o vídeo — e passar por cima disso seria contornar 
 proteção deles. O caminho é eles entregarem os arquivos ou uma chave de leitura
 da biblioteca.
 
-O que já está feito é o casamento, em `apps/api/src/ferramentas/prime.ts`:
+O que já está feito é o casamento, em `packages/banco/ferramentas/prime.ts`:
 **155 dos 214 exercícios** com vídeo em português do Prime, 124 certos e 31
 marcados para conferir no vídeo (quase sempre o aparelho, que o nome não diz).
 Decidido à mão contra o catálogo inteiro — o comparador por palavras sozinho

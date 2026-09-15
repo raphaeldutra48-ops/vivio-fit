@@ -321,7 +321,7 @@ que são referências de otimização, e não critério de diagnóstico, já est
 tela de resultado e na Metodologia — mas aviso não substitui revisão.
 **O que ajuda na revisão:** a página `/metodologia` lista as 20 faixas com as
 fontes, geradas da própria tabela. Dá para imprimir e revisar sem ler código.
-**Vale também para as 8 regras de alerta** (`apps/api/src/modules/alertas/regras.ts`):
+**Vale também para as 8 regras de alerta** (`packages/banco/regras/regras.ts`):
 elas decidem quando um achado vira orientação para outro profissional, e o
 texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
 é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
@@ -514,7 +514,7 @@ aparecia:
    via a recusa sobre um botão a que tem acesso.
 
 **Como se prova:** `packages/sdk/teste/` tem 34 arquivos e 276 casos rodando
-contra o banco de verdade, e `pnpm --filter @vivio/api rls:auditar` compara o
+contra o banco de verdade, e `pnpm --filter @vivio/banco rls:auditar` compara o
 que o SDK usa com o que o banco deixa — e sai com erro quando divergem.
 
 **A última chamada também saiu**, para uma função de borda:
@@ -532,7 +532,7 @@ Janela a saber: o Supabase só dá a sessão por morta quando o token de acesso
 vence E o refresh é recusado, então a pessoa revogada vai ao login em até 15
 minutos — a mesma janela do token da API antiga.
 
-**O que falta para a API sumir de vez (ação sua):**
+**O que falta (ação sua):**
 
 1. **Implantar a função e pôr o segredo** (`supabase/README.md` tem os três
    comandos). A chave da Anthropic é sua e vai direto da sua máquina para o
@@ -540,9 +540,41 @@ minutos — a mesma janela do token da API antiga.
    configurada" e o resto do app segue inteiro.
 2. **Conferir se sobrou mídia no volume do Railway** antes de desligar o
    serviço — desligá-lo leva o volume junto.
-3. **Apagar `apps/api`.** Nenhum app a chama mais. O que vive lá e ainda serve
-   muda de casa, não some: as ferramentas de importação (`src/ferramentas/`), o
-   aplicador e o auditor de regras (`prisma/`).
+
+### `apps/api` saiu do repositório — resolvida em 2026-09-15
+
+O servidor NestJS, os 34 testes e2e por HTTP, o Dockerfile, o envio de e-mail e
+os scripts de senha argon2 (`criar-admin`, `redefinir-senha`, `preparar-teste`,
+que escreviam `senhaHash` para um login que não existe mais) foram apagados,
+junto com `DEPLOY.md` e os passo a passo do Railway e do e-mail.
+
+O que ainda serve mudou de casa para **`packages/banco` (`@vivio/banco`)**:
+schema e migrações do Prisma, as regras (`prisma/rls/`) com aplicador, conferidor
+e auditor, os importadores (`ferramentas/`: wger, Prime, catálogo), as regras de
+alerta que geram o dossiê clínico (`regras/`), a semente e os 8 testes que
+provam as regras direto no Postgres. O `importar-wger` deixou de gravar pelo
+driver de mídia da API e grava direto no compartimento `catalogo`, com a chave
+de serviço, como o `subir-catalogo`. A semente não gera mais hash de senha: quem
+autentica é o Supabase Auth, via `semear-auth`.
+
+Os segredos locais (`.env`, `.env.supabase`) e a mídia baixada vieram junto,
+continuam fora do Git, e a suíte do SDK agora os lê de `packages/banco/`.
+
+**E a mudança achou um defeito meu, de segurança.** A varredura de funções do
+`99-fechar-portas.sql`, escrita dias antes para tirar do anônimo o `EXECUTE` que
+toda função ganha por `PUBLIC`, dava `grant ... to authenticated` em TODA
+função. Parecia repor o que o `PUBLIC` dava; na prática **reabriu ao app nove
+funções que outros arquivos tinham fechado de propósito** — o hook do token,
+`vinculo_de`, `consentimento_de` (um profissional voltava a poder perguntar se
+um colega tem consentimento de um aluno) e seis auxiliares das funções de
+gravação. O teste da cadeia do cliente pegou ao rodar da casa nova. Agora a
+varredura pergunta antes de revogar se o `authenticated` alcançava a função, e
+só devolve a quem alcançava; o auditor ganhou a seção **FUNÇÃO INTERNA AO
+ALCANCE DO APP**, que acusou as nove antes da correção e zero depois.
+
+**Como se prova:** `pnpm --filter @vivio/banco rls:auditar` → "Nada a
+corrigir"; banco 139/139, SDK 278/278, web 306/306, contracts 344/344, `tsc`
+limpo em banco, sdk, web, mobile e contracts, lint sem erro.
 
 
 ### A foto de evolução voltou a ter as três travas — resolvida em 2026-09-11
@@ -636,7 +668,7 @@ lado da regra que faltava:
   regra, e roda por último (`99-`) para pegar também os grupos que ainda vão
   ser migrados.
 
-`pnpm --filter @vivio/api rls:auditar` refaz a conferência contra o banco e sai
+`pnpm --filter @vivio/banco rls:auditar` refaz a conferência contra o banco e sai
 com código 1 se algo voltar: tabela sem RLS, permissão sem regra, política
 órfã, ou leitura/escrita do SDK que o banco não deixa.
 

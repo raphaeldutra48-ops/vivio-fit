@@ -12,16 +12,6 @@
       "port": 3000
     },
     {
-      "name": "api",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@vivio/api",
-        "dev"
-      ],
-      "port": 3333
-    },
-    {
       "name": "mobile-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

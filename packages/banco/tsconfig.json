@@ -1,0 +1,14 @@
+{
+  // O banco e as ferramentas que falam com ele: schema, regras de acesso,
+  // importadores e os testes que provam as regras contra o Postgres. Nada aqui
+  // é empacotado — tudo roda por `tsx` ou `vitest` —, então o typecheck enxerga
+  // o pacote inteiro e não emite nada.
+  "extends": "@vivio/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "noUncheckedIndexedAccess": false,
+    "noEmit": true
+  },
+  "include": ["prisma/**/*", "ferramentas/**/*", "regras/**/*", "scripts/**/*", "teste/**/*", "*.ts"],
+  "exclude": ["node_modules", "media"]
+}

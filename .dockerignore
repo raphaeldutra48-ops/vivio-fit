@@ -36,4 +36,4 @@ docs
 **/*.spec.tsx
 
 # Mídia enviada em desenvolvimento (driver de armazenamento local)
-apps/api/media
+packages/banco/media

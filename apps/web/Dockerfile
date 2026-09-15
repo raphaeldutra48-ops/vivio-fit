@@ -12,7 +12,6 @@ WORKDIR /app
 # --- dependências -----------------------------------------------------------
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
-COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/contracts/package.json packages/contracts/
@@ -20,6 +19,7 @@ COPY packages/sdk/package.json packages/sdk/
 COPY packages/ui/package.json packages/ui/
 COPY packages/ui-native/package.json packages/ui-native/
 COPY packages/config/package.json packages/config/
+COPY packages/banco/package.json packages/banco/
 RUN pnpm install --frozen-lockfile
 
 # --- build ------------------------------------------------------------------
