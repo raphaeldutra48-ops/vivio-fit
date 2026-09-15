@@ -247,6 +247,14 @@ import type {
 } from '@vivio/contracts';
 import { ErroApi } from './erro';
 
+/** Os nomes de recurso da trilha — os mesmos do `@Auditar` da API, que a tela já exibe. */
+type RecursoAuditado =
+  | 'ALERTA_CLINICO' | 'ANAMNESE' | 'CONDICAO_SAUDE' | 'EXAME' | 'PRESCRICAO'
+  | 'AVALIACAO_FISICA' | 'CALORIMETRIA' | 'CHECKIN' | 'FOTO_EVOLUCAO' | 'MEDIDA'
+  | 'META' | 'PROGRESSO' | 'COMPARATIVO' | 'PLANO_DIETA' | 'CARDIO'
+  | 'EXECUCAO_TREINO' | 'PLANO_TREINO';
+type EscopoAuditado = 'TREINO' | 'NUTRICAO' | 'CLINICO' | 'EVOLUCAO';
+
 /**
  * O motor que fala com o Supabase, no lugar da API.
  *
@@ -657,6 +665,33 @@ export class MotorSupabase {
     return u.id;
   }
 
+  /**
+   * Anota na trilha "quem viu meus dados" que alguém abriu dado de um aluno.
+   *
+   * Era o interceptor de auditoria da API, e sumiu com ela: de 11/09 em diante
+   * nenhuma leitura foi anotada. Quem grava, e decide entre LER e NEGADO, é
+   * `registrar_leitura` no banco, com a SESSÃO como ator — daqui não sai nome
+   * de ninguém (`43-trilha-de-auditoria.sql`).
+   *
+   * Não espera e nunca lança: a pessoa não pode ficar sem ver o treino do aluno
+   * porque a anotação falhou. O titular lendo o que é dele não é anotado — nem
+   * chega a ir ao banco.
+   */
+  private auditarLeitura(alunoId: string, recurso: RecursoAuditado, escopo: EscopoAuditado): void {
+    void (async () => {
+      try {
+        if (alunoId === (await this.meuId())) return;
+        await this.db.rpc('registrar_leitura', {
+          p_aluno_id: alunoId,
+          p_recurso_tipo: recurso,
+          p_escopo: escopo,
+        });
+      } catch {
+        // Anotar é secundário à leitura; a falha não sobe.
+      }
+    })();
+  }
+
   // --- vínculo ------------------------------------------------------------
 
   /*
@@ -829,6 +864,7 @@ export class MotorSupabase {
     `13-colunas-sensiveis.sql`.
   */
   async listarAlertas(alunoId: string): Promise<AlertaResumo[]> {
+    this.auditarLeitura(alunoId, 'ALERTA_CLINICO', 'CLINICO');
     const linhas = this.ou(
       await this.db
         .from('AlertaClinico')
@@ -906,6 +942,7 @@ export class MotorSupabase {
   }
 
   async listarCondicoes(alunoId: string): Promise<CondicaoResumo[]> {
+    this.auditarLeitura(alunoId, 'CONDICAO_SAUDE', 'CLINICO');
     const linhas = this.ou(
       await this.db
         .from('CondicaoSaude')
@@ -993,6 +1030,7 @@ export class MotorSupabase {
   }
 
   async listarMedidas(alunoId: string): Promise<MedidaResumo[]> {
+    this.auditarLeitura(alunoId, 'MEDIDA', 'EVOLUCAO');
     const linhas = this.ou(
       await this.db
         .from('Medida')
@@ -1282,6 +1320,7 @@ export class MotorSupabase {
   }
 
   async listarCheckins(alunoId: string, dias = 30): Promise<CheckinResumo[]> {
+    this.auditarLeitura(alunoId, 'CHECKIN', 'EVOLUCAO');
     const de = new Date(hojeUtc().getTime() - (dias - 1) * 86_400_000)
       .toISOString()
       .slice(0, 10);
@@ -1302,6 +1341,7 @@ export class MotorSupabase {
    * período — quem não registrou não deixou de treinar, apenas não contou.
    */
   async resumoDeCheckins(alunoId: string, dias = 30): Promise<ResumoDeCheckins> {
+    this.auditarLeitura(alunoId, 'CHECKIN', 'EVOLUCAO');
     return resumoDeCheckins(await this.listarCheckins(alunoId, dias), dias);
   }
 
@@ -1500,6 +1540,7 @@ export class MotorSupabase {
   }
 
   async listarExames(alunoId: string): Promise<ExameResumo[]> {
+    this.auditarLeitura(alunoId, 'EXAME', 'CLINICO');
     const linhas = this.ou(
       await this.db
         .from('Exame')
@@ -1511,6 +1552,7 @@ export class MotorSupabase {
   }
 
   async obterExame(alunoId: string, exameId: string): Promise<ExameResumo> {
+    this.auditarLeitura(alunoId, 'EXAME', 'CLINICO');
     const linha = this.ou(
       await this.db
         .from('Exame')
@@ -1724,6 +1766,7 @@ export class MotorSupabase {
   }
 
   async listarPlanos(alunoId: string): Promise<PlanoTreinoResumo[]> {
+    this.auditarLeitura(alunoId, 'PLANO_TREINO', 'TREINO');
     const linhas = this.ou(
       await this.db
         .from('PlanoTreino')
@@ -1741,6 +1784,7 @@ export class MotorSupabase {
   }
 
   async planoAtivo(alunoId: string): Promise<PlanoTreinoCompleto> {
+    this.auditarLeitura(alunoId, 'PLANO_TREINO', 'TREINO');
     const linha = this.ou(
       await this.db
         .from('PlanoTreino')
@@ -1760,6 +1804,7 @@ export class MotorSupabase {
   }
 
   async obterPlano(alunoId: string, planoId: string): Promise<PlanoTreinoCompleto> {
+    this.auditarLeitura(alunoId, 'PLANO_TREINO', 'TREINO');
     const linha = this.ou(
       await this.db
         .from('PlanoTreino')
@@ -1873,6 +1918,7 @@ export class MotorSupabase {
   }
 
   async listarExecucoes(alunoId: string, limite = 30): Promise<ExecucaoResumo[]> {
+    this.auditarLeitura(alunoId, 'EXECUCAO_TREINO', 'TREINO');
     const linhas = this.ou(
       await this.db
         .from('ExecucaoTreino')
@@ -1938,6 +1984,7 @@ export class MotorSupabase {
   }
 
   async anterioresDaSessao(alunoId: string, sessaoId: string): Promise<AnterioresDaSessao> {
+    this.auditarLeitura(alunoId, 'EXECUCAO_TREINO', 'TREINO');
     const sessao = this.ou(
       await this.db
         .from('SessaoTreino')
@@ -2083,6 +2130,7 @@ export class MotorSupabase {
    * quando, não a de treinar.
    */
   async meusRecordes(alunoId: string): Promise<MeusRecordes> {
+    this.auditarLeitura(alunoId, 'EXECUCAO_TREINO', 'TREINO');
     const linhas = this.ou(
       await this.db
         .from('SerieExecutada')
@@ -2106,6 +2154,7 @@ export class MotorSupabase {
   }
 
   async painelDeProgresso(alunoId: string, dias = 30): Promise<PainelDeProgresso> {
+    this.auditarLeitura(alunoId, 'PROGRESSO', 'EVOLUCAO');
     const de = MotorSupabase.horaDoBanco(new Date(Date.now() - dias * 86_400_000));
 
     const [execucoes, series, checkins, medidas] = await Promise.all([
@@ -2321,6 +2370,7 @@ export class MotorSupabase {
   }
 
   async listarMetas(alunoId: string): Promise<MetaResumo[]> {
+    this.auditarLeitura(alunoId, 'META', 'EVOLUCAO');
     const linhas = (
       this.ou(
         await this.db
@@ -2701,6 +2751,7 @@ export class MotorSupabase {
   }
 
   async listarDietas(alunoId: string): Promise<PlanoDietaResumo[]> {
+    this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
     const linhas = this.ou(
       await this.db
         .from('PlanoDieta')
@@ -2730,6 +2781,7 @@ export class MotorSupabase {
   }
 
   async dietaAtiva(alunoId: string): Promise<PlanoDietaCompleto> {
+    this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
     const linha = this.ou(
       await this.db
         .from('PlanoDieta')
@@ -2746,6 +2798,7 @@ export class MotorSupabase {
   }
 
   async obterDieta(alunoId: string, planoId: string): Promise<PlanoDietaCompleto> {
+    this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
     const linha = this.ou(
       await this.db
         .from('PlanoDieta')
@@ -2848,6 +2901,7 @@ export class MotorSupabase {
   }
 
   async registrosDoDia(alunoId: string, data?: string): Promise<RegistroDeRefeicao[]> {
+    this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
     const dia = data ?? hojeUtc().toISOString().slice(0, 10);
     const linhas = this.ou(
       await this.db
@@ -4618,6 +4672,7 @@ export class MotorSupabase {
    * ida à rede por foto seria uma tela que demora a carregar sem motivo.
    */
   async listarFotos(alunoId: string): Promise<FotoEvolucaoResumo[]> {
+    this.auditarLeitura(alunoId, 'FOTO_EVOLUCAO', 'EVOLUCAO');
     const linhas = this.ou(
       await this.db
         .from('FotoEvolucao')
@@ -5549,6 +5604,7 @@ export class MotorSupabase {
   }
 
   async listarCardio(alunoId: string, dias: number): Promise<CardioResumo[]> {
+    this.auditarLeitura(alunoId, 'CARDIO', 'TREINO');
     const de = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     /*
       As duas consultas saem juntas, e não uma depois da outra: o `await` dentro
@@ -5686,6 +5742,7 @@ export class MotorSupabase {
    * volume prescrito. Somados, nenhuma das duas dá para responder.
    */
   async resumoDeCalorias(alunoId: string, dias: number): Promise<ResumoDeCalorias> {
+    this.auditarLeitura(alunoId, 'CARDIO', 'EVOLUCAO');
     const de = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 
     const [dadosDoCorpo, respostaExecucoes, respostaCardios] = await Promise.all([
@@ -5842,6 +5899,7 @@ export class MotorSupabase {
   }
 
   async listarCalorimetrias(alunoId: string): Promise<CalorimetriaResumo[]> {
+    this.auditarLeitura(alunoId, 'CALORIMETRIA', 'EVOLUCAO');
     const [resposta, peso] = await Promise.all([
       this.db
         .from('CalorimetriaIndireta')
@@ -5945,6 +6003,7 @@ export class MotorSupabase {
   }
 
   async listarAvaliacoes(alunoId: string): Promise<AvaliacaoResumo[]> {
+    this.auditarLeitura(alunoId, 'AVALIACAO_FISICA', 'EVOLUCAO');
     const linhas = this.ou(
       await this.db
         .from('AvaliacaoFisica')
@@ -6135,6 +6194,7 @@ export class MotorSupabase {
   }
 
   async listarPrescricoes(alunoId: string): Promise<PrescricaoResumo[]> {
+    this.auditarLeitura(alunoId, 'PRESCRICAO', 'CLINICO');
     const linhas = this.ou(
       await this.db
         .from('Prescricao')
@@ -6266,6 +6326,7 @@ export class MotorSupabase {
   }
 
   async listarAnamneses(alunoId: string): Promise<AnamneseResumo[]> {
+    this.auditarLeitura(alunoId, 'ANAMNESE', 'CLINICO');
     const linhas = this.ou(
       await this.db
         .from('Anamnese')
@@ -6388,6 +6449,7 @@ export class MotorSupabase {
    * mercado comprar o que já não está prescrito.
    */
   async listaDeCompras(alunoId: string, dias: number): Promise<ListaDeCompras> {
+    this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
     const linha = this.ou(
       await this.db
         .from('PlanoDieta')
@@ -6527,6 +6589,7 @@ export class MotorSupabase {
    * sai só com os números.
    */
   async montarComparativo(alunoId: string, dias: number): Promise<ComparativoDeEvolucao> {
+    this.auditarLeitura(alunoId, 'COMPARATIVO', 'EVOLUCAO');
     const aluno = this.ou(
       await this.db
         .from('User')

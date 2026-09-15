@@ -309,6 +309,36 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 
 ## Resolvidas
 
+### "Quem viu meus dados" parou de ser escrito em 11/09 — resolvida em 2026-09-15
+**O que estava errado:** a trilha de auditoria era gravada pela API — um
+interceptor anotava cada acesso bem-sucedido às rotas de dado de aluno, e os
+guards anotavam as recusas. Quando o SDK passou a ler e escrever direto no
+banco, nada tomou o lugar. A última linha de `LogAuditoria` era de 11/09; a
+tela do titular (direito dele pela LGPD) continuava abrindo, com um passado que
+tinha parado.
+
+**O que foi feito:** `43-trilha-de-auditoria.sql`, em duas metades com
+garantias diferentes — e a diferença fica escrita:
+- **Escrita por gatilho** nas 15 tabelas de dado de aluno (medida, exame,
+  prescrição, plano de treino…). Criar, alterar, apagar ou carimbar remoção
+  grava a linha na mesma transação, com IP e navegador tirados dos cabeçalhos
+  da requisição. Não depende do app. Não anota o titular mexendo no que é dele
+  nem escrita sem sessão.
+- **Leitura por função**, `registrar_leitura`, que o SDK chama nas 28 leituras
+  de dado de aluno sem esperar a resposta. O ator é a sessão, nunca parâmetro;
+  o banco decide LER ou NEGADO pelas mesmas regras das políticas. A mesma
+  leitura repetida em dez minutos conta uma vez — sem isso, os painéis que
+  consultam a cada poucos segundos soterrariam a lista.
+
+**O limite, dito com todas as letras:** leitura não tem gatilho no Postgres.
+Quem montar consulta à mão pelo console do navegador lê o que a política deixa
+e não é anotado. A trilha de leitura é o registro do uso do app, não barreira.
+
+**Como se prova:** `packages/banco/teste/trilha-de-auditoria.spec.ts` (as duas
+metades pela porta do banco, com o par do que anota e do que não anota) e
+`packages/sdk/teste/trilha-de-leitura.spec.ts` (a tela do profissional lê, a
+linha aparece, o aluno a vê na tela dele).
+
 ### O disparo de lembretes morreu com a API, e voltou dentro do banco — resolvida em 2026-09-15
 **O que estava errado:** a varredura que cria os lembretes rodava dentro da API,
 com `@nestjs/schedule`. Quando `apps/api` saiu do repositório, nada tomou o
