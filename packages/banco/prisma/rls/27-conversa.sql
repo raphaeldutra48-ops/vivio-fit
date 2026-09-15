@@ -213,6 +213,21 @@ begin
     raise exception 'Você não possui vínculo ativo com este aluno.' using errcode = '42501';
   end if;
 
+  /*
+    Procura-depois-cria precisa de fila, e era a pendência 24. Duas aberturas
+    simultâneas da mesma dupla — dois aparelhos, toque duplo, retry de rede —
+    não enxergavam uma à outra e criavam DUAS conversas; o profissional via o
+    aluno duas vezes e podia responder na caixa que o aluno não lê.
+
+    Não há chave natural para um índice único (o par mora em
+    `ParticipanteConversa`), então a trava é por dupla e dura só a transação:
+    a segunda abertura espera a primeira terminar e encontra a conversa pronta.
+    Duplas diferentes não esperam umas pelas outras.
+  */
+  perform pg_advisory_xact_lock(
+    hashtextextended('abrir_conversa:' || v_aluno_id || ':' || v_profissional_id, 0)
+  );
+
   select c.id into v_id
   from public."Conversa" c
   where c."alunoId" = v_aluno_id

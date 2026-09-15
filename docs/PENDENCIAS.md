@@ -6,17 +6,6 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 ## Abertas
 
 
-### 4b. O limite de tentativas é por processo, não distribuído
-**Assumida em:** dívidas técnicas (o que sobrou da pendência 4)
-**Estado:** os contadores de `@Limite()` vivem na memória do processo. Com N
-instâncias da API, o atacante ganha N vezes o orçamento de tentativas, e um
-deploy zera tudo.
-**Por que basta por ora:** a API roda em uma instância, e o caso real —
-alguém martelando uma conta de um lugar só — está coberto. O argon2id continua
-tornando cada tentativa cara.
-**Pagar em:** junto do Redis (pendência 11). Só a implementação de `Limitador`
-muda; o decorador e o interceptador ficam como estão.
-
 ### 7. nodeLinker hoisted no workspace inteiro
 **Assumida em:** C4
 **Estado:** `pnpm-workspace.yaml` usa `nodeLinker: hoisted` por causa do Metro.
@@ -39,23 +28,20 @@ leitura e fila de escrita; a parte difícil (idempotência) já está no servido
 **Reavaliar em:** quando houver edição offline de dados que o profissional também
 edita (dieta, anotações), aí a resolução de conflito justifica o peso.
 
-### 10. Push nao entrega de verdade (driver de log)
-**Assumida em:** C8
-**Estado:** todo o agendamento funciona — horario no fuso do aluno, dias da
-semana, deduplicacao, "nao lembrar quem ja treinou". A entrega usa o driver de
-log: escreve no console em vez de mandar para o aparelho.
-**Por que:** enviar exige projeto no Firebase e credencial.
-**Pagar em:** quando o Firebase existir. Trocar o provider de ENVIADOR por uma
-implementacao com o SDK do FCM; nenhuma regra de agendamento muda.
-
-### 11. Scheduler roda dentro do processo da API
-**Assumida em:** C8
-**Estado:** a varredura de lembretes usa @nestjs/schedule, a cada minuto, no
-mesmo processo da API.
-**Consequencia:** com varias instancias, todas varrem. E seguro (a unique
-(userId, tipo, referenteA) impede envio duplicado, e ha teste para isso), mas
-desperdica consulta ao banco.
-**Pagar em:** quando houver Redis — mover para BullMQ com job unico.
+### 10. Lembrete não chega ao aparelho — só à caixa de avisos do app
+**Assumida em:** C8 · **Atualizada em:** 2026-09-15
+**Estado:** o disparo funciona e roda no banco (`42-disparo-de-lembretes.sql`,
+`pg_cron` a cada minuto): horário no fuso do aluno, dias da semana, uma vez por
+dia por tipo, "não lembrar quem já treinou". O aviso aparece na lista de
+notificações do app. **Não há entrega por push**: o aplicativo nunca registra
+token de aparelho (não usa `expo-notifications`), e a API só tinha um driver que
+escrevia no log e marcava "enviada". A linha agora diz a verdade: `enviadaEm`
+nulo e `erro` = `SEM_DISPOSITIVO` ou `PUSH_NAO_CONFIGURADO`.
+**Pagar em:** quando o app for ter push de verdade. Passos: `expo-notifications`
+no app para pedir permissão e registrar o token (`registrar_dispositivo` já
+existe), e a entrega pela API de push da Expo — por Edge Function ou `pg_net`
+chamada ao fim do disparo, marcando `enviadaEm` e desativando token recusado.
+O build nativo do app precisa ser refeito.
 
 ### 12. Suite de testes lenta contra o Neon gratuito
 **Assumida em:** Fase 2 (chat)
@@ -161,49 +147,6 @@ outro serviço de e-mail entrar aqui, começar por HTTP e não por SMTP.
 **Como verificar de novo, se um dia desconfiar:** definir `EMAIL_TESTE_PARA` no
 Railway, fazer deploy, ler o log — e depois **apagar a variável**, ou todo
 deploy manda e-mail.
-
-### 16. Falha de envio é engolida
-**Assumida em:** verificação de e-mail
-**Atualizada em:** 2026-08-06 — vale igual para o `CorreioResend`, que faz a
-mesma escolha pelo mesmo motivo. Ficou **mais visível** agora que o e-mail
-realmente sai: antes ninguém recebia nada de qualquer forma.
-**Estado:** `CorreioSmtp.enviar` captura o erro e apenas registra no log. Um
-cadastro com provedor fora do ar responde 201 como se tudo tivesse dado certo, e
-a pessoa fica esperando um e-mail que não vem.
-**Por que aceitei:** a alternativa imediata era derrubar o cadastro já gravado
-no banco por causa de uma falha externa, o que é pior. O reenvio na tela de
-entrada é a saída manual.
-**Pagar em:** quando existir fila (Redis, pendência 11) — enfileirar o envio com
-retentativa em vez de tentar uma vez dentro da requisição.
-
-### 17. `COOKIE_SAMESITE` precisa virar `none` se web e API não forem do mesmo site
-**Assumida em:** cookie httpOnly
-**Estado:** o cookie sai com `SameSite=Lax`, que só acompanha requisições
-same-site. Porta não conta para "site", então `localhost:3000` → `localhost:3333`
-funciona, e em produção funciona se forem subdomínios do mesmo domínio
-(`app.viviofit.com.br` e `api.viviofit.com.br`).
-**Risco:** hospedar a web na Vercel e a API no Railway são sites diferentes — o
-cookie simplesmente não é enviado e ninguém mantém sessão. A env
-`COOKIE_SAMESITE=none` cobre o caso, **mas** `None` desliga a proteção CSRF que
-o `Lax` dava de graça: aí `/auth/refresh` e `/auth/logout` passam a precisar de
-token anti-CSRF.
-**Pagar em:** na decisão de hospedagem. Preferir domínios irmãos e continuar com
-`Lax` é mais simples e mais seguro do que implementar anti-CSRF.
-
-### 18. Imagens Docker nunca foram construídas
-**Assumida em:** preparação do deploy
-**Estado:** `apps/api/Dockerfile` e `apps/web/Dockerfile` estão escritos, mas
-esta máquina não tem Docker — nenhum `docker build` rodou.
-**O que foi verificado sem ele:** os comandos que as imagens executam
-(`turbo run build --filter=@vivio/api` e `--filter=@vivio/web`), a geração do
-bundle standalone do Next e sua execução real em `apps/web/server.js`, a recusa
-da API a subir sem `ORIGENS_PERMITIDAS`, e o CORS respondendo só à origem
-conhecida.
-**O que continua sem prova:** o `pnpm install --frozen-lockfile` dentro do
-contêiner, o `prisma generate` com o engine linkado contra a OpenSSL da imagem
-slim, e os caminhos dos `COPY`.
-**Pagar em:** no primeiro deploy — o log do Railway aponta a linha exata se algo
-estiver errado.
 
 ### 19. Mídia em disco de contêiner é apagada a cada deploy
 **Assumida em:** preparação do deploy (dívida que existia sem estar registrada)
@@ -349,31 +292,6 @@ com mais de N dias. Nunca começar pelo que apaga.
 **Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
 uns 60% sem explicação.
 
-### 24. `abrirConversa` é procura-depois-cria, sem trava no banco
-**Encontrada em:** área de feedback (2026-08-10), ao ligar o botão "responder
-no chat".
-**O que acontece:** `ChatService.abrirConversa` faz `findFirst` e, se não achar,
-`create`. Duas chamadas simultâneas para o mesmo par aluno–profissional não
-enxergam uma à outra e criam **duas conversas**, que aparecem como duas linhas
-do mesmo aluno na lista. Foi exatamente o que aconteceu: o efeito do `?com=`
-disparou duas vezes e duplicou a conversa da Ana no banco de desenvolvimento.
-**O que já foi corrigido:** a trava do lado do cliente
-(`apps/web/app/(pro)/chat/page.tsx`), que agora só pede a abertura uma vez por
-aluno. Isso fecha o caminho que existe hoje na interface.
-**Por que continua aberta:** a corrida é do servidor. Dois aparelhos, dois
-cliques rápidos ou um retry de rede reproduzem sem passar pela tela. Nenhum
-dado se perde — as mensagens ficam na conversa em que foram enviadas — mas o
-profissional vê o aluno duas vezes e pode responder na conversa que o aluno
-não está lendo, o que é pior do que parece.
-**Por que não foi resolvida agora:** a correção certa é um índice único, e não
-existe chave natural: o par aluno–profissional mora na tabela de participantes,
-não em `Conversa`. Resolver exige decidir entre desnormalizar um
-`profissionalId` em `Conversa` (com unique em `(alunoId, profissionalId)`) ou
-um unique em `(conversaId, userId)` mais uma reescrita da busca. É decisão de
-modelagem com migração, e não cabia dentro da área de feedback.
-**Enquanto isso:** conversa duplicada e vazia é inofensiva e dá para apagar à
-mão. Se aparecer em produção, apagar a que não tem mensagem.
-
 ### 25. Seis `useEffect` com dependência faltando
 **Assumida em:** 2026-09-01, pelo ESLint recém-instalado
 **Estado:** seis efeitos omitem `recarregar` (ou equivalente) da lista de
@@ -389,39 +307,60 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 `apps/web/components/MetasDoAluno.tsx` (dois).
 **Pagar em:** junto com o teste de render de cada uma dessas telas (pendência 14b).
 
-### 26. `treino.e2e.spec.ts` falhou uma vez em quatro, sem causa apurada
-**Assumida em:** 2026-09-01
-**Estado:** numa das quatro execuções completas da suíte, 8 dos 20 testes de
-`treino.e2e.spec.ts` falharam — os do bloco "a lista como histórico". As outras
-três execuções passaram 648/648, e o arquivo sozinho passa 20/20 sempre.
-
-**O que já foi descartado, com evidência:**
-- Paralelismo entre arquivos — `vitest.config.ts` tem `fileParallelism: false`
-- Acúmulo de planos da Ana entre execuções — conferido no banco: 2 planos, ambos
-  arquivados, e o `afterAll` apaga só o que o próprio teste criou
-- `NaN` no comparador de ordenação — `PESO_DO_STATUS` é
-  `Record<StatusPlano, number>` e cobre os três status
-- Regressão da limpeza feita neste dia — o arquivo passa sozinho, e as demais
-  47 suítes passam
-
-**Por que não foi resolvida:** a saída da execução que falhou foi filtrada por
-`grep` antes de ser guardada, e as mensagens de erro se perderam. Sem elas,
-qualquer conserto seria chute — e chute em teste verde vira teste que esconde
-defeito.
-
-**O que fazer quando repetir:** guardar a saída inteira (`pnpm --filter
-@vivio/api test > saida.log 2>&1`, sem filtro) e ler a asserção que falhou.
-
-**Correção aplicada no caminho, mas de outro defeito:** `PlanosService.listar`
-ordenava por `criadoEm: 'desc'` sem desempate. Dois planos criados no mesmo
-milissegundo — o que acontece ao versionar, porque a versão nova nasce junto do
-arquivamento da antiga — saíam em ordem arbitrária do Postgres, e a lista
-mudava de ordem entre carregamentos da tela. Agora desempata por `versao` e
-`id`. **Isto não explica a falha acima**, porque as asserções são sobre status,
-não sobre data.
-**Pagar em:** na próxima vez que a suíte ficar vermelha.
-
 ## Resolvidas
+
+### O disparo de lembretes morreu com a API, e voltou dentro do banco — resolvida em 2026-09-15
+**O que estava errado:** a varredura que cria os lembretes rodava dentro da API,
+com `@nestjs/schedule`. Quando `apps/api` saiu do repositório, nada tomou o
+lugar: a tela de lembretes continuava salvando horário e nenhum aviso nascia —
+tudo parecia funcionar. Era também a pendência 11 (o agendador dentro do
+processo da API).
+
+**O que foi feito:** `42-disparo-de-lembretes.sql` — a função
+`disparar_lembretes_devidos(p_agora)` e o `pg_cron` chamando a cada minuto
+(`cron.job` `vivio-disparar-lembretes`, conferido rodando com `succeeded`). O
+app não consegue chamá-la: quem pudesse escolheria `p_agora` e fabricaria aviso
+de qualquer dia.
+
+**Um defeito da versão da API que não veio junto:** o "já treinou hoje"
+comparava o dia local do aluno com as bordas do dia em UTC. O treino das 22h de
+ontem em São Paulo (01h de hoje em UTC) calava o lembrete de hoje. Agora as
+bordas são as do dia local.
+
+**Como se prova:** `packages/banco/teste/lembretes.spec.ts`, 16 casos — os da
+suíte antiga da API mais o do dia local, o do fuso inválido, o de o app não
+poder disparar e o que compara os textos do banco com `PREVIA_LEMBRETE`, que
+precisam morar nos dois lados. O horário de prova é sempre o de daqui a seis
+horas, para o agendador de verdade nunca criar um aviso no meio do teste.
+
+### Abrir a mesma conversa ao mesmo tempo não cria duas — resolvida em 2026-09-15
+Era a pendência 24. `abrir_conversa` procurava e depois criava, sem fila: dois
+aparelhos, um toque duplo ou um retry de rede criavam duas conversas da mesma
+dupla. Não há chave natural para índice único (o par mora em
+`ParticipanteConversa`), então a função pega uma trava por dupla que dura a
+transação (`pg_advisory_xact_lock`). A segunda abertura espera e encontra a
+conversa pronta; duplas diferentes não esperam umas pelas outras.
+
+**Como se prova:** `packages/banco/teste/conversa-sem-duplicata.spec.ts`. O
+teste de seis aberturas simultâneas **passava também sem a trava** — a corrida
+não se reproduz sob comando —, então o que prova é outro: o teste segura a
+trava da dupla por fora e confere que a abertura fica esperando. Ele falhou
+antes da correção e passa depois.
+
+### Pendências da época da API que deixaram de existir — encerradas em 2026-09-15
+Registradas quando havia um servidor NestJS; com `apps/api` fora do
+repositório, o problema que descreviam não tem mais onde acontecer:
+- **4b. Limite de tentativas por processo** — o login é do Supabase Auth, que
+  aplica o próprio limite por IP e por conta.
+- **16. Falha de envio de e-mail engolida** — verificação e redefinição de
+  senha são e-mails do Supabase Auth.
+- **17. `COOKIE_SAMESITE`** — não há mais cookie de sessão nosso; a sessão é a
+  do `supabase-js`.
+- **18. Imagens Docker nunca construídas** — a imagem da API foi apagada; a web
+  é publicada pelo build da Cloudflare, que roda a cada push e está verde.
+- **26. `treino.e2e.spec.ts` intermitente** — o arquivo era da suíte HTTP da
+  API e saiu com ela, sem causa apurada; o comportamento de treino tem prova
+  própria em `packages/sdk/teste/treinos.spec.ts`.
 
 ### O aplicativo não estava instalável, e nada avisava — resolvida em 2026-09-12
 **O que era:** o Worker da Cloudflare redireciona `/sem-conexao.html` para

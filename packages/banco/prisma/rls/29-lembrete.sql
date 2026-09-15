@@ -5,15 +5,15 @@
 -- disso interessa a quem o acompanha, e as políticas de leitura já diziam
 -- isso. Faltava a escrita.
 --
--- ## O que fica na API por enquanto
+-- ## O disparo não mora aqui
 --
--- O DISPARO. `lembretes.scheduler.ts` varre a cada minuto o que está na hora e
--- manda para o Expo; é servidor, não cliente, e vai virar rotina agendada do
--- lado do Supabase quando a API morrer. O que sai daqui é a metade que o app
--- usa: ler e escrever a configuração, registrar o aparelho e marcar lida.
+-- Quem varre o que está na hora e cria o aviso é
+-- `42-disparo-de-lembretes.sql`, chamado pelo `pg_cron` a cada minuto (antes
+-- era `lembretes.scheduler.ts`, dentro da API). Este arquivo é a metade que o
+-- app usa: ler e escrever a configuração, registrar o aparelho e marcar lida.
 --
 -- Por isso `Notificacao` fica com leitura e UPDATE, e sem INSERT: quem cria
--- notificação é quem dispara, com a chave de serviço. O app só marca lida.
+-- notificação é o disparador. O app só marca lida.
 
 -- --------------------------------------------------------------------------
 -- Configuração de lembrete
