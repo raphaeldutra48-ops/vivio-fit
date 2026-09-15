@@ -287,6 +287,16 @@ export interface OpcoesSupabase {
   persistirSessao?: boolean;
   /** Para onde o link de redefinição de senha volta. */
   urlDeRetorno?: string;
+  /**
+   * Chamado quando a sessão morre SEM a pessoa ter pedido para sair.
+
+   * Refresh revogado, senha trocada em outro aparelho, conta desativada: o
+   * `supabase-js` descobre na próxima renovação e encerra a sessão local. Sem
+   * este aviso a tela continuaria mostrando a pessoa como logada, com cada
+   * consulta voltando vazia ou recusada — e a conclusão natural seria "o app
+   * quebrou", não "preciso entrar de novo".
+   */
+  aoPerderSessao?: () => void | Promise<void>;
 }
 
 /**
@@ -408,7 +418,35 @@ export class MotorSupabase {
         ...(opcoes.armazenamento ? { storage: opcoes.armazenamento } : {}),
       },
     });
+
+    /*
+      O aviso de sessão perdida mora aqui, e não num `catch` de requisição.
+
+      Ele vivia dentro do cliente HTTP da API: um 401, uma tentativa de
+      renovar, e se falhasse, `aoPerderSessao`. Quando o último grupo saiu da
+      API, esse caminho ficou sem ninguém que o percorresse — e o aviso deixou
+      de disparar em silêncio. A sessão morria e a tela seguia mostrando a
+      pessoa como logada.
+
+      `SIGNED_OUT` é o evento que o `supabase-js` emite quando encerra a sessão.
+      QUANDO ele chega, depois de uma revogação, tem um detalhe que vale saber:
+      a renovação recusada não basta. Enquanto o token de acesso ainda vale, a
+      biblioteca preserva a sessão (a pessoa ainda consegue consultar); ela só é
+      dada como morta quando o token de acesso vence E o refresh é recusado. Na
+      prática, a pessoa com a sessão revogada é mandada ao login em até 15
+      minutos — a mesma janela que o token da API antiga tinha.
+
+      O evento também chega no "sair" que a pessoa pediu — e esse não é perda de
+      sessão, é o que ela quis. Daí a marca.
+    */
+    this.db.auth.onAuthStateChange((evento) => {
+      if (evento !== 'SIGNED_OUT' || this.saindoPorPedido) return;
+      void this.opcoes.aoPerderSessao?.();
+    });
   }
+
+  /** Verdadeiro enquanto a pessoa está saindo porque pediu. */
+  private saindoPorPedido = false;
 
   /** O token de agora, para quem precisa chamar uma função fora do PostgREST. */
   async token(): Promise<string | null> {
@@ -483,7 +521,12 @@ export class MotorSupabase {
   }
 
   async sair(): Promise<void> {
-    await this.db.auth.signOut();
+    this.saindoPorPedido = true;
+    try {
+      await this.db.auth.signOut();
+    } finally {
+      this.saindoPorPedido = false;
+    }
   }
 
   /**

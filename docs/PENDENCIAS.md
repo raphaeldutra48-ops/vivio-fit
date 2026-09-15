@@ -518,8 +518,19 @@ contra o banco de verdade, e `pnpm --filter @vivio/api rls:auditar` compara o
 que o SDK usa com o que o banco deixa — e sai com erro quando divergem.
 
 **A última chamada também saiu**, para uma função de borda:
-`supabase/functions/ler-dieta`. O SDK não chama mais a API em lugar nenhum — o
-`requisicao()` ficou sem quem o chame.
+`supabase/functions/ler-dieta`. O cliente HTTP da API foi apagado do SDK
+(`requisicao()`, `baseUrl`, o armazenamento de tokens próprio), junto com o
+endereço da API na web, no aplicativo e nos 32 arquivos de teste.
+
+**E apagá-lo revelou um defeito que ele escondia.** O aviso de sessão perdida —
+que na web manda para o login — só disparava de dentro desse cliente HTTP.
+Quando o último grupo saiu da API, o caminho ficou sem ninguém que o
+percorresse, e o aviso parou de disparar em silêncio: sessão revogada, tela
+mostrando a pessoa logada, cada consulta voltando vazia. Religado ao evento
+`SIGNED_OUT` do Supabase, com prova em `packages/sdk/teste/sessao.spec.ts`.
+Janela a saber: o Supabase só dá a sessão por morta quando o token de acesso
+vence E o refresh é recusado, então a pessoa revogada vai ao login em até 15
+minutos — a mesma janela do token da API antiga.
 
 **O que falta para a API sumir de vez (ação sua):**
 
@@ -529,10 +540,9 @@ que o SDK usa com o que o banco deixa — e sai com erro quando divergem.
    configurada" e o resto do app segue inteiro.
 2. **Conferir se sobrou mídia no volume do Railway** antes de desligar o
    serviço — desligá-lo leva o volume junto.
-3. **Apagar `apps/api`**, junto com o `requisicao()` do SDK e o `baseUrl` que
-   34 arquivos de teste ainda passam. O que vive lá e ainda serve muda de casa,
-   não some: as ferramentas de importação (`src/ferramentas/`), o aplicador e o
-   auditor de regras (`prisma/`).
+3. **Apagar `apps/api`.** Nenhum app a chama mais. O que vive lá e ainda serve
+   muda de casa, não some: as ferramentas de importação (`src/ferramentas/`), o
+   aplicador e o auditor de regras (`prisma/`).
 
 
 ### A foto de evolução voltou a ter as três travas — resolvida em 2026-09-11

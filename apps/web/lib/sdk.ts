@@ -3,10 +3,9 @@ import { PROJETO_SUPABASE, VivioClient } from '@vivio/sdk';
 /**
  * Telas que existem justamente para quem ainda não tem sessão.
  *
- * Sem esta lista, o `me.obter()` que o SessaoProvider dispara no boot falha,
- * o SDK conclui que a sessão morreu e manda todo mundo para /login — inclusive
- * quem acabou de clicar no link de confirmação do e-mail, que é exatamente
- * quem nunca está autenticado.
+ * A sessão perdida manda para /login, e estas telas não podem entrar nessa
+ * regra: quem acabou de clicar no link de confirmação do e-mail, ou abriu a
+ * página pública de um profissional, nunca teve sessão para perder.
  */
 const ROTAS_PUBLICAS = [
   '/login',
@@ -45,8 +44,6 @@ const emRotaPublica = (): boolean =>
  * de conter o estrago depois.
  */
 export const sdk = new VivioClient({
-  // Enquanto os grupos de dados ainda não migraram, é para cá que eles vão.
-  baseUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333',
   supabase: {
     /*
       O padrão vem do código, e não do painel de quem constrói.
@@ -76,4 +73,3 @@ export const sdk = new VivioClient({
 });
 
 /** Sessão encerrada: quem apaga o que ficou guardado é o próprio Supabase. */
-export const limparTokens = (): void => sdk.definirTokens(null);

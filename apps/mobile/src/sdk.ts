@@ -74,24 +74,9 @@ async function limparPedacos(chave: string): Promise<void> {
   }
 }
 
-export const limparTokens = (): Promise<void> => sdk.auth.logout();
-
-/*
-  A variável vem primeiro para dar como apontar o app para a API local sem
-  editar o `app.json` — que guarda o endereço de produção e não deve ser
-  mexido para rodar em casa. Um `app.json` alterado por engano é a forma mais
-  fácil de publicar uma versão do app falando com o servidor errado.
-
-  No navegador use `127.0.0.1`, não `localhost`: `localhost` resolve para IPv6
-  (::1) e a API de desenvolvimento escuta só em IPv4.
-*/
 const extra = Constants.expoConfig?.extra as Record<string, string | undefined> | undefined;
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? extra?.apiUrl ?? 'http://localhost:3333';
-
 export const sdk = new VivioClient({
-  // Enquanto os grupos de dados ainda não migraram, é para cá que eles vão.
-  baseUrl: apiUrl,
   supabase: {
     // O padrão vem do código pelo mesmo motivo da web: a chave `anon` é
     // pública por desenho, e quem protege os dados é o RLS. Aqui pesa ainda

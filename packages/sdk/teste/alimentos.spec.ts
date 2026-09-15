@@ -14,7 +14,6 @@ const anon = process.env.SUPABASE_ANON_KEY;
 
 describe.skipIf(!url || !anon)('SDK sem API: catálogo de alimentos', () => {
   const sdk = new VivioClient({
-    baseUrl: 'http://127.0.0.1:1',
     supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
   });
 

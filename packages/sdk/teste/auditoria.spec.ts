@@ -27,11 +27,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: quem viu meus dados', (
   let personalId = '';
 
   const aluno = new VivioClient({
-    baseUrl: 'http://127.0.0.1:1',
     supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
   });
   const personal = new VivioClient({
-    baseUrl: 'http://127.0.0.1:1',
     supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
   });
 

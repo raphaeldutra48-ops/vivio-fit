@@ -64,7 +64,6 @@
       "url": "https://u.expo.dev/0e7cd601-fdc8-46fe-bac5-c5d49e10eb1b"
     },
     "extra": {
-      "apiUrl": "https://api.viviofit.com.br",
       "router": {},
       "eas": {
         "projectId": "0e7cd601-fdc8-46fe-bac5-c5d49e10eb1b"

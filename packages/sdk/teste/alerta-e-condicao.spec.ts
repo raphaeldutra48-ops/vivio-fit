@@ -11,8 +11,8 @@ import { VivioClient } from '../src/client';
  * SUA — o personal a que fala de movimento, a nutricionista a que fala de
  * plano alimentar.
  *
- * `baseUrl` aponta para lugar nenhum: se algum destes métodos ainda tocasse a
- * API, morreria em conexão recusada em vez de passar despercebido.
+ * O cliente não tem mais endereço de API nenhum: se algum destes métodos ainda
+ * dependesse dela, nem compilaria.
  */
 const url = process.env.SUPABASE_URL;
 const anon = process.env.SUPABASE_ANON_KEY;
@@ -26,7 +26,6 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: alerta e condição', (
 
   const cliente = (): VivioClient =>
     new VivioClient({
-      baseUrl: 'http://127.0.0.1:1',
       supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
     });
 

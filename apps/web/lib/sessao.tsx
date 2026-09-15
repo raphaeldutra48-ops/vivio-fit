@@ -3,7 +3,7 @@
 import type { UsuarioAutenticado } from '@vivio/contracts';
 import { useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { limparTokens, sdk } from './sdk';
+import { sdk } from './sdk';
 
 interface Sessao {
   usuario: UsuarioAutenticado | null;
@@ -42,7 +42,6 @@ export function SessaoProvider({ children }: { children: React.ReactNode }) {
 
   const sair = useCallback(async () => {
     await sdk.auth.logout().catch(() => undefined);
-    limparTokens();
     setUsuario(null);
     router.push('/login');
   }, [router]);

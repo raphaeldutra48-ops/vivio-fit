@@ -12,9 +12,9 @@ import { VivioClient } from '../src/client';
  * que o método existe, que devolve a forma que a tela espera, e que o erro
  * chega como `ErroApi` e não cru do `supabase-js`.
  *
- * `baseUrl` aponta para lugar nenhum de propósito. Se algum destes métodos
- * ainda tocasse a API, a chamada morreria em conexão recusada em vez de passar
- * despercebida.
+ * O cliente não tem mais endereço de API nenhum. Se algum destes métodos ainda
+ * dependesse dela, o teste nem compilaria — que é uma prova mais forte do que a
+ * conexão recusada que este comentário prometia antes.
  *
  * Vive aqui, e não em `apps/api`, porque o que está sob teste é o SDK — e ele
  * precisa continuar existindo depois que a API for demolida.
@@ -42,7 +42,6 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: vínculo e consentiment
   /** Um cliente por pessoa: cada um com a própria sessão, como no app. */
   const clientePara = (): VivioClient =>
     new VivioClient({
-      baseUrl: 'http://127.0.0.1:1',
       supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
     });
 

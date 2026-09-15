@@ -123,7 +123,6 @@ import type {
   MudarStatusPrescricaoInput,
   PrescricaoResumo,
   PrescritivelResumo,
-  ParDeTokens,
   RegistrarAlunoInput,
   RegistrarExecucaoInput,
   RegistrarMedidaInput,
@@ -142,155 +141,32 @@ import type {
 import { DIAS_PADRAO_FEEDBACK } from '@vivio/contracts';
 import { ErroApi } from './erro';
 
-export interface TokensArmazenados {
-  accessToken: string;
-  refreshToken: string;
-}
-
 export interface OpcoesCliente {
-  /**
-   * Onde a API ainda responde.
-   *
-   * Some quando o ultimo grupo sair dela. Enquanto isso, os dois motores
-   * convivem no mesmo cliente e as telas nao percebem qual atende cada
-   * chamada — que e o ponto de a migracao caber dentro do SDK.
-   */
-  baseUrl: string;
-  /** O motor novo. Autenticacao ja passa toda por aqui. */
   supabase: OpcoesSupabase;
-  /** Lê os tokens de onde o app guarda (localStorage, SecureStore...). */
-  carregarTokens?: () => TokensArmazenados | null | Promise<TokensArmazenados | null>;
-  /** Chamado sempre que um par novo é emitido — o app persiste. */
-  aoAtualizarTokens?: (tokens: ParDeTokens) => void | Promise<void>;
-  /** Chamado quando a sessão morreu de vez e o usuário precisa logar de novo. */
+  /**
+   * Chamado quando a sessão morre sem a pessoa ter pedido para sair — refresh
+   * revogado, senha trocada em outro aparelho. A web usa para mandar ao login.
+   */
   aoPerderSessao?: () => void | Promise<void>;
-  fetch?: typeof fetch;
-}
-
-interface OpcoesRequisicao {
-  metodo?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  corpo?: unknown;
-  query?: Record<string, string | number | boolean | undefined>;
-  autenticada?: boolean;
-  /** Uso interno: evita laço infinito de refresh. */
-  jaTentouRenovar?: boolean;
 }
 
 /**
- * Cliente HTTP tipado do Vívio Fit. Usado por web e mobile.
+ * O cliente do Vívio Fit. Usado por web e mobile.
  *
- * Renova o access token automaticamente: numa resposta 401 ele tenta o refresh
- * uma única vez e repete a requisição original. A tela não precisa saber que
- * o token de 15 minutos expirou.
+ * Os nomes dos métodos são os mesmos de quando havia uma API por trás — são
+ * mais de cem chamadas nas telas, e nenhuma precisou saber que o motor mudou.
+ * Hoje tudo passa pelo `MotorSupabase`: o banco com as políticas de acesso, e
+ * uma função de borda para a leitura de dieta por IA.
  */
 export class VivioClient {
-  private tokens: TokensArmazenados | null = null;
-  private renovacaoEmCurso: Promise<boolean> | null = null;
-  private readonly fetchImpl: typeof fetch;
   /** Acesso direto ao Postgres para quem precisa consultar sem passar por metodo. */
   readonly supabase: MotorSupabase;
 
-  constructor(private readonly opcoes: OpcoesCliente) {
-    this.fetchImpl = opcoes.fetch ?? globalThis.fetch.bind(globalThis);
-    this.supabase = new MotorSupabase(opcoes.supabase);
-  }
-
-  definirTokens(tokens: TokensArmazenados | null): void {
-    this.tokens = tokens;
-  }
-
-  /*
-    O que morava aqui, e por que sumiu.
-
-    `guardar` gravava o par de tokens; `renovar` fazia a renovacao compartilhada
-    — cinco 401 simultaneos nao podiam virar cinco refresh, porque o servidor,
-    corretamente, lia refresh reapresentado como vazamento e derrubava a sessao
-    inteira. Eram trinta linhas de codigo de concorrencia que existiam so para
-    nao dar tiro no proprio pe.
-
-    O `supabase-js` faz as duas coisas, e serializa a renovacao sozinho.
-  */
-
-  private async requisicao<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<T> {
-    const { metodo = 'GET', corpo, query, autenticada = true, jaTentouRenovar = false } = opcoes;
-
-    const url = new URL(`${this.opcoes.baseUrl.replace(/\/$/, '')}/api/v1${caminho}`);
-    for (const [chave, valor] of Object.entries(query ?? {})) {
-      if (valor !== undefined) url.searchParams.set(chave, String(valor));
-    }
-
-    const cabecalhos: Record<string, string> = {};
-    if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
-    if (autenticada) {
-      /*
-        O token vem do Supabase, que agora e quem autentica.
-
-        Enquanto os grupos de dados nao migram, eles continuam batendo na API —
-        e a API aprendeu a aceitar esse token (`token-supabase.ts`). Ler do
-        campo antigo aqui deixaria o cabecalho VAZIO, porque `login` nao guarda
-        mais nada nele: toda chamada nao migrada voltava 401 com a pessoa
-        logada, e a tela concluia que a sessao tinha morrido.
-
-        `getSession()` do `supabase-js` renova sozinho quando falta pouco, o
-        que substitui o `renovar()` que vivia aqui.
-      */
-      const token = await this.supabase.token();
-      if (token) cabecalhos['Authorization'] = `Bearer ${token}`;
-    }
-
-    let resposta: Response;
-    try {
-      resposta = await this.fetchImpl(url.toString(), {
-        method: metodo,
-        headers: cabecalhos,
-        body: corpo === undefined ? undefined : JSON.stringify(corpo),
-        // Nao ha mais cookie nosso: a credencial e o token do Supabase, no
-        // cabecalho. `omit` deixa isso explicito em vez de depender do padrao.
-        credentials: 'omit',
-      });
-    } catch (erro) {
-      throw new ErroApi(
-        'ERRO_DE_REDE',
-        'Não foi possível conectar. Verifique sua internet.',
-        0,
-        { causa: String(erro) },
-      );
-    }
-
-    if (resposta.status === 401 && autenticada && !jaTentouRenovar) {
-      /*
-        Uma segunda chance, e so uma: pede a sessao de novo — o `supabase-js`
-        renova o token nessa hora se ele acabou de expirar — e repete.
-
-        O `renovar()` proprio, com toda a danca de concorrencia (cinco 401 ao
-        mesmo tempo nao podiam virar cinco refresh, que o servidor leria como
-        vazamento), saiu junto com a API. O `supabase-js` ja serializa isso.
-      */
-      const { data } = await this.supabase.db.auth.refreshSession();
-      if (data.session) {
-        return this.requisicao<T>(caminho, { ...opcoes, jaTentouRenovar: true });
-      }
-      await this.opcoes.aoPerderSessao?.();
-    }
-
-    if (resposta.status === 204) return undefined as T;
-
-    const texto = await resposta.text();
-    const dados: unknown = texto ? JSON.parse(texto) : null;
-
-    if (!resposta.ok) {
-      const envelope = dados as {
-        erro?: { codigo: string; mensagem: string; detalhes?: Record<string, unknown> };
-      };
-      throw new ErroApi(
-        (envelope?.erro?.codigo ?? 'ERRO_INTERNO') as never,
-        envelope?.erro?.mensagem ?? 'Erro inesperado.',
-        resposta.status,
-        envelope?.erro?.detalhes,
-      );
-    }
-
-    return dados as T;
+  constructor(opcoes: OpcoesCliente) {
+    this.supabase = new MotorSupabase({
+      ...opcoes.supabase,
+      aoPerderSessao: opcoes.aoPerderSessao ?? opcoes.supabase.aoPerderSessao,
+    });
   }
 
   // --- auth ---------------------------------------------------------------
@@ -369,10 +245,7 @@ export class VivioClient {
 
     login: (dados: LoginInput): Promise<RespostaAutenticacao> => this.supabase.entrar(dados),
 
-    logout: async (): Promise<void> => {
-      await this.supabase.sair();
-      this.tokens = null;
-    },
+    logout: (): Promise<void> => this.supabase.sair(),
   };
 
   // --- usuário ------------------------------------------------------------

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useColorScheme } from 'react-native';
 import { obterTema, type NomeDeTema, type Tema } from '@vivio/ui-native';
 import { apagar, gravar, ler } from './armazenamento';
-import { limparTokens, sdk } from './sdk';
+import { sdk } from './sdk';
 
 const CHAVE_USUARIO = 'vivio.usuario';
 
@@ -70,7 +70,6 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
 
   const sair = useCallback(async () => {
     await sdk.auth.logout().catch(() => undefined);
-    await limparTokens();
     await apagar(CHAVE_USUARIO);
     setUsuario(null);
   }, []);

@@ -36,7 +36,6 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: agenda', () => {
 
   const cliente = (): VivioClient =>
     new VivioClient({
-      baseUrl: 'http://127.0.0.1:1',
       supabase: { url: url!, chaveAnonima: anon!, persistirSessao: false },
     });
 
