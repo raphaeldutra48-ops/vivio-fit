@@ -41,7 +41,10 @@ enum StatusConta {
 model User {
   id            String      @id @default(cuid())
   email         String      @unique
-  senhaHash     String? // null quando a conta usa apenas login social
+  /// Sobra da autenticacao da API, que saiu do repositorio: quem guarda
+  /// credencial hoje e o Supabase Auth, em auth.users. A coluna fica vazia e
+  /// continua fora do alcance de qualquer papel (13-colunas-sensiveis.sql).
+  senhaHash     String?
   nome          String
   telefone      String?
   avatarUrl     String?
@@ -55,9 +58,6 @@ model User {
 
   perfilAluno        PerfilAluno?
   perfilProfissional PerfilProfissional?
-  sessoes            SessaoRefresh[]
-  tokensDeVerificacao TokenVerificacaoEmail[]
-  tokensDeRedefinicao TokenRedefinicaoSenha[]
   checkins            CheckinDiario[]        @relation("CheckinsDoAluno")
   cardios             AtividadeCardio[]      @relation("CardiosDoAluno")
   demonstracoes       DemonstracaoProfissional[] @relation("DemonstracoesGravadas")
@@ -179,6 +179,7 @@ model PerfilProfissional {
 
   @@unique([tipo, registroConselho, ufRegistro])
   @@index([verificadoEm, recusadoEm])
+  @@index([verificadoPorId])
 }
 
 enum StatusVinculo {
@@ -370,7 +371,7 @@ model Exercicio {
 ///
 /// Assim o exercício continua um só, e a demonstração é que tem dono.
 model DemonstracaoProfissional {
-  id             String    @id @default(cuid())
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   profissionalId String
   profissional   User      @relation("DemonstracoesGravadas", fields: [profissionalId], references: [id], onDelete: Cascade)
   exercicioId    String
@@ -414,6 +415,7 @@ model PlanoTreino {
 
   @@index([alunoId, status])
   @@index([raizId])
+  @@index([personalId])
 }
 
 /// "Treino A", "Treino B"... dentro de um plano.
@@ -492,7 +494,7 @@ model ExecucaoTreino {
 /// `execucaoId` nulo é o caso da corrida de domingo; preenchido, é a esteira
 /// que a pessoa fez depois do treino de força.
 model AtividadeCardio {
-  id          String    @id @default(cuid())
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId     String
   aluno       User      @relation("CardiosDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
   execucaoId  String?
@@ -576,6 +578,8 @@ model Meta {
   deletadoEm   DateTime?
 
   @@index([alunoId, deletadoEm])
+  @@index([criadoPorId])
+  @@index([exercicioId])
 }
 
 /// Check-in diário do aluno — existe **com ou sem treino**.
@@ -631,6 +635,7 @@ model FeedbackTreino {
   sensacao    String?
   comentario  String?
   criadoEm    DateTime       @default(now())
+  @@index([dorExercicioId])
 }
 
 // ---------------------------------------------------------------------------
@@ -686,7 +691,7 @@ enum AnguloFoto {
 /// `chaveArquivo` é a chave no storage privado — NUNCA uma URL pública. A
 /// entrega é sempre por link assinado de curta duração.
 model FotoEvolucao {
-  id           String     @id @default(cuid())
+  id           String     @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId      String
   aluno        User       @relation("FotosDoAluno", fields: [alunoId], references: [id])
   data         DateTime   @db.Date
@@ -810,6 +815,7 @@ model PlanoDieta {
 
   @@index([alunoId, status])
   @@index([raizId])
+  @@index([nutricionistaId])
 }
 
 model Refeicao {
@@ -860,6 +866,7 @@ model RegistroRefeicao {
 
   @@unique([alunoId, refeicaoId, data])
   @@index([alunoId, data(sort: Desc)])
+  @@index([refeicaoId])
 }
 
 model MetaAgua {
@@ -905,7 +912,7 @@ enum EscopoPrescritivel {
 /// Catálogo do que pode ser prescrito. GLOBAL é curado pelo admin; PRIVADO
 /// pertence ao profissional que cadastrou.
 model ItemPrescritivel {
-  id               String             @id @default(cuid())
+  id               String             @id @default(dbgenerated("(gen_random_uuid())::text"))
   nome             String
   tipo             TipoPrescritivel
   /// Ex.: "cápsula 500 mg", "pote 900 g", "solução 20 mg/mL".
@@ -930,7 +937,7 @@ model ItemPrescritivel {
 
 /// Modelo reutilizável de prescrição, com posologia já definida.
 model ModeloPrescricao {
-  id           String   @id @default(cuid())
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   prescritorId String
   prescritor   User     @relation("ModelosDePrescricao", fields: [prescritorId], references: [id], onDelete: Cascade)
   nome         String
@@ -946,7 +953,7 @@ model ModeloPrescricao {
 }
 
 model ItemModeloPrescricao {
-  id            String           @id @default(cuid())
+  id            String           @id @default(dbgenerated("(gen_random_uuid())::text"))
   modeloId      String
   modelo        ModeloPrescricao @relation(fields: [modeloId], references: [id], onDelete: Cascade)
   prescritivelId String
@@ -977,7 +984,7 @@ enum StatusPrescricao {
 /// versão nova e marca a anterior como SUBSTITUIDA — o histórico precisa
 /// mostrar o que estava valendo em cada data.
 model Prescricao {
-  id           String           @id @default(cuid())
+  id           String           @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId      String
   aluno        User             @relation("PrescricoesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
   prescritorId String
@@ -996,10 +1003,11 @@ model Prescricao {
 
   @@index([alunoId, status])
   @@index([raizId])
+  @@index([prescritorId])
 }
 
 model ItemPrescricao {
-  id             String           @id @default(cuid())
+  id             String           @id @default(dbgenerated("(gen_random_uuid())::text"))
   prescricaoId   String
   prescricao     Prescricao       @relation(fields: [prescricaoId], references: [id], onDelete: Cascade)
   prescritivelId String
@@ -1066,6 +1074,7 @@ model Exame {
   alertas    AlertaClinico[]
 
   @@index([alunoId, dataColeta(sort: Desc)])
+  @@index([registradoPorId])
 }
 
 /// Condição de saúde do aluno — a outra fonte de alerta cruzado.
@@ -1098,6 +1107,8 @@ model CondicaoSaude {
   alertas AlertaClinico[]
 
   @@index([alunoId, resolvidaEm])
+  @@index([registradoPorId])
+  @@index([resolvidaPorId])
 }
 
 /// Alerta cruzado: achado no exame vira orientação para OUTRO membro da equipe.
@@ -1135,6 +1146,9 @@ model AlertaClinico {
   /// Idem para condição: registrar de novo a mesma não enche a tela.
   @@unique([alunoId, papelDestino, regra, condicaoId])
   @@index([alunoId, papelDestino, reconhecidoEm])
+  @@index([condicaoId])
+  @@index([exameId])
+  @@index([reconhecidoPorId])
 }
 
 /// Um marcador de um exame, com a classificação congelada no registro.
@@ -1166,7 +1180,7 @@ model ResultadoMarcador {
 /// calorimetria de dois anos atrás, com quinze quilos a menos, é pior do que
 /// uma estimativa de hoje.
 model CalorimetriaIndireta {
-  id             String    @id @default(cuid())
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId        String
   aluno          User      @relation("CalorimetriasDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
   /// Quem lançou: o aluno com o laudo na mão, ou o profissional que pediu.
@@ -1186,10 +1200,11 @@ model CalorimetriaIndireta {
   deletadoEm     DateTime?
 
   @@index([alunoId, data(sort: Desc)])
+  @@index([registradoPorId])
 }
 
 model AvaliacaoFisica {
-  id                String           @id @default(cuid())
+  id                String           @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId           String
   aluno             User             @relation("AvaliacoesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
   avaliadorId       String
@@ -1216,6 +1231,7 @@ model AvaliacaoFisica {
   deletadoEm        DateTime?
 
   @@index([alunoId, data(sort: Desc)])
+  @@index([avaliadorId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1360,6 +1376,7 @@ model Mensagem {
   removidaEm   DateTime?
 
   @@index([conversaId, enviadaEm(sort: Desc)])
+  @@index([autorId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1590,7 +1607,7 @@ model MaterialCompartilhado {
 /// Preparação com ingredientes e modo de preparo. Os macros saem da soma dos
 /// ingredientes dividida pelo rendimento — nunca digitados à mão.
 model Receita {
-  id            String  @id @default(cuid())
+  id            String  @id @default(dbgenerated("(gen_random_uuid())::text"))
   autorId       String
   autor         User    @relation("ReceitasDoAutor", fields: [autorId], references: [id], onDelete: Cascade)
   nome          String
@@ -1612,7 +1629,7 @@ model Receita {
 }
 
 model IngredienteReceita {
-  id          String   @id @default(cuid())
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   receitaId   String
   receita     Receita  @relation(fields: [receitaId], references: [id], onDelete: Cascade)
   alimentoId  String
@@ -1622,12 +1639,13 @@ model IngredienteReceita {
   ordem       Int
 
   @@index([receitaId, ordem])
+  @@index([alimentoId])
 }
 
 /// Refeição avulsa reutilizável — "Café da manhã 400 kcal" que serve em vários
 /// cardápios. Diferente de `RefeicaoModelo`, que só existe dentro de um cardápio.
 model RefeicaoSalva {
-  id              String   @id @default(cuid())
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   autorId         String
   autor           User     @relation("RefeicoesDoAutor", fields: [autorId], references: [id], onDelete: Cascade)
   nome            String
@@ -1645,7 +1663,7 @@ model RefeicaoSalva {
 /// Item de refeição salva: ou um alimento com gramas, ou uma receita com
 /// porções. Um dos dois, nunca os dois — garantido no serviço.
 model ItemRefeicaoSalva {
-  id          String        @id @default(cuid())
+  id          String        @id @default(dbgenerated("(gen_random_uuid())::text"))
   refeicaoId  String
   refeicao    RefeicaoSalva @relation(fields: [refeicaoId], references: [id], onDelete: Cascade)
   alimentoId  String?
@@ -1658,6 +1676,8 @@ model ItemRefeicaoSalva {
   ordem       Int
 
   @@index([refeicaoId, ordem])
+  @@index([alimentoId])
+  @@index([receitaId])
 }
 
 enum TipoPergunta {
@@ -1672,7 +1692,7 @@ enum TipoPergunta {
 
 /// Questionário que o profissional monta uma vez e aplica a vários pacientes.
 model ModeloAnamnese {
-  id            String            @id @default(cuid())
+  id            String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   profissionalId String
   profissional  User              @relation("ModelosDeAnamnese", fields: [profissionalId], references: [id], onDelete: Cascade)
   nome          String
@@ -1687,7 +1707,7 @@ model ModeloAnamnese {
 }
 
 model PerguntaAnamnese {
-  id         String         @id @default(cuid())
+  id         String         @id @default(dbgenerated("(gen_random_uuid())::text"))
   modeloId   String
   modelo     ModeloAnamnese @relation(fields: [modeloId], references: [id], onDelete: Cascade)
   texto      String
@@ -1705,7 +1725,7 @@ model PerguntaAnamnese {
 
 /// Anamnese aplicada a um paciente. Dado de saúde: escopo CLINICO.
 model Anamnese {
-  id             String    @id @default(cuid())
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   alunoId        String
   aluno          User      @relation("AnamnesesDoAluno", fields: [alunoId], references: [id], onDelete: Cascade)
   profissionalId String
@@ -1721,10 +1741,12 @@ model Anamnese {
   atualizadoEm   DateTime  @updatedAt
 
   @@index([alunoId, respondidaEm])
+  @@index([modeloId])
+  @@index([profissionalId])
 }
 
 model RespostaAnamnese {
-  id            String            @id @default(cuid())
+  id            String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   anamneseId    String
   anamnese      Anamnese          @relation(fields: [anamneseId], references: [id], onDelete: Cascade)
   perguntaId    String?
@@ -1739,62 +1761,15 @@ model RespostaAnamnese {
   ordem          Int
 
   @@index([anamneseId, ordem])
+  @@index([perguntaId])
 }
 
 /// Token de confirmação de e-mail. Mesmo tratamento do refresh: só o hash é
 /// persistido, então vazar o banco não permite confirmar e-mail de ninguém.
-model TokenVerificacaoEmail {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// O e-mail alvo fica registrado: se a pessoa trocar de e-mail antes de
-  /// confirmar, o token antigo não vale para o endereço novo.
-  email     String
-  tokenHash String    @unique
-  expiraEm  DateTime
-  usadoEm   DateTime?
-  criadoEm  DateTime  @default(now())
-
-  @@index([userId, usadoEm])
-}
-
 /// Token de redefinição de senha. Tabela separada da de verificação de e-mail
 /// de propósito: são poderes diferentes — um confirma posse do endereço, o
 /// outro troca a credencial. Misturar faria um token servir para o que não foi
 /// emitido.
-model TokenRedefinicaoSenha {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Mesmo motivo do token de verificação: trocar de e-mail invalida o link
-  /// que foi enviado para o endereço antigo.
-  email     String
-  tokenHash String    @unique
-  expiraEm  DateTime
-  usadoEm   DateTime?
-  criadoEm  DateTime  @default(now())
-
-  @@index([userId, usadoEm])
-}
-
-model SessaoRefresh {
-  id         String    @id @default(cuid())
-  familiaId  String
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Guardamos só o hash — token em claro nunca toca o banco
-  tokenHash  String    @unique
-  expiraEm   DateTime
-  usadoEm    DateTime?
-  revogadoEm DateTime?
-  ip         String?
-  userAgent  String?
-  criadoEm   DateTime  @default(now())
-
-  @@index([userId, revogadoEm])
-  @@index([familiaId])
-}
-
 /// Regra que transforma achado clínico em orientação endereçada a um papel.
 ///
 /// Era um arranjo em TypeScript dentro da API. Virou tabela quando o acesso
@@ -1888,7 +1863,7 @@ model SolicitacaoDeAcesso {
   motivoResposta String?
   /// Prazo. Nao e nulo por padrao de proposito: acesso clinico concedido para
   /// sempre e vazamento marcado para depois. Quem precisa de mais, renova.
-  expiraEm       DateTime?         @default(dbgenerated("(now() + interval '90 days')"))
+  expiraEm       DateTime?         @default(dbgenerated("(now() + '90 days'::interval)"))
   criadoEm       DateTime          @default(now())
   respondidaEm   DateTime?
   revogadoEm     DateTime?

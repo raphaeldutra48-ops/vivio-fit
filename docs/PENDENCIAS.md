@@ -309,6 +309,51 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 
 ## Resolvidas
 
+### Auditoria geral de 22/09/2026 — cinco achados, todos pagos no mesmo dia
+
+**1. Falha crítica no Next (execução remota de código).** A produção rodava
+15.5.22; duas falhas críticas — uma no otimizador de imagens, outra em
+servidores Windows — foram corrigidas na 15.5.24. E o otimizador estava
+**acessível no domínio** (`/_next/image` respondia 200), que é justamente o
+caminho da falha. Subiu para 15.5.25 e, como nenhuma tela usa `next/image`, o
+otimizador foi desligado (`images.unoptimized`): porta que não existe não
+precisa de correção na próxima vez.
+
+**2. O site não mandava nenhum cabeçalho de segurança.** Entraram em
+`next.config.mjs`: HSTS de um ano com subdomínios (sem `preload`, que é decisão
+do dono do domínio), `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+`Permissions-Policy` (câmera só para o próprio site, o resto fechado) e uma CSP
+parcial — `frame-ancestors`, `base-uri`, `form-action`, `object-src`. A CSP
+completa fica para quando houver nonce nos scripts do Next: mal ajustada, ela
+quebra a aplicação inteira em produção sem aparecer em teste nenhum.
+
+**3. Credencial velha parada no banco.** `SessaoRefresh` guardava **3.006**
+hashes de sessão da autenticação antiga, e `User.senhaHash` ainda tinha o hash
+argon2 das sete contas. Nada disso é usado desde que o Supabase Auth assumiu.
+As três tabelas mortas foram apagadas e a coluna, esvaziada (ela continua
+existindo, fora do alcance de todo papel).
+
+**4. O `schema.prisma` divergia do banco.** Os preenchimentos automáticos de
+`id` — postos à mão quando as gravações morriam em violação de nulo — existiam
+só no banco. A próxima migração os teria removido, trazendo o defeito de volta.
+Agora estão declarados, e `migrate diff` acusa "empty migration".
+
+**5. Vinte e três chaves estrangeiras sem índice.** Com sete contas não se
+nota; com mil, cada remoção de pai varre a tabela filha. Declaradas no schema e
+criadas na mesma migração (`20260922163000_limpeza_da_autenticacao_antiga`).
+
+**Também conferido e em ordem:** 71 tabelas com RLS e 150 políticas, 99 funções
+`security definer` todas com `search_path` fixado, o disparo de lembretes com
+10.180 execuções sem falha, a trilha de auditoria gravando, nenhuma chave de
+mídia apontando para arquivo ausente, nenhum `.env` versionado e nenhuma conta
+de teste sobrando.
+
+**O que ficou de fora, e por quê:** um PDF de teste órfão no compartimento
+`exames` (a remoção foi barrada pela proteção do ambiente; some pelo painel do
+Supabase em dois cliques) e os 40 alertas de dependência do Expo, que são
+ferramenta de desenvolvimento e não vão para o ar — valem junto da próxima
+subida de versão do aplicativo.
+
 ### "Quem viu meus dados" parou de ser escrito em 11/09 — resolvida em 2026-09-15
 **O que estava errado:** a trilha de auditoria era gravada pela API — um
 interceptor anotava cada acesso bem-sucedido às rotas de dado de aluno, e os
