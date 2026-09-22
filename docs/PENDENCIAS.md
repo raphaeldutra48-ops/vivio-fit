@@ -309,6 +309,32 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 
 ## Resolvidas
 
+### A leitura automática de dieta entrou no ar — e o teste achou um defeito nela — resolvida em 2026-09-22
+A função de borda `ler-dieta` foi publicada no projeto do Supabase (o dono pôs a
+chave da Anthropic como segredo; ela não passa pelo repositório nem por mim). O
+endereço saiu de 404 para 401, e uma chamada autenticada prova que o segredo
+está com o nome certo: ela passa da conferência da chave e para na trava
+seguinte.
+
+**O defeito, achado ao escrever a prova:** a função decidia o dono da pasta por
+`auth.getUser()`, caindo no id do **Supabase Auth**. Mas a chave do arquivo é
+`materiais/<id do app>/...` — é esse o id que a política do compartimento
+exige — e os dois são diferentes em **todas as sete contas** de hoje, porque
+nasceram antes do Auth. Resultado: a importação responderia "chave de arquivo
+não pertence a você" para qualquer pessoa, sempre. Agora o dono vem de
+`usuario_atual()`, derivado da claim do token verificado — a mesma função que
+as políticas usam.
+
+**Como se prova:** `packages/sdk/teste/leitura-de-dieta.spec.ts`, 8 casos, e
+nenhum gasta uma leitura paga: as seis recusas (sem sessão, aluno, sem vínculo,
+sem NUTRICAO, sem LEITURA_AUTOMATICA, chave de outra pessoa) e os dois casos
+legítimos, que atravessam todas as travas e param no passo seguinte — o arquivo
+que não existe. Era esse par que faltava: sem ele, o defeito acima passaria
+despercebido, porque toda recusa continuava verde.
+
+**De quebra:** `importarDieta` morava no grupo `exercicios` do SDK, por engano
+de lugar. Foi para `dietas`, com a tela ajustada.
+
 ### Auditoria geral de 22/09/2026 — cinco achados, todos pagos no mesmo dia
 
 **1. Falha crítica no Next (execução remota de código).** A produção rodava
@@ -546,14 +572,8 @@ Janela a saber: o Supabase só dá a sessão por morta quando o token de acesso
 vence E o refresh é recusado, então a pessoa revogada vai ao login em até 15
 minutos — a mesma janela do token da API antiga.
 
-**O que falta (ação sua):**
-
-1. **Implantar a função e pôr o segredo** (`supabase/README.md` tem os três
-   comandos). A chave da Anthropic é sua e vai direto da sua máquina para o
-   projeto; enquanto ela não existe, a tela diz "a leitura automática não está
-   configurada" e o resto do app segue inteiro.
-2. **Conferir se sobrou mídia no volume do Railway** antes de desligar o
-   serviço — desligá-lo leva o volume junto.
+**O que falta (ação sua):** conferir se sobrou mídia no volume do Railway antes
+de desligar o serviço — desligá-lo leva o volume junto.
 
 ### `apps/api` saiu do repositório — resolvida em 2026-09-15
 

@@ -72,7 +72,7 @@ export default function ImportarDieta() {
     try {
       const chave = await sdk.midia.enviar(TipoMidia.MATERIAL, arquivo);
 
-      const lida = await sdk.exercicios.importarDieta({
+      const lida = await sdk.dietas.importarDieta({
         chave,
         mimeType: arquivo.type as 'application/pdf',
         alunoId,

@@ -222,10 +222,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     a política do compartimento recusaria de qualquer jeito. Esta é a que dá a
     frase; a de lá é a que vale.
   */
-  const { data: usuario } = await supabase.auth.getUser();
-  const meuId = (usuario?.user?.app_metadata as { vivio_id?: string } | undefined)?.vivio_id
-    ?? (usuario?.user?.user_metadata as { vivio_id?: string } | undefined)?.vivio_id
-    ?? usuario?.user?.id;
+  /*
+    Quem é o dono da pasta vem do BANCO, e não de `auth.getUser()`.
+
+    A primeira versão lia `vivio_id` do metadata e caía no id do Auth quando não
+    achava. Só que o hook do token põe `vivio_id` nas CLAIMS, não no metadata —
+    e os dois ids são diferentes em toda conta que nasceu antes do Supabase Auth
+    (as sete de hoje, todas). O efeito: a chave `materiais/<id do app>/...`, que
+    é a que o Storage exige, nunca batia com o id comparado aqui, e a importação
+    recusava com "chave não pertence a você" para todo mundo.
+
+    `usuario_atual()` deriva o id da claim do token já verificado — é a mesma
+    função que as políticas usam para decidir tudo o mais.
+  */
+  const { data: meuId } = await supabase.rpc('usuario_atual');
   if (!meuId || !chave.startsWith(`materiais/${meuId}/`)) {
     return erro('CONFLITO', 'Chave de arquivo não pertence a você.', 409);
   }

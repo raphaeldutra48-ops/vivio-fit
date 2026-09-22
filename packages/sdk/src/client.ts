@@ -370,16 +370,6 @@ export class VivioClient {
 
     removerDemonstracao: (id: string): Promise<void> => this.supabase.removerDemonstracao(id),
 
-    /**
-     * Transcreve um plano alimentar em PDF ou foto. Devolve RASCUNHO — nada é
-     * salvo até o profissional conferir e mandar salvar pelo caminho normal.
-     */
-    importarDieta: (dados: {
-      chave: string;
-      mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
-      alunoId?: string | null;
-    }): Promise<LeituraDeDieta> => this.supabase.importarDieta(dados),
-
     /** A fila de gravação: o que falta, do mais prescrito para o menos. */
     planoDeGravacao: (): Promise<ExercicioAGravar[]> => this.supabase.planoDeGravacao(),
 
@@ -803,6 +793,16 @@ export class VivioClient {
   };
 
   readonly dietas = {
+    /**
+     * Transcreve um plano alimentar em PDF ou foto. Devolve RASCUNHO — nada é
+     * salvo até o profissional conferir e mandar salvar pelo caminho normal.
+     */
+    importarDieta: (dados: {
+      chave: string;
+      mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
+      alunoId?: string | null;
+    }): Promise<LeituraDeDieta> => this.supabase.importarDieta(dados),
+
     listar: (alunoId: string): Promise<PlanoDietaResumo[]> =>
       this.supabase.listarDietas(alunoId),
 
