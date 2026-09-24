@@ -18,9 +18,9 @@ import { MAPA, indiceDeMidia, type MidiaDoWger } from './wger';
  *
  * ## Grava direto no compartimento, com a chave de serviço
  *
- * Enquanto a API existia, este importador gravava pelo driver de mídia dela
- * (disco do Railway ou R2), escolhido pela mesma regra do boot. Com a API fora
- * do repositório, o destino é um só: o compartimento público `catalogo`, onde o
+ * Enquanto a API existia, este importador gravava pelo driver de mídia dela,
+ * escolhido pela mesma regra do boot. Com a API fora do repositório, o destino
+ * é um só: o compartimento público `catalogo`, onde o
  * navegador do aluno alcança a figura sem servidor nosso no meio. Ele não tem
  * política de escrita — ninguém que use o app grava no catálogo —, então quem
  * envia é esta ferramenta, rodada à mão, como o `subir-catalogo`.

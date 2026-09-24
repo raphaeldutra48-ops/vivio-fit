@@ -1,11 +1,7 @@
-# Script de shell precisa de LF mesmo quando editado no Windows.
-#
-# Com CRLF, o contêiner Linux tenta executar "node\r" e responde
-# "entrada.sh: not found" — mensagem que não diz nada sobre a causa real e
-# custa uma tarde para rastrear.
-*.sh text eol=lf
-
-# Dockerfile e afins são lidos por ferramentas Linux pela mesma razão.
-Dockerfile text eol=lf
+# Arquivos lidos por ferramentas que esperam LF, mesmo quando editados no
+# Windows. Com CRLF, um `\r` invisível entra no valor e o erro que aparece não
+# fala do fim de linha — foi assim que um contêiner respondeu "not found" para
+# um script que existia.
 *.yaml text eol=lf
 *.yml text eol=lf
+*.toml text eol=lf

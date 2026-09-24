@@ -43,16 +43,20 @@ existe), e a entrega pela API de push da Expo — por Edge Function ou `pg_net`
 chamada ao fim do disparo, marcando `enviadaEm` e desativando token recusado.
 O build nativo do app precisa ser refeito.
 
-### 12. Suite de testes lenta contra o Neon gratuito
-**Assumida em:** Fase 2 (chat)
-**Estado:** a suite leva ~4 minutos. Sob carga, uma requisicao chega a 10s
-porque o compute gratuito do Neon escala a zero e limita. O timeout do vitest
-subiu para 90s so para lentidao de infra nao ser lida como bug.
-**Sintoma ja observado:** dois testes falharam por timeout numa rodada e
-passaram na seguinte, sem mudanca de codigo.
-**Pagar em:** junto com a pendencia 2 — branch de teste no Neon (a ligacao ja
-esta pronta, ver la), e depois Postgres local no CI, que tira a rede do caminho
-e e o que de fato resolve a lentidao.
+### 12. As suítes rodam contra o banco de produção, e demoram
+**Assumida em:** Fase 2 · **Atualizada em:** 2026-09-24 (o texto antigo falava do
+Neon, que saiu de cena)
+**Estado:** as 1.111 provas rodam contra o **Supabase do projeto** — não há
+banco de teste separado. A suíte inteira leva de 4 a 8 minutos, e a maior parte
+disso é rede: cada caso fala com o banco de verdade.
+**Por que é seguro hoje, e quando deixa de ser:** o banco tem só a semente e o
+que os testes criam, e um guarda (`teste/guarda-de-producao.ts`) recusa a suíte
+inteira se achar uma conta de gente real dentro. No dia em que o primeiro aluno
+se cadastrar, esse portão fecha sozinho — e aí é obrigatório um banco separado,
+não uma escolha.
+**O que fazer quando fechar:** um projeto Supabase só para teste, com as
+migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
+apontando para ele. O caminho já existe no arranjo das suítes.
 
 ### 14b. As outras telas continuam sem teste de render
 **Assumida em:** dívidas técnicas (o que sobrou da pendência 14)
@@ -103,134 +107,6 @@ apagar o campo faz ele saltar para `1` sozinho. Vale arrumar junto da próxima
 mexida no financeiro, não isolado.
 
 O padrão inteiro está em [ADAPTACOES.md](ADAPTACOES.md).
-
-### 15. E-mail de produção — PAGA em 2026-08-06
-**Assumida em:** verificação de e-mail
-**Estado:** **resolvida.** Resend configurado, domínio `viviofit.com.br`
-verificado (DKIM + SPF + MX + DMARC no registro.br, conferidos por consulta a
-dois resolvedores públicos), e o primeiro envio real caiu na **caixa de
-entrada** — não no spam, o que para domínio novo é melhor que o esperado.
-`EMAIL_SEM_ENTREGA` foi apagada; a API agora recusa subir sem entrega de
-e-mail.
-
-**A pedra do caminho, que vale lembrar:** o primeiro teste falhou com
-`Connection timeout` no SMTP. O **Railway bloqueia saída na porta 587**, como
-quase toda plataforma faz contra abuso de spam — nenhuma chave nem DNS
-resolveria. O envio passou para a **API HTTP do Resend**, na 443. Se algum dia
-outro serviço de e-mail entrar aqui, começar por HTTP e não por SMTP.
-
-**Configuração final:** só `RESEND_API_KEY` (a chave crua) e `EMAIL_REMETENTE`.
-`SMTP_URL` continua existindo para outro provedor e ganha da chave.
-
-**O que foi feito de código no caminho:**
-- A API **recusa subir** em produção sem forma de enviar ou sem
-  `WEB_PUBLIC_URL` válida (`src/entrega-de-email.ts`), porque o sintoma dessa
-  configuração faltando é "o site não funciona", relatado dias depois por quem
-  não conseguiu entrar. A escapatória `EMAIL_SEM_ENTREGA=true` continua no
-  código para um eventual intervalo sem provedor, e é explícita para aparecer
-  na lista de variáveis de quem for olhar.
-- O nome do cadastro deixou de entrar cru na mensagem
-  (`src/modules/auth/mensagem-verificacao.ts`). Quem se cadastra **ainda não
-  provou ser dono do endereço** — é o que este e-mail vai verificar. Dava para
-  cadastrar o e-mail de outra pessoa, escolher o `nome`, e a vítima receberia,
-  assinado pelo nosso domínio, um parágrafo ou um link escrito pelo atacante.
-  Isso só passaria a valer no dia em que o e-mail saísse de verdade.
-- `src/ferramentas/enviar-email-teste.ts` confere a configuração sem sujar a
-  base com cadastro de teste, e distingue "não conecta" de "o provedor recusou
-  a mensagem" — foi ela que identificou o bloqueio de porta em vez de nos
-  deixar trocando a chave à toa. Fica em `src/` porque a imagem de produção só
-  carrega o compilado, e o contêiner é o único lugar onde a chave existe.
-  Aciona-se por `EMAIL_TESTE_PARA` no Railway, como as outras tarefas.
-- A chave é **censurada em qualquer texto que vá para o log**, inclusive no
-  texto de exceção que vem de fora e que não dá para controlar.
-
-**Como verificar de novo, se um dia desconfiar:** definir `EMAIL_TESTE_PARA` no
-Railway, fazer deploy, ler o log — e depois **apagar a variável**, ou todo
-deploy manda e-mail.
-
-### 19. Mídia em disco de contêiner é apagada a cada deploy
-**Assumida em:** preparação do deploy (dívida que existia sem estar registrada)
-**Estado:** o driver de armazenamento padrão grava em `MEDIA_DIR`, no disco
-local. Em desenvolvimento isso é o certo. No Railway o sistema de arquivos do
-contêiner é efêmero: **cada deploy apaga as fotos de evolução dos alunos**, e o
-banco fica com registros apontando para arquivos que não existem mais.
-**Por que só apareceu agora:** o driver foi feito com a abstração pronta para
-S3 desde o começo, e em desenvolvimento nada some — o problema só existe onde o
-contêiner é recriado.
-**O que já está feito (2026-08-02):** `ArmazenamentoR2` implementa a interface
-`Armazenamento` com URL assinada de curta duração para leitura e escrita, e
-`escolherDriverDeMidia` decide o driver **por presença de configuração**, não
-por `NODE_ENV` — quem aponta um bucket quer usá-lo, inclusive localmente para
-conferir a credencial antes do deploy. Nenhum serviço mudou: era para isso que
-a interface existia. Em produção sem R2 o app sobe (derrubá-lo por causa de
-mídia seria pior) e registra no boot, em nível de erro, que **as fotos serão
-apagadas no próximo deploy** — mesmo tratamento que o `PROXY_HOPS` recebeu.
-**O que falta (ação sua, precisa da conta Cloudflare):** em
-[dash.cloudflare.com](https://dash.cloudflare.com) → **R2** → *Create bucket*
-(10 GB grátis, sem cobrança de egresso, que é o que pesa quando o app serve
-imagem toda vez que alguém abre a evolução). Depois **Manage R2 API Tokens** →
-criar token com leitura e escrita nesse bucket. As quatro variáveis vão direto
-nas Variables do Railway:
-
-```
-R2_BUCKET=<nome do bucket>
-R2_ACCOUNT_ID=<o hex que aparece no painel do R2>
-R2_ACCESS_KEY_ID=<do token>
-R2_SECRET_ACCESS_KEY=<do token>
-```
-
-O bucket fica **privado** — a entrega é sempre por link assinado. Não marque
-acesso público.
-**Como verificar:** subir uma foto de evolução, fazer um deploy novo e abrir a
-foto de novo. Antes disso o log do boot já diz qual driver está em uso.
-**Ainda aberto até o bucket existir.** A pendência 22 (arquivo do exame) se paga
-junto: o upload do laudo usa o mesmo armazenamento.
-
-**Atualização em 2026-09-10 — conferido nas Variables do Railway:**
-
-- **Paga no Railway, pelo volume — e não pelo R2.** A API continua lá
-  (`x-railway-edge: gru1`), com o volume `@vivio/api-volume` montado em
-  `/dados/midia` e `MEDIA_DIR=/dados/midia`. A mídia no disco local **sobrevive
-  ao deploy**. R2 **não** está configurado.
-- **O aviso de boot mentia desde 01/09.** `midiaEmDiscoPersistente()` tinha sido
-  trocada por um `return false` fixo, na premissa de que a API já estava na
-  Cloudflare. Todo boot de produção anunciava, em nível de erro, que as fotos
-  seriam APAGADAS no próximo deploy — com o volume de 5 GB no lugar. A checagem
-  do volume voltou, com os testes de caminho que tinham sido apagados junto.
-- **O importador do wger passou a gravar pelo driver**
-  (`src/ferramentas/importar-wger.ts`; a interface `Armazenamento` ganhou
-  `gravar` e `existe`) e é idempotente pelo ARQUIVO, não pela coluna. No volume
-  isso dá na mesma que antes; importa no dia da troca de armazenamento — rodar
-  o importador é o que repovoa o destino novo.
-- **Diagnóstico sem gravar nada:** `IMPORTAR_WGER=true` e `SIMULAR=true` nas
-  Variables do serviço `api`, e deploy. O log diz qual driver está em uso e
-  quantas imagens do banco não estão no armazenamento.
-
-**Atualização em 2026-09-11 — resolvida pelo Storage do Supabase.** O destino
-escolhido foi o Storage, e não o R2, por um motivo que o R2 não resolvia: quem
-envia o arquivo agora é o **cliente**, e quem decide se ele pode é a política do
-compartimento, com a sessão de quem enviou. No R2 essa conferência continuaria
-sendo trabalho da API — que é justamente a peça que está saindo.
-
-- Seis compartimentos (`32-armazenamento.sql`), cada um com teto de tamanho e
-  lista de formatos, todos privados menos o `catalogo`.
-- O endereço do arquivo é `<compartimento>/<dono>/<arquivo>`: a primeira pasta é
-  o dono, e é ela que a política lê. Nenhuma linha do banco precisou ser
-  reescrita — a chave que ele guardava já tinha essa forma.
-- O driver da API passou a ser o Supabase quando `SUPABASE_URL` e
-  `SUPABASE_SERVICE_ROLE` estão presentes (`ArmazenamentoSupabase`), à frente do
-  R2. Não é preferência: é onde o cliente escreve, e as duas pontas precisam
-  olhar para o mesmo lugar.
-- `midiaEmDiscoPersistente()` continua de pé para quem rodar a API sozinha, e
-  responde `false` quando o volume some — o aviso de boot volta a ser verdadeiro
-  sem ninguém mexer em nada.
-
-**O que resta é a mídia já gravada no volume do Railway.** As figuras do acervo
-foram para o `catalogo` (`subir-catalogo`, 32 arquivos, nenhuma chave apontando
-para arquivo ausente). Foto de evolução e laudo de aluno, se houver alguma no
-volume, não foram movidas — o banco de produção tem só as sete contas de
-semente, então provavelmente não há nenhuma; conferir antes de desligar o
-serviço, porque desligá-lo leva o volume junto.
 
 ### 20. Confirmação automática de pagamento exige gateway
 **Assumida em:** Receba Fácil
@@ -308,6 +184,25 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 **Pagar em:** junto com o teste de render de cada uma dessas telas (pendência 14b).
 
 ## Resolvidas
+
+### O Railway saiu do repositório — encerrada em 2026-09-24
+Não resta dependência dele em lugar nenhum: o site é construído e servido pela
+Cloudflare a cada push, o banco e o armazenamento são o Supabase, e a única
+função de servidor é uma função de borda. Saíram nesta limpeza o `Dockerfile` da
+web e o `.dockerignore` (existiam só para a imagem que ia para lá), o
+`output: 'standalone'` do Next (que servia a essa imagem) e o `.env.example`
+inteiro, que ainda pedia segredo de JWT, bucket R2, Redis e FCM — coisas de uma
+API que não existe mais. O modelo novo pede o que de fato se usa: endereço do
+Supabase, chave anônima, chave de serviço e conexão direta com o Postgres.
+
+Com isso, duas pendências deixaram de existir por não terem mais onde acontecer:
+- **15. E-mail de produção.** Era o Resend configurado na API, com a pedra do
+  caminho de a plataforma bloquear a porta 587. Quem manda e-mail de verificação
+  e de redefinição hoje é o Supabase Auth.
+- **19. Mídia em disco de contêiner.** O disco efêmero que apagava foto de
+  evolução a cada deploy não existe: a mídia vive no Storage do Supabase, com
+  seis compartimentos e política própria, e a conferência de chaves apontando
+  para arquivo ausente virou rotina da auditoria (hoje: zero).
 
 ### A leitura automática de dieta entrou no ar — e o teste achou um defeito nela — resolvida em 2026-09-22
 A função de borda `ler-dieta` foi publicada no projeto do Supabase (o dono pôs a
@@ -572,8 +467,11 @@ Janela a saber: o Supabase só dá a sessão por morta quando o token de acesso
 vence E o refresh é recusado, então a pessoa revogada vai ao login em até 15
 minutos — a mesma janela do token da API antiga.
 
-**O que falta (ação sua):** conferir se sobrou mídia no volume do Railway antes
-de desligar o serviço — desligá-lo leva o volume junto.
+**Nada ficou pendente daqui.** A conferência do volume do Railway, que este
+texto pedia, foi descartada por decisão do dono em 24/09: o Railway não faz mais
+parte do projeto em nenhuma forma. A mídia que importava — as 32 figuras do
+acervo — já está no Storage do Supabase, e nenhuma chave do banco aponta para
+arquivo ausente.
 
 ### `apps/api` saiu do repositório — resolvida em 2026-09-15
 

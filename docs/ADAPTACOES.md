@@ -216,8 +216,10 @@ apaga o alerta. O defeito só existe na composição.
   em `packageManager`, e trava tentando baixá-la. Chamar
   `node <cache>/pnpm/11.17.0/bin/pnpm.cjs` contorna a resolução inteira.
 
-- **Docker não existe aqui.** Nenhuma imagem foi construída (pendência 18); o
-  primeiro deploy no Railway é o teste.
+- **Docker não existe aqui, e não faz falta.** A web é construída pela
+  Cloudflare a cada push (Workers Builds) e o banco é serviço gerenciado: não há
+  imagem nossa para construir. O `Dockerfile` que existia era da época em que o
+  destino era o Railway, e saiu junto com ele.
 
 ---
 

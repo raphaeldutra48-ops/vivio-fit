@@ -41,8 +41,12 @@ const nextConfig = {
   reactStrictMode: true,
   // Pacotes do monorepo são TypeScript compilado localmente, não publicados.
   transpilePackages: ['@vivio/sdk', '@vivio/ui', '@vivio/contracts'],
-  // Empacota só o necessário para rodar, com as dependências resolvidas do
-  // workspace inteiro — sem isso a imagem carregaria o node_modules do monorepo.
+  /*
+    Exigido pelo empacotador da Cloudflare, e não pela imagem Docker que já não
+    existe: `opennextjs-cloudflare` lê `.next/standalone` para montar o Worker.
+    Tirar esta linha derruba o build com "pages-manifest.json não encontrado" —
+    foi o que aconteceu ao tentar removê-la junto com o Dockerfile.
+  */
   output: 'standalone',
   // fileURLToPath e não `new URL(...).pathname`: no Windows o pathname vem como
   // "/C:/Users/..." e o Next não resolve esse caminho.
