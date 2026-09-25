@@ -217,6 +217,18 @@ export default function Cadastrar() {
 
             {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
+            <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+              Ao criar a conta você concorda com os{' '}
+              <Link href="/termos" className="underline">
+                Termos de uso
+              </Link>{' '}
+              e com a{' '}
+              <Link href="/privacidade" className="underline">
+                Política de privacidade
+              </Link>
+              .
+            </p>
+
             <Botao type="submit" disabled={!podeEnviar || enviando}>
               {enviando ? 'Criando…' : 'Criar conta'}
             </Botao>

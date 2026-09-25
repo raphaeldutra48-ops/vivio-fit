@@ -1,4 +1,5 @@
 import {
+  DOCUMENTOS_LEGAIS,
   EscopoDado,
   FINALIDADE_POR_ESCOPO,
   type ConsentimentoResumo,
@@ -6,7 +7,7 @@ import {
 } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -350,6 +351,27 @@ export default function Equipe() {
             </Pressable>
           );
         })}
+      </View>
+
+      {/*
+        Os documentos ficam ao alcance NESTA tela, e não escondidos num menu: é
+        aqui que a pessoa decide o que compartilhar, e é aqui que ela pode querer
+        saber para onde o dado vai. Abrem no navegador, servidos pelo site.
+      */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: espacamento.lg, paddingVertical: espacamento.lg }}>
+        {(['termos', 'privacidade'] as const).map((qual) => (
+          <Pressable key={qual} onPress={() => void Linking.openURL(DOCUMENTOS_LEGAIS[qual])}>
+            <Text
+              style={{
+                color: tema.textoSecundario,
+                fontSize: tipografia.tamanho.sm,
+                textDecorationLine: 'underline',
+              }}
+            >
+              {qual === 'termos' ? 'Termos de uso' : 'Política de privacidade'}
+            </Text>
+          </Pressable>
+        ))}
       </View>
     </ScrollView>
   );

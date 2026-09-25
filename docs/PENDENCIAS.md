@@ -6,6 +6,24 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 ## Abertas
 
 
+### 27. Os documentos legais são rascunho, e não há botão de excluir conta
+**Assumida em:** 2026-09-25, na auditoria geral
+**Estado:** `/termos` e `/privacidade` existem, são públicas, descrevem o sistema
+como ele é (as seis autorizações, a transferência internacional na leitura
+automática, o pagamento que não passa pela plataforma) e estão ligadas ao login,
+ao cadastro e à tela de autorizações do aplicativo. O que falta não é código:
+- **[PREENCHER] no texto:** razão social e CNPJ do controlador, e-mail do
+  encarregado, prazos de guarda, idade mínima, foro. Enquanto houver, a página
+  mostra aviso de rascunho — e há teste que exige esse par.
+- **Revisão jurídica.** O texto foi escrito a partir do comportamento real do
+  software, que é a parte que um advogado não adivinha; o inverso também vale.
+- **Exclusão de conta não tem tela.** O direito existe na LGPD e a política diz
+  que o pedido é atendido por e-mail. Um botão exige decidir o que apagar e o que
+  o profissional precisa guardar por obrigação dele — e isso é decisão de
+  produto, não de implementação.
+**Pagar em:** antes de abrir cadastro para fora. É bloqueador de lançamento, não
+de desenvolvimento.
+
 ### 7. nodeLinker hoisted no workspace inteiro
 **Assumida em:** C4
 **Estado:** `pnpm-workspace.yaml` usa `nodeLinker: hoisted` por causa do Metro.

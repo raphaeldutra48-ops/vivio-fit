@@ -132,6 +132,15 @@ export default function Login() {
             </Cartao>
           </div>
         )}
+        <p className="mt-lg text-center text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+          <Link href="/termos" className="underline">
+            Termos de uso
+          </Link>
+          {' · '}
+          <Link href="/privacidade" className="underline">
+            Política de privacidade
+          </Link>
+        </p>
       </div>
     </main>
   );

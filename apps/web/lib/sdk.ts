@@ -14,6 +14,9 @@ const ROTAS_PUBLICAS = [
   '/redefinir-senha',
   // Página do profissional: existe justamente para quem não tem conta.
   '/p/',
+  // Termos e privacidade: quem vai decidir se cria conta precisa ler antes.
+  '/termos',
+  '/privacidade',
 ];
 
 const emRotaPublica = (): boolean =>
