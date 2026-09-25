@@ -9,6 +9,14 @@
     "noUncheckedIndexedAccess": false,
     "noEmit": true
   },
-  "include": ["prisma/**/*", "ferramentas/**/*", "regras/**/*", "scripts/**/*", "teste/**/*", "*.ts"],
+  "include": [
+    "prisma/**/*",
+    "ferramentas/**/*",
+    "regras/**/*",
+    "diagnostico/**/*",
+    "scripts/**/*",
+    "teste/**/*",
+    "*.ts"
+  ],
   "exclude": ["node_modules", "media"]
 }
