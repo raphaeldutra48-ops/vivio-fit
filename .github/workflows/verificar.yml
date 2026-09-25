@@ -57,7 +57,13 @@ jobs:
       - name: Compilar os pacotes internos
         # A web e o app importam `dist/` dos pacotes; sem isto o typecheck deles
         # falha por motivo que não é defeito de código.
-        run: pnpm --filter "@vivio/web^..." run build
+        #
+        # Os DOIS filtros importam: o primeiro pega o que a web usa (contracts,
+        # sdk, ui) e o segundo o que só o aplicativo usa (`ui-native`). Com um
+        # filtro só, o typecheck do app reprovava com "Cannot find module
+        # '@vivio/ui-native'" — e aqui na máquina passava, porque o `dist` estava
+        # no disco de build antigo.
+        run: pnpm --filter "@vivio/web^..." --filter "@vivio/mobile^..." run build
 
       - name: Gerar os tipos de rota do Next
         # `next-env.d.ts` referencia `.next/types/routes.d.ts`, que o `next build`
