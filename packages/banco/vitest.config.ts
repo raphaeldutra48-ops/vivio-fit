@@ -11,6 +11,7 @@ export default defineConfig({
       'ferramentas/**/*.spec.ts',
       'regras/**/*.spec.ts',
       'diagnostico/**/*.spec.ts',
+      'exportar/**/*.spec.ts',
       'prisma/**/*.spec.ts',
     ],
     environment: 'node',

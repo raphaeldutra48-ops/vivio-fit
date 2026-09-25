@@ -22,7 +22,8 @@
     "rls:conferir": "tsx prisma/conferir-rls.ts",
     "rls:auditar": "tsx prisma/auditar-rls.ts",
     "diagnostico": "tsx diagnostico/rodar.ts",
-    "test:sem-banco": "vitest run --config vitest.sem-banco.config.ts"
+    "test:sem-banco": "vitest run --config vitest.sem-banco.config.ts",
+    "exportar": "tsx exportar/rodar.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

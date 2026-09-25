@@ -188,6 +188,38 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Passou a existir cópia dos dados fora do Supabase — resolvida em 2026-09-25
+O provedor faz backup diário, e isso cobre a falha do provedor. Não cobre projeto
+apagado por engano, cobrança não paga, conta suspensa, nem migração minha que
+apague dado — nenhum desses é resolvido por backup que vive dentro do mesmo
+projeto.
+
+`pnpm --filter @vivio/banco exportar` grava as 67 tabelas de `public` em JSON
+(uma por arquivo, `DESTINO=` escolhe a pasta) mais um `manifesto.json` com a
+**ordem de restauração**, a contagem por tabela e o instante. A ordem é o ponto:
+exportar é fácil, restaurar tem ordem, e ela é calculada das chaves estrangeiras
+do próprio banco — lista escrita à mão envelheceria na primeira tabela nova, em
+silêncio. Ciclo de dependência não é tratado como erro: sai separado no
+manifesto, porque nenhuma ordem resolve ciclo e quem restaura precisa saber que
+ali se adia a conferência das chaves.
+
+**O que ela NÃO cobre, dito no próprio manifesto:** as contas do Supabase Auth
+(são do provedor, com as credenciais) e os arquivos do Storage — o acervo volta
+com `subir-catalogo`, mas foto de evolução e laudo só existem lá.
+
+**E a primeira execução de verdade achou um defeito que nenhum erro denunciava.**
+O `numeric` do Postgres não chega como texto pelo `$queryRaw`: chega como objeto
+`Decimal`, e o peso de 68,4 kg foi para o arquivo como
+`{"s":1,"e":1,"d":[68,4000000]}` — a forma interna da biblioteca. Um backup assim
+é ilegível exatamente no dado clínico, e só apareceu porque a saída foi LIDA em
+vez de conferida pelo "rodou sem erro". Corrigido, com teste, e agora sai
+`"68.4"`.
+
+**Como se prova:** `packages/banco/exportar/ordem.spec.ts`, 11 casos — a ordem
+(pai antes de filho, auto-referência que não trava, ciclo que sai separado em vez
+de sumir do backup, ordem estável entre execuções) e a serialização (bigint,
+data com fuso, `Decimal`, binário em base64).
+
 ### O projeto passou a ter verificação automática — resolvida em 2026-09-25
 Não havia nenhuma. As suítes rodavam quando alguém lembrava, e a publicação da
 web já era automática a cada push — a pior combinação possível: publica sozinho,

@@ -52,3 +52,7 @@ revisao-clinica.html
 
 # Relatorio gerado por prisma/mapear-wger.ts — conferencia, nao fonte.
 packages/banco/candidatos-wger.txt
+
+# Cópia dos dados feita por `pnpm --filter @vivio/banco exportar`.
+# Tem dado de saúde de aluno dentro: fica na máquina de quem exportou.
+exportacoes/

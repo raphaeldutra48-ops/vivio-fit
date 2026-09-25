@@ -26,6 +26,7 @@ export default defineConfig({
     root: './',
     include: [
       'diagnostico/**/*.spec.ts',
+      'exportar/**/*.spec.ts',
       'ferramentas/**/*.spec.ts',
       'regras/**/*.spec.ts',
       'prisma/**/*.spec.ts',
