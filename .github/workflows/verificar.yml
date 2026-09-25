@@ -59,6 +59,14 @@ jobs:
         # falha por motivo que não é defeito de código.
         run: pnpm --filter "@vivio/web^..." run build
 
+      - name: Gerar os tipos de rota do Next
+        # `next-env.d.ts` referencia `.next/types/routes.d.ts`, que o `next build`
+        # gera e o Git ignora. Na minha máquina o arquivo existia de builds
+        # anteriores, então o typecheck passava; no runner, recém-clonado, ele não
+        # existe — e foi exatamente aqui que a primeira execução deste arquivo
+        # reprovou. `typegen` gera só isso, sem build inteiro.
+        run: pnpm --filter @vivio/web exec next typegen
+
       - name: Tipos
         run: |
           for pacote in @vivio/contracts @vivio/sdk @vivio/ui @vivio/ui-native @vivio/banco @vivio/web @vivio/mobile; do
