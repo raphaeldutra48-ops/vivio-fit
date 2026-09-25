@@ -186,22 +186,34 @@ com mais de N dias. Nunca começar pelo que apaga.
 **Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
 uns 60% sem explicação.
 
-### 25. Seis `useEffect` com dependência faltando
-**Assumida em:** 2026-09-01, pelo ESLint recém-instalado
-**Estado:** seis efeitos omitem `recarregar` (ou equivalente) da lista de
-dependências. Hoje funcionam: as listas foram mantidas à mão e estão corretas.
-**O risco:** é latente, não ativo. Quem editar `recarregar` para usar uma
-variável nova e esquecer de acrescentá-la ao efeito ganha um closure velho —
-tela que não atualiza, sem erro nenhum.
-**Por que não foi corrigido junto:** a correção certa é `useCallback`, e
-nenhum dos seis arquivos tem teste que prove que o comportamento não mudou.
-Mexer às cegas em código que funciona troca um risco latente por um ativo.
-**Onde:** `apps/mobile/app/(tabs)/nutricao.tsx`, `apps/mobile/app/fotos.tsx`,
-`apps/web/app/(pro)/exercicios/page.tsx`, `apps/web/components/MenuLateral.tsx`,
-`apps/web/components/MetasDoAluno.tsx` (dois).
-**Pagar em:** junto com o teste de render de cada uma dessas telas (pendência 14b).
-
 ## Resolvidas
+
+### Os seis efeitos com dependência faltando — resolvida em 2026-09-25
+Era a pendência 25. Seis `useEffect` tinham a lista de dependências escrita à
+mão e **certa por manutenção, não por construção**: funcionavam porque alguém as
+mantinha corretas. O risco era latente — quem editasse a função de recarga para
+ler um estado novo e esquecesse de acrescentá-lo ganharia um closure velho: a
+tela mostrando o resultado anterior, sem erro nenhum.
+
+As funções de recarga viraram `useCallback` com as dependências reais, e o
+efeito passou a depender delas. O `eslint` não acusa mais nenhum caso.
+
+**O caso do menu foi o que ensinou algo.** Lá a dependência correta (`blocos`)
+não podia simplesmente entrar na lista: `menuPara(papel)` devolve array novo a
+cada render, então o efeito rodaria sempre, chamaria `setAbertas` com um objeto
+novo, e o render seguinte repetiria tudo — **laço infinito**. Só depois de
+memorizar com `useMemo` (e de só mexer no estado quando a seção ainda não está
+aberta) a dependência honesta ficou segura.
+
+**Como se prova:** `apps/web/teste/recarga-das-telas.test.tsx`, 5 casos. Eles
+verificam o par: a tela recarrega quando o que ela observa muda (busca digitada,
+troca de aluno, troca de página) e **não recarrega em laço** — o teste do menu
+termina de renderizar, o que é a prova de que não há laço, porque se houvesse ele
+travaria. Era exatamente esse teste que faltava para a pendência poder ser paga,
+e foi o motivo de ela ter ficado aberta.
+
+O aplicativo (nutrição e fotos) recebeu a mesma correção, sem teste próprio: ele
+ainda não tem suíte, o que segue registrado na pendência 14b.
 
 ### A suíte de banco parou de depender de IPv6 — e "no tests" parou de passar por aprovação — resolvida em 2026-09-25
 **O que aconteceu:** no meio da auditoria, a suíte de banco terminou com

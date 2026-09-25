@@ -9,7 +9,7 @@ import {
   type MetaResumo,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { Aviso, Botao, Campo, Cartao } from './ui';
 
@@ -147,7 +147,7 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
   const mensuravel = TIPOS_MENSURAVEIS.includes(tipo);
   const precisaExercicio = tipo === TipoMeta.CARGA_EXERCICIO;
 
-  async function recarregar() {
+  const recarregar = useCallback(async () => {
     try {
       setMetas(await sdk.metas.listar(alunoId));
       setSemAutorizacao(false);
@@ -159,11 +159,11 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
       }
       setErro('Não foi possível carregar as metas.');
     }
-  }
+  }, [alunoId]);
 
   useEffect(() => {
     void recarregar();
-  }, [alunoId]);
+  }, [recarregar]);
 
   // A biblioteca só é buscada quando o formulário abre com meta de carga —
   // são 156 itens e nenhuma outra meta precisa deles.
@@ -173,7 +173,9 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
       .listar({ limit: 100 })
       .then(setExercicios)
       .catch(() => undefined);
-  }, [precisaExercicio]);
+    // `exercicios.length` na lista porque ele decide o `return` acima: sem ele,
+    // a dependência mentia sobre o que o efeito lê.
+  }, [precisaExercicio, exercicios.length]);
 
   async function criar(evento: React.FormEvent) {
     evento.preventDefault();

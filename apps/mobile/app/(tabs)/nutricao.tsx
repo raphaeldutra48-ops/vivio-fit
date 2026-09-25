@@ -6,7 +6,7 @@ import {
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { alvoToqueMin, espacamento, obterAreaTema, raio, tipografia } from '@vivio/ui-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { FalhouAoCarregar } from '../../src/componentes/Estado';
 import { sdk } from '../../src/sdk';
@@ -48,7 +48,7 @@ export default function Nutricao() {
     [dieta, registros],
   );
 
-  async function recarregar() {
+  const recarregar = useCallback(async () => {
     if (!usuario) return;
     setFalhou(false);
     sdk.dietas
@@ -75,11 +75,17 @@ export default function Nutricao() {
         setRegistros(Object.fromEntries(lista.map((r) => [r.refeicaoId, r.status]))),
       )
       .catch(() => undefined);
-  }
+    /*
+      A lista de dependências era `[usuario]` escrita à mão, e estava certa por
+      manutenção, não por construção. Com `useCallback` é o compilador que cobra:
+      quem passar a ler outro estado aqui e esquecer a dependência ganharia uma
+      tela que não atualiza, sem erro para investigar.
+    */
+  }, [usuario]);
 
   useEffect(() => {
     void recarregar();
-  }, [usuario]);
+  }, [recarregar]);
 
   async function beber(volumeMl: number) {
     if (!usuario) return;

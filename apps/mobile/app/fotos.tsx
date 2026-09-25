@@ -6,7 +6,7 @@ import {
 } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
@@ -44,7 +44,7 @@ export default function Fotos() {
   const [angulo, setAngulo] = useState<AnguloFoto>('FRENTE');
   const [erro, setErro] = useState<string | null>(null);
 
-  async function recarregar() {
+  const recarregar = useCallback(async () => {
     if (!usuario) return;
     try {
       setFotos(await sdk.fotos.listar(usuario.id));
@@ -54,11 +54,11 @@ export default function Fotos() {
     } finally {
       setCarregando(false);
     }
-  }
+  }, [usuario]);
 
   useEffect(() => {
     void recarregar();
-  }, [usuario]);
+  }, [recarregar]);
 
   async function escolherEEnviar() {
     if (!usuario) return;

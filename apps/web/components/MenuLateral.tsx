@@ -3,7 +3,7 @@
 import type { Papel } from '@vivio/contracts';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { menuPara, type SecaoRecolhivel } from '../lib/menu';
 import { EscolhaDeTema } from './EscolhaDeTema';
 
@@ -141,7 +141,14 @@ function Secao({
 
 export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: () => void }) {
   const caminho = usePathname();
-  const blocos = menuPara(papel);
+  /*
+    `useMemo` aqui não é otimização: é o que torna a dependência do efeito
+    honesta. `menuPara(papel)` devolve array novo a cada render; incluí-lo na
+    lista sem memorizar faria o efeito rodar sempre, e como ele chama
+    `setAbertas` com um objeto novo, o render seguinte dispararia o efeito de
+    novo — laço infinito. Memorizado por papel, ele muda quando deve mudar.
+  */
+  const blocos = useMemo(() => menuPara(papel), [papel]);
 
   // Abre sozinha a seção que contém a página atual — o usuário nunca chega
   // numa tela sem enxergar onde ela fica na navegação.
@@ -150,8 +157,10 @@ export function MenuLateral({ papel, aoNavegar }: { papel: Papel; aoNavegar?: ()
     const daVez = blocos
       .flatMap((b) => b.secoes)
       .find((s) => s.itens.some((i) => caminho.startsWith(i.href)));
-    if (daVez) setAbertas((a) => ({ ...a, [daVez.rotulo]: true }));
-  }, [caminho]);
+    // Só mexe no estado se a seção ainda não estiver aberta: estado novo a cada
+    // render é o que transformaria a dependência correta em laço.
+    if (daVez) setAbertas((a) => (a[daVez.rotulo] ? a : { ...a, [daVez.rotulo]: true }));
+  }, [caminho, blocos]);
 
   return (
     <nav aria-label="Menu principal" className="flex flex-col gap-lg py-lg">

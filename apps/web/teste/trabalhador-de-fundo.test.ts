@@ -60,7 +60,7 @@ function carregarTrabalhador(fetchFalso: typeof fetch): AmbienteFalso {
     match: (chave: string) => Promise.resolve(guardados.get(chave)),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('self', 'caches', 'fetch', 'Response', 'URL', codigo)(
     self,
     caches,

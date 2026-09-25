@@ -7,7 +7,7 @@ import {
   type ExercicioResumo,
   type GrupoMuscular,
 } from '@vivio/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FichaDeExercicio } from '../../../components/FichaDeExercicio';
 import { FilaDeGravacao } from '../../../components/FilaDeGravacao';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
@@ -196,18 +196,24 @@ export default function Exercicios() {
   const ehExercicioProprio = useRef(false);
   const exercicioAlvo = useRef<string | null>(null);
 
-  async function recarregar() {
+  /*
+    `useCallback` e não função solta: o efeito abaixo depende dela, e a lista de
+    dependências escrita à mão (`[busca]`) só estava certa porque alguém a manteve
+    certa. Quem editasse a recarga para usar outro estado ganharia um closure
+    velho — a tela mostrando resultado de uma busca anterior, sem erro nenhum.
+  */
+  const recarregar = useCallback(async () => {
     try {
       setExercicios(await sdk.exercicios.listar({ q: busca || undefined, limit: 100 }));
       setErro(null);
     } catch {
       setErro('Não foi possível carregar a biblioteca.');
     }
-  }
+  }, [busca]);
 
   useEffect(() => {
     void recarregar();
-  }, [busca]);
+  }, [recarregar]);
 
   async function criar(evento: React.FormEvent) {
     evento.preventDefault();
