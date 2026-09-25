@@ -209,6 +209,25 @@ eles o trabalho avisa o que falta e encerra, em vez de ficar vermelho todo dia
 por configuração ausente, que é o jeito mais rápido de ensinar todo mundo a
 ignorar o aviso.
 
+**As três primeiras execuções reprovaram, e foi o melhor argumento a favor
+dele.** Nenhuma das três era defeito do código publicado; todas eram
+**verificação local passando por motivo errado**:
+
+1. **Tipos da web.** `next-env.d.ts` referencia `.next/types/routes.d.ts`, que o
+   `next build` gera e o Git ignora. Aqui o arquivo existia de builds antigos —
+   o typecheck vinha passando por resto de build. Num clone limpo, falha. Virou
+   passo com `next typegen`.
+2. **Tipos do aplicativo.** O passo compilava só as dependências da web, e o app
+   caiu em "Cannot find module '@vivio/ui-native'". De novo: aqui o `dist` estava
+   no disco.
+3. **Fuso horário.** A prova de `dataLocalDoCheckin` exige que a data local
+   divirja da data em UTC — e essa divergência **só existe num fuso atrás do
+   UTC**. Em UTC a asserção cai. A suíte de contracts passou a rodar em
+   `America/Sao_Paulo`, que é o relógio do aluno; deixar o resultado depender do
+   fuso de quem roda é descobrir a diferença no dia do deploy. O arquivo de
+   configuração novo ainda caiu fora do tsconfig (sem verificação nenhuma), e
+   contracts ganhou o par amplo/build que o `sdk` já tinha.
+
 **O que o CI não faz, e é decisão e não limitação:** não roda as provas de
 política de acesso nem a suíte do SDK. Elas falam com o Supabase do projeto — o
 mesmo que serve o app — e criam e apagam contas. Rodá-las a cada push seria mexer
