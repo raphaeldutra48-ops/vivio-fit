@@ -185,6 +185,33 @@ Mexer às cegas em código que funciona troca um risco latente por um ativo.
 
 ## Resolvidas
 
+### A suíte de banco parou de depender de IPv6 — e "no tests" parou de passar por aprovação — resolvida em 2026-09-25
+**O que aconteceu:** no meio da auditoria, a suíte de banco terminou com
+`Test Files  no tests`. Nada vermelho, nada rodado. A causa: o host direto do
+Supabase (`db.<ref>.supabase.co`) tem **só registro AAAA** — responde apenas em
+IPv6 — e o IPv6 desta rede caiu. O guarda de produção, que roda antes de coletar
+os arquivos, morreu com `Can't reach database server`, que se lê como banco fora
+do ar. O banco estava de pé: o site seguia respondendo, porque fala HTTPS sobre
+IPv4 com o PostgREST, e o agendador de lembretes continuou disparando dentro do
+Postgres.
+
+**O que foi feito:** `packages/banco/conexao.ts` passou a ser o único lugar que
+decide a URL, e prefere o **pooler** (`...pooler.supabase.com`), que tem IPv4 e
+atende em modo sessão — transação e DDL passam como numa conexão comum. Os doze
+pontos que montavam a URL na mão (ferramentas e suítes) usam o helper, e o
+guarda de produção passou a ler `.env.supabase`, onde esse endereço mora; sem
+isso ele continuava indo ao host IPv6 mesmo com o pooler configurado.
+
+**O achado mais importante não foi a rede.** Foi a suíte ter terminado dizendo
+"no tests" e isso ter parecido tudo bem. `passWithNoTests: false` agora está
+explícito no `vitest.config.ts` do pacote: zero teste é falha. Suíte que não roda
+nada não aprova nada — e essa é a diferença entre uma auditoria e uma sensação
+de segurança.
+
+**Como se prova:** 19 arquivos e 171 casos passando pelo pooler, e as três
+ferramentas (`rls:conferir`, `rls:auditar`, exportação de regras) pelo mesmo
+caminho.
+
 ### O Railway saiu do repositório — encerrada em 2026-09-24
 Não resta dependência dele em lugar nenhum: o site é construído e servido pela
 Cloudflare a cada push, o banco e o armazenamento são o Supabase, e a única
