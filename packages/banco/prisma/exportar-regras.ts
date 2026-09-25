@@ -10,6 +10,7 @@ import {
 } from '@vivio/contracts';
 import { REGRAS } from '../regras/regras';
 import { CUIDADO_POR_REGIAO, alertasDaCondicao } from '../regras/regras-condicao';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Leva as regras de alerta do TypeScript para a tabela.
@@ -68,7 +69,7 @@ function limitesDe(marcador: Marcador, lado: 'ABAIXO' | 'ACIMA'): Record<string,
 
 async function principal(): Promise<void> {
   const prisma = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const vistos = new Set<string>();
 

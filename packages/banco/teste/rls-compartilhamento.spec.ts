@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Compartilhamento de dado entre profissionais, conferido no banco.
@@ -23,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 describe('RLS: pedir dado a um colega', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `prova-comp-${Date.now()}`;
   const alunoId = `${marca}-aluno`;

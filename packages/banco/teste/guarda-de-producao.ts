@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { config as carregarEnv } from 'dotenv';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Recusa a suíte inteira se o banco tiver gente de verdade dentro.
@@ -42,9 +43,15 @@ export function ehUsuarioDeVerdade(email: string): boolean {
 
 export async function setup(): Promise<void> {
   carregarEnv();
+  /*
+    `.env.supabase` também, e é o que faltava: o endereço do banco que funciona
+    em rede sem IPv6 (o pooler) mora ali, e não no `.env`. Sem esta linha o
+    guarda ia ao host direto, que só responde em IPv6, e a suíte inteira
+    terminava com "no tests" — nenhuma falha, nenhum teste, nada provado.
+  */
+  carregarEnv({ path: '.env.supabase' });
 
-  const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
-  if (!url) throw new Error('Nem DATABASE_URL nem DATABASE_URL_TEST estão definidas.');
+  const url = process.env.DATABASE_URL_TEST ?? urlDoBanco();
 
   const prisma = new PrismaClient({ datasourceUrl: url });
   try {

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * O que cada papel alcança COLUNA a coluna, pela porta que o app usa.
@@ -26,7 +27,7 @@ const anon = process.env.SUPABASE_ANON_KEY;
 
 describe.skipIf(!url || !anon)('colunas sensíveis pelo PostgREST', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `sonda-col-${Date.now()}`;
   const exameId = `${marca}-e`;

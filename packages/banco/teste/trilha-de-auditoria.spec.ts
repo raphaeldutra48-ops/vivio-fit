@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * A trilha "quem viu meus dados" volta a ser escrita (`43-trilha-de-auditoria.sql`).
@@ -11,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
  */
 describe('Auditoria: a trilha pelo banco', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `prova-trilha-${Date.now()}`;
   const alunoId = `${marca}-aluno`;

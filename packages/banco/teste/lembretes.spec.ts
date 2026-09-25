@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PREVIA_LEMBRETE, type TipoLembrete } from '@vivio/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * O disparo de lembretes, agora dentro do banco (`42-disparo-de-lembretes.sql`).
@@ -37,7 +38,7 @@ const QUARTA = new Date(`2026-07-29T${HORARIO}:00-03:00`);
 
 describe('Lembretes: o disparo pelo banco', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
 
   const disparar = async (agora: Date): Promise<number> => {

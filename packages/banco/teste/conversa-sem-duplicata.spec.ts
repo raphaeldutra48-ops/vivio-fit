@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Abrir a mesma conversa ao mesmo tempo não cria duas (pendência 24).
@@ -11,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 describe('Conversa: aberturas simultâneas', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `prova-conversa-${Date.now()}`;
   const alunoId = `${marca}-aluno`;

@@ -1,4 +1,5 @@
 import { config as carregarEnv } from 'dotenv';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Escolhe o banco que a suíte usa, e recusa os que ela não pode tocar.
@@ -42,8 +43,15 @@ if (teste) {
   // O Prisma só olha DATABASE_URL; a troca acontece aqui.
   process.env.DATABASE_URL = teste;
   process.env.DIRECT_URL = process.env.DIRECT_URL_TEST ?? teste;
-} else if (!process.env.DATABASE_URL) {
-  throw new Error('Nem DATABASE_URL nem DATABASE_URL_TEST estão definidas.');
+} else {
+  /*
+    Sem banco de teste declarado, quem decide é `urlDoBanco()`: ele prefere o
+    pooler, que tem IPv4. O host direto do Supabase responde só em IPv6, e numa
+    rede sem IPv6 a suíte inteira morre no guarda com "can't reach database
+    server" — erro que se lê como banco fora do ar.
+  */
+  process.env.DATABASE_URL = urlDoBanco();
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
 }
 
 const alvo = process.env.DATABASE_URL!;

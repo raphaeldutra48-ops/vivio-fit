@@ -1,11 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Aplica os arquivos de `prisma/rls/` no banco, em ordem.
  *
- *   SUPABASE_DIRECT_URL=... pnpm --filter @vivio/banco exec tsx prisma/aplicar-rls.ts
+ *   pnpm --filter @vivio/banco rls:aplicar
+ *
+ * A URL do banco vem de `conexao.ts`, que prefere o pooler (tem IPv4; o host
+ * direto do Supabase responde só em IPv6).
  *
  * O divisor existe porque o driver não aceita várias instruções numa chamada, e
  * já errou duas vezes por olhar LINHA em vez de ler o texto:
@@ -106,8 +110,7 @@ export function comandos(sql: string): string[] {
 }
 
 async function principal(): Promise<void> {
-  const url = process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL;
-  if (!url) throw new Error('Falta SUPABASE_DIRECT_URL no ambiente.');
+  const url = urlDoBanco();
   const prisma = new PrismaClient({ datasourceUrl: url });
   try {
     const pasta = join(__dirname, 'rls');

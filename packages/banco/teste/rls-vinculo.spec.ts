@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Vínculo de cuidado pelo banco: convidar e responder.
@@ -13,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 describe('RLS: vínculo de cuidado', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `prova-vinc-${Date.now()}`;
   const alunoId = `${marca}-aluno`;

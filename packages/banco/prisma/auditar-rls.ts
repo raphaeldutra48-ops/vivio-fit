@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Auditoria das políticas, contra o banco de verdade.
@@ -21,10 +22,7 @@ import { join } from 'node:path';
  * Sai com código 1 se achar problema: serve para rodar antes de publicar.
  */
 
-const prisma = new PrismaClient({
-  datasourceUrl:
-    process.env.SUPABASE_DIRECT_URL ?? process.env.DIRECT_URL ?? process.env.DATABASE_URL,
-});
+const prisma = new PrismaClient({ datasourceUrl: urlDoBanco() });
 
 const COMANDOS: Record<string, string> = { r: 'SELECT', a: 'INSERT', w: 'UPDATE', d: 'DELETE' };
 const ESCRITAS = ['INSERT', 'UPDATE', 'DELETE'];

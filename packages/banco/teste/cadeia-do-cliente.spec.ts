@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * A cadeia inteira do lado do cliente, sem API nenhuma no meio.
@@ -22,7 +23,7 @@ const anon = process.env.SUPABASE_ANON_KEY;
 
 describe.skipIf(!url || !anon)('a cadeia do cliente, sem API', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   let nutri: SupabaseClient;
   let medico: SupabaseClient;

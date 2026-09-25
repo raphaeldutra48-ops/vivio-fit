@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Confere que toda coluna citada nas políticas existe mesmo.
@@ -14,7 +15,7 @@ import { join } from 'node:path';
  */
 async function principal(): Promise<void> {
   const prisma = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   try {
     const colunas = await prisma.$queryRawUnsafe<{ tabela: string; coluna: string }[]>(

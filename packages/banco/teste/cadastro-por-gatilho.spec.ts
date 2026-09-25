@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it } from 'vitest';
+import { urlDoBanco } from '../conexao';
 
 /**
  * Cadastro sem API: a conta nasce no Supabase Auth e o gatilho faz o resto.
@@ -19,7 +20,7 @@ const chaveServico = process.env.SUPABASE_SERVICE_ROLE;
 
 describe.skipIf(!urlSupabase || !chaveServico)('cadastro por gatilho', () => {
   const p = new PrismaClient({
-    datasourceUrl: process.env.SUPABASE_DIRECT_URL ?? process.env.DATABASE_URL,
+    datasourceUrl: urlDoBanco(),
   });
   const marca = `prova-cad-${Date.now()}`;
   const criados: string[] = [];
