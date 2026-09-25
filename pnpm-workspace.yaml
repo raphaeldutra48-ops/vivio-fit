@@ -23,3 +23,17 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - expo-updates@57.0.13
+
+# Versões forçadas por causa de aviso de segurança em dependência de terceiro.
+#
+# As três chegam por dentro do Next e do Expo, que ainda pedem versões antigas;
+# nenhuma é dependência declarada nossa, então subir o pacote de cima não
+# resolveria. O que cada uma corrige:
+#   postcss  — leitura de arquivo fora do previsto pelo mapa de origem
+#   nanoid   — geração podia entrar em laço com tamanho inválido
+#   sharp    — falhas herdadas do libvips e do libheif (imagem e HEIC)
+# Reavaliar quando Next e Expo subirem: override é dívida, não solução.
+overrides:
+  postcss: ^8.5.23
+  nanoid: ^3.3.18
+  sharp: ^0.35.4
