@@ -188,6 +188,27 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### A auditoria virou um comando — resolvida em 2026-09-25
+Conferir o sistema no ar levava dezenas de comandos à mão: páginas públicas,
+cabeçalhos de segurança, se a função de borda está publicada, se a rotina do
+banco rodou, sobras de execução de teste, chaves de mídia sem arquivo. Cada
+achado das auditorias de 22 e 25/09 apareceu porque alguém lembrou de olhar — e
+conferência que depende de lembrança não acontece na semana em que mais importa.
+
+Agora é `pnpm --filter @vivio/banco diagnostico`: 18 checagens, sai com código 1
+se algo reprovar, não escreve nada em lugar nenhum. As **regras de decisão** ficam
+separadas da coleta (`diagnostico/regras.ts`), com 15 casos de teste — cada regra
+provada pelos dois lados, o estado bom e o estado ruim que ela existe para pegar.
+Todos os estados ruins testados aconteceram de verdade aqui: o site sem nenhum
+cabeçalho, a função respondendo 404 por duas semanas, a rotina registrada e
+parada, a chave apontando para arquivo que não existe.
+
+Um diagnóstico sem teste é pior do que nenhum: basta uma comparação invertida
+para ele aprovar tudo para sempre, com a aparência de conferência.
+
+**Primeira execução real:** nada reprovou, com uma nota — o PDF de teste órfão no
+compartimento `exames`, que a proteção do ambiente me impede de apagar.
+
 ### Os seis efeitos com dependência faltando — resolvida em 2026-09-25
 Era a pendência 25. Seis `useEffect` tinham a lista de dependências escrita à
 mão e **certa por manutenção, não por construção**: funcionavam porque alguém as

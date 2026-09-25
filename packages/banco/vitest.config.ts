@@ -10,6 +10,7 @@ export default defineConfig({
       'teste/**/*.spec.ts',
       'ferramentas/**/*.spec.ts',
       'regras/**/*.spec.ts',
+      'diagnostico/**/*.spec.ts',
       'prisma/**/*.spec.ts',
     ],
     environment: 'node',

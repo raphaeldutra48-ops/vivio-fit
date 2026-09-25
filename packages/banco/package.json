@@ -20,7 +20,8 @@
     "subir-catalogo": "tsx --env-file=.env.supabase ferramentas/subir-catalogo.ts",
     "rls:aplicar": "tsx prisma/aplicar-rls.ts",
     "rls:conferir": "tsx prisma/conferir-rls.ts",
-    "rls:auditar": "tsx prisma/auditar-rls.ts"
+    "rls:auditar": "tsx prisma/auditar-rls.ts",
+    "diagnostico": "tsx diagnostico/rodar.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
