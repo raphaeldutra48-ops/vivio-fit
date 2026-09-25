@@ -1,0 +1,82 @@
+# Verificação a cada push: tipos, lint e as provas que não precisam do banco.
+#
+# Até 25/09/2026 o projeto não tinha verificação automática nenhuma — as suítes
+# rodavam quando alguém lembrava de rodar. A publicação da web já é automática
+# (Cloudflare Workers Builds a cada push), o que é a pior combinação possível:
+# publica sozinho, confere quando dá.
+#
+# O que este arquivo NÃO faz, e por quê: não roda as provas de política de acesso
+# nem a suíte do SDK. Elas falam com o Supabase do projeto — o mesmo que serve o
+# app — e criam e apagam contas. Rodá-las a cada push significaria mexer em dado
+# de produção de dentro de um runner. Quem publica roda `pnpm test` com a
+# credencial em mãos; o CI pega o que dá para pegar sem tocar em nada.
+name: Verificar
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  # Para rodar à mão quando desconfiar de algo.
+  workflow_dispatch:
+
+concurrency:
+  # Push novo cancela a verificação do anterior no mesmo ramo: o resultado do
+  # commit de trás não interessa mais.
+  group: verificar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # O Prisma exige a variável do datasource para GERAR o cliente, mesmo sem
+      # conexão nenhuma. Endereço inválido de propósito: se algum passo tentar
+      # falar com banco de verdade, falha aqui em vez de alcançar produção.
+      DATABASE_URL: postgresql://nao:existe@localhost:5432/nenhum
+      DIRECT_URL: postgresql://nao:existe@localhost:5432/nenhum
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A versão do pnpm é a fixada em `packageManager`; o corepack respeita.
+      - run: corepack enable
+
+      - name: Instalar (lockfile congelado)
+        # `--frozen-lockfile` é o ponto: lockfile desatualizado reprova aqui, e
+        # não no build da Cloudflare, que usa a mesma regra.
+        run: pnpm install --frozen-lockfile
+
+      - name: Gerar o cliente do Prisma
+        run: pnpm --filter @vivio/banco exec prisma generate
+
+      - name: Compilar os pacotes internos
+        # A web e o app importam `dist/` dos pacotes; sem isto o typecheck deles
+        # falha por motivo que não é defeito de código.
+        run: pnpm --filter "@vivio/web^..." run build
+
+      - name: Tipos
+        run: |
+          for pacote in @vivio/contracts @vivio/sdk @vivio/ui @vivio/ui-native @vivio/banco @vivio/web @vivio/mobile; do
+            echo "::group::$pacote"
+            pnpm --filter "$pacote" run typecheck
+            echo "::endgroup::"
+          done
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Provas que não precisam do banco
+        run: |
+          pnpm --filter @vivio/contracts test
+          pnpm --filter @vivio/web test
+          pnpm --filter @vivio/banco run test:sem-banco
+
+      - name: Build da web, como a Cloudflare faz
+        # Pega o que só aparece no empacotamento — foi assim que a falta do
+        # `output: standalone` apareceu, e não em teste nenhum.
+        run: pnpm --filter @vivio/web run build:cloudflare

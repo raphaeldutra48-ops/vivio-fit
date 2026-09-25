@@ -1,0 +1,76 @@
+# O diagnóstico do que está no ar, todo dia.
+#
+# O comando existe (`pnpm --filter @vivio/banco diagnostico`) e confere 18
+# coisas: páginas públicas, cabeçalhos de segurança, se a função de borda está
+# publicada, se a rotina de lembretes rodou, sobras de execução de teste, chaves
+# de mídia sem arquivo. Rodado à mão, ele só encontra problema no dia em que
+# alguém lembra de rodá-lo — e os dois defeitos mais caros desta migração (o
+# disparo de lembretes que morreu com a API e a trilha de auditoria que parou de
+# ser escrita) passaram semanas assim, sem ninguém notar.
+#
+# Aqui ele roda sozinho. Falhando, o GitHub avisa por e-mail — que é o
+# monitoramento mais simples que dá para ter sem contratar serviço nenhum.
+#
+# ## Os segredos que ele precisa
+#
+# Em Settings → Secrets and variables → Actions, no repositório:
+#   SUPABASE_URL          o endereço do projeto (https://<ref>.supabase.co)
+#   SUPABASE_POOLER_URL   a conexão do pooler (tem IPv4; a direta é só IPv6)
+#
+# Sem eles o trabalho não falha: ele avisa o que falta e encerra. Melhor do que
+# vermelho todo dia por configuração ausente, que é o jeito mais rápido de
+# ensinar todo mundo a ignorar o aviso.
+name: Diagnóstico
+
+on:
+  schedule:
+    # 12:00 UTC = 09:00 em Brasília, dia útil ou não.
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  diagnosticar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: corepack enable
+
+      - name: Faltam segredos?
+        id: segredos
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_POOLER_URL" ]; then
+            echo "tem=nao" >> "$GITHUB_OUTPUT"
+            echo "::warning::Sem SUPABASE_URL e SUPABASE_POOLER_URL nos segredos do repositório, o diagnóstico não roda. Veja o comentário no topo deste arquivo."
+          else
+            echo "tem=sim" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Instalar
+        if: steps.segredos.outputs.tem == 'sim'
+        run: pnpm install --frozen-lockfile
+
+      - name: Gerar o cliente do Prisma
+        if: steps.segredos.outputs.tem == 'sim'
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: pnpm --filter @vivio/banco exec prisma generate
+
+      - name: Compilar o que o diagnóstico importa
+        if: steps.segredos.outputs.tem == 'sim'
+        run: pnpm --filter @vivio/contracts run build
+
+      - name: Diagnosticar
+        if: steps.segredos.outputs.tem == 'sim'
+        # Sai com código 1 se algo reprovar, e é isso que torna o trabalho
+        # vermelho. Nota (arquivo órfão, conta real no banco) não reprova.
+        run: pnpm --filter @vivio/banco run diagnostico

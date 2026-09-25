@@ -188,6 +188,35 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### O projeto passou a ter verificação automática — resolvida em 2026-09-25
+Não havia nenhuma. As suítes rodavam quando alguém lembrava, e a publicação da
+web já era automática a cada push — a pior combinação possível: publica sozinho,
+confere quando dá.
+
+**`.github/workflows/verificar.yml`**, a cada push e pull request: instala com
+lockfile congelado (a mesma regra da Cloudflare, então lockfile desatualizado
+reprova aqui e não no deploy), gera o cliente do Prisma, compila os pacotes
+internos, confere tipos dos sete pacotes, roda o lint, roda as provas que não
+precisam de banco (contracts 344, web 318, banco 110) e, por último, faz o build
+do empacotador da Cloudflare — que é onde aparece o que teste não pega, como a
+falta do `output: standalone`.
+
+**`.github/workflows/diagnostico.yml`**, todo dia às 9h de Brasília: roda o
+comando de diagnóstico contra o que está no ar. Falhando, o GitHub avisa por
+e-mail — o monitoramento mais simples que existe sem contratar serviço. Precisa
+de dois segredos no repositório (`SUPABASE_URL` e `SUPABASE_POOLER_URL`); sem
+eles o trabalho avisa o que falta e encerra, em vez de ficar vermelho todo dia
+por configuração ausente, que é o jeito mais rápido de ensinar todo mundo a
+ignorar o aviso.
+
+**O que o CI não faz, e é decisão e não limitação:** não roda as provas de
+política de acesso nem a suíte do SDK. Elas falam com o Supabase do projeto — o
+mesmo que serve o app — e criam e apagam contas. Rodá-las a cada push seria mexer
+em dado de produção de dentro de um runner. Para isso existe
+`vitest.sem-banco.config.ts`, que separa as onze provas de decisão pura das que
+só se provam contra um Postgres de verdade; quem publica continua rodando
+`pnpm test` completo com a credencial em mãos.
+
 ### A auditoria virou um comando — resolvida em 2026-09-25
 Conferir o sistema no ar levava dezenas de comandos à mão: páginas públicas,
 cabeçalhos de segurança, se a função de borda está publicada, se a rotina do
