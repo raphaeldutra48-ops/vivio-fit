@@ -1,0 +1,12 @@
+{
+  // O que vira `dist/`. Só `src`: configuração de teste não entra no pacote que
+  // a web, o aplicativo e o banco consomem.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "vitest.config.ts"]
+}

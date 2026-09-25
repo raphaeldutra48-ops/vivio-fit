@@ -1,10 +1,16 @@
 {
+  // Visão AMPLA: editor, ESLint e `pnpm typecheck` enxergam tudo.
+  //
+  // Este arquivo era o do build (`rootDir: src`, `include: [src]`), e por isso
+  // `vitest.config.ts` ficava fora de qualquer verificação — o lint acusou
+  // "não encontrado pelo serviço do projeto" no dia em que esse arquivo passou
+  // a existir. É o mesmo buraco que `apps/api` teve e que o `@vivio/sdk` já
+  // tinha corrigido: o arquivo padrão cobre tudo, e o build restringe.
   "extends": "@vivio/config/tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
