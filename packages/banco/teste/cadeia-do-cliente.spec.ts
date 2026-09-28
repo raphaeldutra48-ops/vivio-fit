@@ -28,6 +28,7 @@ describe.skipIf(!url || !anon)('a cadeia do cliente, sem API', () => {
   let nutri: SupabaseClient;
   let medico: SupabaseClient;
   let tokenNutri = '';
+  let nutriId = '';
   let ana = '';
   let bruno = '';
 
@@ -47,6 +48,7 @@ describe.skipIf(!url || !anon)('a cadeia do cliente, sem API', () => {
     const n = await entrar('nutri@viviofit.com.br');
     nutri = n.c;
     tokenNutri = n.token;
+    nutriId = (await p.user.findUniqueOrThrow({ where: { email: 'nutri@viviofit.com.br' } })).id;
     medico = (await entrar('medico@viviofit.com.br')).c;
   });
 
@@ -54,13 +56,41 @@ describe.skipIf(!url || !anon)('a cadeia do cliente, sem API', () => {
     await p.$disconnect();
   });
 
-  it('o hook põe o nosso id e o papel no token', async () => {
+  it('o hook põe o nosso id, o papel e o nome no token', async () => {
     // Sem isto nada mais funciona: `auth.uid()` faria `::uuid` num cuid e
     // derrubaria a consulta em vez de devolver falso.
     const c = claims(tokenNutri);
     expect(typeof c.vivio_id).toBe('string');
     expect(c.vivio_id).not.toBe('');
     expect(c.vivio_papel).toBe('NUTRICIONISTA');
+    /*
+      O NOME entrou na claim depois de um defeito achado operando o app: a
+      saudação dizia "Olá," e mais nada. O cliente lia o nome de
+      `user_metadata` do Auth, que nenhuma das contas existentes tem.
+    */
+    expect(c.vivio_nome).toBe('Eduarda Nutricionista');
+  });
+
+  it('o nome no token acompanha a troca de nome no perfil', async () => {
+    /*
+      A parte que o metadata do Auth NÃO fazia, e o motivo de a fonte ser
+      `public."User"`: metadata é cópia, e cópia envelhece. Quem se renomeasse
+      continuaria sendo chamado pelo nome antigo até alguém mexer no Auth à mão.
+
+      A prova precisa de um login NOVO porque a claim é gravada na emissão do
+      token; num app de verdade a troca aparece no próximo token (no máximo uma
+      hora depois, pela renovação).
+    */
+    const original = (await p.user.findUniqueOrThrow({ where: { id: nutriId } })).nome;
+    try {
+      await p.user.update({ where: { id: nutriId }, data: { nome: `Renomeada ${Date.now()}` } });
+      const esperado = (await p.user.findUniqueOrThrow({ where: { id: nutriId } })).nome;
+
+      const nova = await entrar('nutri@viviofit.com.br');
+      expect(claims(nova.token).vivio_nome).toBe(esperado);
+    } finally {
+      await p.user.update({ where: { id: nutriId }, data: { nome: original } });
+    }
   });
 
   it('a política filtra a leitura pelo PostgREST', async () => {

@@ -188,6 +188,57 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria operando as duas interfaces — quatro defeitos, 28/09/2026
+As auditorias anteriores liam código, banco e rede. Esta **usou o produto**: web
+em `localhost:3000` e aplicativo em modo web em `localhost:8081`, entrando com as
+contas da semente, clicando nas telas e escrevendo de verdade. Foi a primeira vez,
+e cada defeito abaixo estava invisível para as 1.160 provas automatizadas.
+
+**1. As regras de acesso não podiam mais ser aplicadas.** `aplicar-rls.ts` morria
+em `relation "public.SessaoRefresh" does not exist`: a migração de 22/09 apagou as
+três tabelas da autenticação antiga e duas linhas que ligavam RLS nelas ficaram
+nos arquivos 05 e 99. O efeito é o pior possível numa ferramenta de regras —
+**aplicação parcial**: tudo depois do arquivo 05 não rodava. O banco em produção
+seguia correto (as regras já estavam nele), e é por isso que nenhum auditor
+acusou: auditor LÊ O BANCO, não reaplica os arquivos. Corrigido, e o
+`rls:conferir` passou a validar também as TABELAS citadas — provado com um
+arquivo temporário citando tabela inexistente (acusa e sai com código 1).
+
+**2. A saudação não tinha nome, em nenhuma das duas interfaces.** "Olá," e mais
+nada. O cliente lia o nome de `user_metadata` do Auth, que as contas criadas por
+`semear-auth` nunca tiveram — e que, pior, é cópia: não acompanharia a troca de
+nome no perfil. Agora o hook do token leva `vivio_nome`, lido de `public."User"`,
+que é a fonte. Provado nas duas pontas, inclusive o caso da renomeação.
+
+**3. O limite de e-mail do Supabase aparecia como falta de internet.** O
+cadastro respondeu `429 over_email_send_rate_limit` (o projeto está no serviço
+embutido, que envia poucos por hora) e a tela disse **"Sem conexão com o
+servidor. Verifique a internet e tente de novo."** A pessoa tem internet; o
+servidor respondeu "espere". O padrão certo já existia na tela de login, com
+comentário e tudo, e não tinha sido aplicado no cadastro — nas duas interfaces.
+Corrigido, com quatro casos de teste que separam limite, rede de verdade e
+servidor com defeito.
+
+**4. A sigla do conselho dobrava.** Quem digita "CREF 012345-G" no campo que pede
+só o número gerava `CREF CREF 012345-G` — o valor que o admin confere contra o
+conselho, e a chave de unicidade por (tipo, registro, UF), onde as duas formas
+conviveriam como profissionais diferentes. Virou regra em
+`@vivio/contracts/conselho.ts`, com o caso do conselho TROCADO deixado à vista de
+propósito (apagar seria decidir pela pessoa qual afirmação estava certa).
+
+**Um dado corrompido, corrigido:** o nome de um plano da semente estava gravado
+com o caractere de substituição (`efbfbd`), e a tela mostrava "Full body � 2x por
+semana". Varri as sete colunas de texto do produto: era o único.
+
+**O que foi exercitado e funciona:** login nas duas interfaces, painel do
+profissional com dados reais, ficha do aluno completa (alertas, gráficos de peso
+e gordura, metas, gasto energético, planos), biblioteca de 217 exercícios, agenda,
+financeiro, materiais, chat com **escrita** (mensagem enviada e persistida), e o
+fluxo ponta a ponta: **plano ativado na web apareceu no aplicativo da aluna**, com
+exercícios, séries e cargas. No aplicativo: início, treino, nutrição (plano real
+com macros), evolução (histórico, recordes), equipe com as autorizações e os
+documentos legais ligados.
+
 ### Passou a existir cópia dos dados fora do Supabase — resolvida em 2026-09-25
 O provedor faz backup diário, e isso cobre a falha do provedor. Não cobre projeto
 apagado por engano, cobrança não paga, conta suspensa, nem migração minha que

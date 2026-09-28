@@ -1,6 +1,6 @@
 'use client';
 
-import { Papel, senhaSchema } from '@vivio/contracts';
+import { Papel, registroComConselho, senhaSchema } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -58,7 +58,13 @@ export default function Cadastrar() {
         email: email.trim().toLowerCase(),
         senha,
         tipo,
-        registroConselho: `${profissao.conselho} ${registroConselho.trim()}`,
+        /*
+          A sigla entra aqui, e `registroComConselho` garante que ela entre UMA
+          vez: quem digita "CREF 012345-G" no campo que pede só o número gerava
+          "CREF CREF 012345-G" — o valor que o admin confere contra o conselho, e
+          a chave de unicidade por (tipo, registro, UF).
+        */
+        registroConselho: registroComConselho(profissao.conselho, registroConselho),
         ufRegistro,
         telefone: telefone.trim() || undefined,
         especialidades: [],
@@ -72,13 +78,29 @@ export default function Cadastrar() {
         // (tipo, registroConselho, ufRegistro). Dizer "tente de novo" seria
         // mandar a pessoa repetir algo que nunca vai funcionar.
         setErro(
-          `Já existe conta com o registro ${profissao.conselho} ${registroConselho.trim()}/${ufRegistro}. ` +
+          `Já existe conta com o registro ${registroComConselho(profissao.conselho, registroConselho)}/${ufRegistro}. ` +
             'Confira o número, ou entre com a conta que já existe.',
         );
       } else if (e instanceof ErroApi && e.codigo === 'DADOS_INVALIDOS') {
         setErro('Confira os dados: algum campo não foi aceito.');
-      } else if (e instanceof ErroApi && e.ehTemporario) {
+      } else if (e instanceof ErroApi && e.codigo === 'LIMITE_EXCEDIDO') {
+        /*
+          O caso real, medido em 28/09: o cadastro bateu no limite de envio de
+          e-mail do Supabase (429 `over_email_send_rate_limit`) e esta tela dizia
+          "Sem conexão com o servidor. Verifique a internet" — a pessoa com
+          internet perfeita mexendo no wi-fi por nada, e tentando de novo num
+          caminho que ia recusar igual.
+
+          O padrão certo já existia na tela de login, com este mesmo comentário:
+          quando o servidor RESPONDEU e o que ele disse foi "espere", a frase é a
+          dele, não uma suposição nossa sobre a rede de quem está do outro lado.
+        */
+        setErro(e.message);
+      } else if (e instanceof ErroApi && e.codigo === 'ERRO_DE_REDE') {
         setErro('Sem conexão com o servidor. Verifique a internet e tente de novo.');
+      } else if (e instanceof ErroApi && e.ehTemporario) {
+        // Servidor respondeu, e respondeu mal (5xx). Não é a internet de ninguém.
+        setErro('O servidor não conseguiu responder agora. Tente de novo em instantes.');
       } else {
         setErro('Não foi possível criar a conta agora. Se continuar, fale com o suporte.');
       }

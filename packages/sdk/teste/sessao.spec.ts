@@ -50,6 +50,27 @@ describe.skipIf(!url || !anon || !servico)('SDK: sessão perdida', () => {
     await admin.auth.admin.deleteUser(usuarioId);
   });
 
+  it('o nome de quem entrou chega ao cliente, para a tela poder saudar', async () => {
+    /*
+      Operando o app em 28/09 a saudação aparecia como "Olá," e mais nada — em
+      todas as contas. O nome era lido de `user_metadata` do Auth, que as contas
+      criadas por `semear-auth` nunca tiveram, e que de todo modo é cópia: não
+      acompanharia a troca de nome no perfil. Hoje vem da claim `vivio_nome`, que
+      o hook do token lê de `public."User"`.
+
+      A conta desta suíte é criada com `user_metadata.nome`, então o teste
+      confere o que a tela precisa: que o nome CHEGA, por qualquer um dos dois
+      caminhos, e não vazio.
+    */
+    const c = cliente(() => undefined);
+    const entrada = await c.auth.login({ email, senha: 'Senha@123' });
+    expect(entrada.usuario.nome).not.toBe('');
+
+    const atual = await c.supabase.usuarioAtual();
+    expect(atual?.nome).toBe(entrada.usuario.nome);
+    await c.auth.logout();
+  });
+
   it('sair porque pediu NÃO conta como sessão perdida', async () => {
     const aviso = vi.fn();
     const c = cliente(aviso);

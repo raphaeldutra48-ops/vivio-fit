@@ -88,8 +88,17 @@ export default function Cadastrar() {
     } catch (e) {
       if (e instanceof ErroApi && e.codigo === 'EMAIL_JA_CADASTRADO') {
         setErro('Este e-mail já tem conta. Tente entrar.');
-      } else if (e instanceof ErroApi && e.ehTemporario) {
+      } else if (e instanceof ErroApi && e.codigo === 'LIMITE_EXCEDIDO') {
+        /*
+          Mesma correção da tela da web, e pelo mesmo motivo: o limite de envio
+          de e-mail do Supabase devolve 429, que `ehTemporario` inclui, e o app
+          mandava a pessoa conferir a internet. A tela de login já fazia certo.
+        */
+        setErro(e.message);
+      } else if (e instanceof ErroApi && e.codigo === 'ERRO_DE_REDE') {
         setErro('Sem conexão. Verifique a internet e tente de novo.');
+      } else if (e instanceof ErroApi && e.ehTemporario) {
+        setErro('O servidor não conseguiu responder agora. Tente de novo em instantes.');
       } else {
         setErro('Não foi possível criar a conta. Tente de novo em instantes.');
       }

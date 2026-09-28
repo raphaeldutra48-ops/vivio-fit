@@ -41,18 +41,13 @@ revoke all on public."_prisma_migrations" from anon, authenticated;
 -- As tabelas de autenticação
 -- --------------------------------------------------------------------------
 /*
-  Token de redefinição de senha, token de verificação de e-mail e sessão de
-  refresh: são segredos de identidade, e nenhuma delas tem — nem deve ter —
-  política. Quem lida com elas é a API, que entra como `postgres`.
-
-  Hoje elas já falham fechadas. O `revoke` é para que continuem falhando
-  fechadas por decisão, e não por ainda ninguém ter escrito a política que as
-  abriria sem querer.
-
+  As três tabelas de credencial da autenticação própria (sessão de refresh e os
+  tokens de e-mail e de senha) foram APAGADAS na migração
+  `20260922163000_limpeza_da_autenticacao_antiga`: quem guarda credencial é o
+  Supabase Auth. Os `revoke` que existiam aqui foram embora com elas — e, como
+  no arquivo 05, eram linhas que derrubavam o aplicador em "relation does not
+  exist".
 */
-revoke all on public."TokenRedefinicaoSenha" from anon, authenticated;
-revoke all on public."TokenVerificacaoEmail" from anon, authenticated;
-revoke all on public."SessaoRefresh" from anon, authenticated;
 
 /*
   `LogAuditoria` é o caso invertido, e por pouco não virou um bug meu: registro

@@ -53,3 +53,4 @@ export * from './importacao-dieta';
 export * from './resumo';
 export * from './rascunho-treino';
 export * from './enderecos';
+export * from './conselho';

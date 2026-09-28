@@ -137,19 +137,18 @@ create policy tokendispositivo_le on public."TokenDispositivo" for select using 
 );
 
 -- --------------------------------------------------------------------------
--- Tabelas de credencial: NINGUÉM lê pela API.
+-- Tabelas de credencial: não existem mais.
 --
--- SessaoRefresh e os tokens de verificação e de redefinição pertencem à
--- autenticação própria, que o Supabase Auth substitui. Enquanto existirem no
--- schema ficam com RLS ligado e SEM política nenhuma — o que em Postgres
--- significa "nada é visível". Somem junto com a API.
+-- `SessaoRefresh` e os tokens de verificação e de redefinição eram da
+-- autenticação própria. Quem guarda credencial hoje é o Supabase Auth, e as três
+-- foram apagadas na migração `20260922163000_limpeza_da_autenticacao_antiga`.
+--
+-- As linhas que ligavam RLS nelas ficaram aqui e QUEBRARAM o aplicador: ele
+-- morria em "relation does not exist" no meio do arquivo 05, deixando as regras
+-- dos arquivos seguintes sem aplicar. O banco em produção seguia correto (as
+-- regras já estavam nele), então nenhuma auditoria acusou — auditor lê o banco,
+-- não reaplica os arquivos. Achado em 28/09 ao reaplicar por outro motivo.
 -- --------------------------------------------------------------------------
-alter table public."SessaoRefresh" enable row level security;
-alter table public."SessaoRefresh" force row level security;
-alter table public."TokenRedefinicaoSenha" enable row level security;
-alter table public."TokenRedefinicaoSenha" force row level security;
-alter table public."TokenVerificacaoEmail" enable row level security;
-alter table public."TokenVerificacaoEmail" force row level security;
 
 -- --------------------------------------------------------------------------
 -- Auditoria: o titular vê os próprios acessos, e mais ninguém.

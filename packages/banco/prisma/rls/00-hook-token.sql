@@ -44,6 +44,18 @@ begin
     claims := jsonb_set(claims, '{vivio_id}', to_jsonb(id_vivio));
     claims := jsonb_set(claims, '{vivio_papel}',
       to_jsonb(coalesce((select papel::text from public."User" where id = id_vivio), '')));
+    /*
+      O NOME também, e o motivo é um defeito achado operando o app em 28/09: a
+      saudação saía "Olá," sem nome nenhum. O cliente lia o nome de
+      `user_metadata` do Auth, que as contas criadas por `semear-auth` nunca
+      tiveram — e que, pior, não acompanha a troca de nome no perfil: quem se
+      renomeasse continuaria sendo chamado pelo nome antigo até alguém mexer no
+      Auth à mão.
+      Aqui a fonte é `public."User"`, que é onde o nome de fato mora, e a claim
+      se renova a cada token — no máximo uma hora depois da troca.
+    */
+    claims := jsonb_set(claims, '{vivio_nome}',
+      to_jsonb(coalesce((select nome from public."User" where id = id_vivio), '')));
   end if;
 
   return jsonb_set(event, '{claims}', claims);

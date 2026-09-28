@@ -493,7 +493,15 @@ export class MotorSupabase {
     return {
       id,
       email: sessao.user.email ?? '',
-      nome: (sessao.user.user_metadata?.nome as string | undefined) ?? '',
+      /*
+        O nome vem da CLAIM, não do `user_metadata`.
+        Operando o app em 28/09 a saudação aparecia como "Olá," vazio: as contas
+        existentes não têm `nome` no metadata do Auth, e mesmo as que têm ficariam
+        desatualizadas depois de a pessoa se renomear no perfil — o metadata é
+        cópia, e cópia envelhece. O hook do token lê `public."User"`, que é a
+        fonte. O metadata fica como reserva para sessão emitida antes disso.
+      */
+      nome: claims.vivio_nome ?? (sessao.user.user_metadata?.nome as string | undefined) ?? '',
       papel: (claims.vivio_papel ?? 'ALUNO') as Papel,
     };
   }
@@ -512,7 +520,7 @@ export class MotorSupabase {
       usuario: {
         id: claims?.vivio_id ?? '',
         email: sessao.user.email ?? '',
-        nome: (sessao.user.user_metadata?.nome as string | undefined) ?? '',
+        nome: claims?.vivio_nome ?? (sessao.user.user_metadata?.nome as string | undefined) ?? '',
         papel: (claims?.vivio_papel ?? 'ALUNO') as Papel,
         emailVerificado: Boolean(sessao.user.email_confirmed_at),
       },
@@ -7346,7 +7354,9 @@ function n(v: unknown): number | null {
  * menu mentir para ela e nada mais — o banco continuaria recusando. Verificar
  * assinatura no cliente exigiria a chave e daria uma falsa sensação de defesa.
  */
-function lerClaims(token: string): { vivio_id?: string; vivio_papel?: string } | null {
+function lerClaims(
+  token: string,
+): { vivio_id?: string; vivio_papel?: string; vivio_nome?: string } | null {
   try {
     const meio = token.split('.')[1];
     if (!meio) return null;
