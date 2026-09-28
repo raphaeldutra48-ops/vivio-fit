@@ -76,55 +76,22 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. As outras telas continuam sem teste de render
-**Assumida em:** dívidas técnicas (o que sobrou da pendência 14)
-**Estado:** jsdom e testing-library estão instalados e o `EditorDeItensPrescritos`
-está coberto, mas as demais telas seguem verificadas só operando o navegador.
-**Como escolher a próxima:** cobrir onde a tela **transforma** o que o usuário
-digita antes de mandar (é onde o bug mora), não onde ela só exibe. Formulário
-que só passa `value` adiante não precisa de teste de render — o typecheck já
-cobre.
-**Já coberto desde então:** a reordenação das duas telas (`Reordenavel.test.tsx`),
-a montagem do corpo do modelo de anamnese (`lib/anamnese.spec.ts`), o editor de
-plano alimentar (`lib/dieta.spec.ts` + `teste/montar-dieta.test.tsx`) e a
-adipometria (`lib/adipometria.spec.ts` + `teste/adipometria.test.tsx`) — as duas
-últimas eram as candidatas anteriores e as duas cobraram o preço previsto. Ver as
-resolvidas de 2026-08-01.
-**A classe de defeito acabou em 2026-08-04.** Não existe mais `|| 0` nem
-`Number(e.target.value)` gravado no estado em nenhuma tela de formulário. As
-seis que transformam entrada antes de enviar — plano alimentar, adipometria,
-bioimpedância, receitas, refeições e montagem de treino — passaram todas para o
-formato `lib/<tela>.ts`, com o estado guardando **texto**.
-
-**A cobertura fechou em 2026-08-05.** As três telas que tinham só teste de
-unidade da regra ganharam teste de render da fiação: `teste/montar-treino.test.tsx`
-(11), `teste/refeicoes-salvas.test.tsx` (10) e `teste/receitas.test.tsx` (9). As
-seis telas que transformam entrada agora têm os dois lados.
-
-O critério de escolha do que testar foi **o que a regra não consegue ver**, e não
-repetir a regra pela porta da frente:
-- **Treino:** três sessões dividindo os mesmos manipuladores. `adicionarExercicio`
-  e `alterarItem` fecham sobre `sessaoAtiva`; errar o índice ali escreve na sessão
-  errada sem quebrar nenhum teste de unidade, porque a regra recebe a sessão já
-  escolhida.
-- **Refeições:** o mesmo formulário serve a criar e a editar, distinguidos por
-  `editando` valer `''` na criação e o id na edição — e o `if (editando)` conta com
-  `''` ser falso. E a volta do servidor lê `porcoes` ou `quantidadeG` conforme o
-  tipo do item; ler o campo errado põe um número plausível no lugar certo.
-- **Receitas:** o `jaEscolhidos` passado à `BuscaDeAlimento`. A lista usa
-  `key={i.alimentoId}`, então o mesmo alimento duas vezes daria chave repetida no
-  React e as gramas passariam a ser escritas na linha errada.
-
-Os três casos acima foram verificados quebrando a fiação de propósito e conferindo
-que o teste acusa — teste que passa de qualquer jeito não é cobertura, é enfeite.
-
-**Uma instância remanescente, benigna:** `financeiro/page.tsx:226` faz
-`setRepetir(Math.max(1, Number(e.target.value)))`. O `Math.max` impede zero e
-`NaN` de chegarem ao servidor, então não há bug de dado — o custo é de uso:
-apagar o campo faz ele saltar para `1` sozinho. Vale arrumar junto da próxima
-mexida no financeiro, não isolado.
-
-O padrão inteiro está em [ADAPTACOES.md](ADAPTACOES.md).
+### 14b. A cobertura de tela é desigual: web coberta, aplicativo em 2 de 24
+**Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-28
+**Estado:** a web tem 322 provas, com render das seis telas que transformam
+entrada. O aplicativo tinha zero e passou a ter **11, em 2 telas** (cadastro e
+autorizações) — as outras 22 seguem sem prova, incluindo treino em execução,
+nutrição do dia, fotos e evolução.
+**Como escolher a próxima:** onde a tela DECIDE algo — o que ela manda, o que ela
+impede, o que ela diz quando recusam. Tela que só exibe o que o SDK devolveu não
+precisa: o typecheck e as provas do SDK já cobrem.
+**As candidatas, por risco:** a execução de treino (guarda série a série em
+`AsyncStorage` e sincroniza depois — é a única com fila offline), o registro de
+refeição e água (escreve sem confirmação), e as fotos (envio de arquivo com
+escolha de quem pode ver).
+**O que a suíte do aplicativo NÃO cobre, por desenho:** gesto, layout nativo,
+permissão de câmera e módulo nativo. Para isso não há substituto a um aparelho —
+e é o que o primeiro build de teste vai servir para conferir.
 
 ### 20. Confirmação automática de pagamento exige gateway
 **Assumida em:** Receba Fácil
@@ -187,6 +154,36 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### O aplicativo passou a ter suíte — começando pelas telas que mais doem — 28/09/2026
+Eram 24 telas e **zero teste**, e a assimetria ficou evidente no mesmo dia: a
+correção do limite de e-mail nasceu com quatro provas na web e nenhuma no
+aplicativo, porque lá não havia onde escrevê-las.
+
+**Onze casos, em duas telas escolhidas por risco:**
+- **cadastro recusado** — limite de envio, rede de verdade, servidor com defeito e
+  e-mail repetido, cada um com a frase certa, mais o caso positivo (a tela troca
+  pelo aviso de confirmar o e-mail). Provei que pegam o defeito **reintroduzindo o
+  mapeamento antigo**: dois falharam, e voltaram a passar com a correção.
+- **autorizações** — conceder é um toque; **retirar pergunta antes e não retira
+  nada sem resposta**; confirmar retira o consentimento certo; cancelar não
+  retira; e o texto que a pessoa lê é o mesmo que fica gravado. É o "específico e
+  informado" da LGPD, e estava sem prova nenhuma.
+
+**O ambiente:** `react-native-web` pelo mesmo caminho do `expo start --web`, que é
+como o aplicativo foi operado na auditoria. O que ele não cobre está dito na
+configuração: gesto, layout nativo, permissão de câmera e módulo nativo não têm
+substituto a um aparelho de verdade.
+
+**Uma armadilha que vale lembrar:** o dublê do `Alert` entrava por
+`react-native/Libraries/Alert/Alert` — o caminho NATIVO — e não interceptava nada.
+O teste da revogação passava reto, sem registrar pergunta alguma, dando a
+impressão de cobrir justamente o que não cobria. Passou a entrar por
+`react-native`, que a suíte aponta para o web.
+
+A suíte entrou no CI, ao lado de contracts, web e banco. Também atualizei o
+lockfile: as dependências novas tinham sido declaradas sem reinstalar, e o
+`--frozen-lockfile` do CI reprovaria — a mesma regra que a Cloudflare usa.
 
 ### Auditoria operando as duas interfaces — quatro defeitos, 28/09/2026
 As auditorias anteriores liam código, banco e rede. Esta **usou o produto**: web
@@ -364,8 +361,9 @@ termina de renderizar, o que é a prova de que não há laço, porque se houvess
 travaria. Era exatamente esse teste que faltava para a pendência poder ser paga,
 e foi o motivo de ela ter ficado aberta.
 
-O aplicativo (nutrição e fotos) recebeu a mesma correção, sem teste próprio: ele
-ainda não tem suíte, o que segue registrado na pendência 14b.
+O aplicativo (nutrição e fotos) recebeu a mesma correção. Na época ele não tinha
+suíte; passou a ter em 28/09 — mas essas duas telas continuam sem prova, porque as
+primeiras onze foram para cadastro e autorizações.
 
 ### A suíte de banco parou de depender de IPv6 — e "no tests" parou de passar por aprovação — resolvida em 2026-09-25
 **O que aconteceu:** no meio da auditoria, a suíte de banco terminou com
