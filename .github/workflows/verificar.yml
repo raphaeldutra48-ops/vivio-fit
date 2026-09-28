@@ -88,6 +88,7 @@ jobs:
         run: |
           pnpm --filter @vivio/contracts test
           pnpm --filter @vivio/web test
+          pnpm --filter @vivio/mobile test
           pnpm --filter @vivio/banco run test:sem-banco
 
       - name: Build da web, como a Cloudflare faz
