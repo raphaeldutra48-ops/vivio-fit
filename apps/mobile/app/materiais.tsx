@@ -57,7 +57,9 @@ export default function Materiais() {
         {carregando && <Text style={{ color: tema.textoSecundario }}>Carregando…</Text>}
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
-        {!carregando && materiais.length === 0 && (
+        {/* O `!erro` importa: sem ele, "Nenhum material" aparecia ao lado da
+            mensagem de falha, e é a frase do cartão que fica. */}
+        {!carregando && !erro && materiais.length === 0 && (
           <View style={cartao}>
             <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
               Nada por aqui ainda

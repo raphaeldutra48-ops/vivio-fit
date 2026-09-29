@@ -1,4 +1,5 @@
 import {
+  FAIXA_TMB_MEDIDA,
   VALIDADE_CALORIMETRIA_MESES,
   numeroDoCampo,
   type CalorimetriaResumo,
@@ -54,14 +55,23 @@ export default function Calorimetria() {
   const [equipamento, setEquipamento] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** true quando a busca falhou — diferente de não haver exame. */
+  const [falhou, setFalhou] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!usuario) return;
     try {
       setExames(await sdk.calorimetrias.listar(usuario.id));
       setErro(null);
+      setFalhou(false);
     } catch {
+      /*
+        "Nenhum exame registrado" aparecia junto da mensagem de falha, e ela diz
+        mais do que sabe: que o app está ESTIMANDO o metabolismo porque não há
+        laudo. Quem tem laudo lia que ele não existe.
+      */
       setErro('Não foi possível carregar seus exames.');
+      setFalhou(true);
       setExames([]);
     }
   }, [usuario]);
@@ -71,13 +81,31 @@ export default function Calorimetria() {
   }, [carregar]);
 
   async function salvar() {
-    const valor = Number(tmb);
-    if (!usuario || !valor) return;
+    if (!usuario) return;
+    // Mesma armadilha do cardio: `Number('1.850')` é NaN, e o toque em salvar
+    // não fazia nada nem dizia nada. Aqui o número vem de um laudo, digitado uma
+    // vez só — perdê-lo em silêncio é pior que recusar com uma frase.
+    /*
+      A faixa importa mais aqui do que em qualquer outro campo do app.
+
+      "1.850" é como o laudo imprime, e QUALQUER conversão numérica lê isso como
+      1,85 — número válido, valor absurdo, e um metabolismo de 1,85 kcal/dia
+      contaminaria o planejamento alimentar inteiro. Barrar pela faixa é o que
+      transforma um erro de digitação silencioso numa frase que diz o que fazer.
+    */
+    const valor = numeroDoCampo(tmb);
+    if (valor === null || valor < FAIXA_TMB_MEDIDA.min || valor > FAIXA_TMB_MEDIDA.max) {
+      setErro(
+        `O gasto em repouso do laudo fica entre ${FAIXA_TMB_MEDIDA.min} e ${FAIXA_TMB_MEDIDA.max} kcal por dia. Digite só os números: 1850, e não 1.850.`,
+      );
+      return;
+    }
+    setErro(null);
     setSalvando(true);
     try {
       await sdk.calorimetrias.registrar(usuario.id, {
         data,
-        tmbMedidaKcal: valor,
+        tmbMedidaKcal: Math.round(valor),
         // Campo opcional: ilegível é ausência, e não `NaN` — ver `numeroDoCampo`.
         pesoNoExameKg: numeroDoCampo(peso) ?? undefined,
         equipamento: equipamento.trim() || undefined,
@@ -251,7 +279,7 @@ export default function Calorimetria() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Salvar exame"
-                disabled={salvando || !Number(tmb)}
+                disabled={salvando || (numeroDoCampo(tmb) ?? 0) <= 0}
                 onPress={() => void salvar()}
                 style={{
                   flex: 2,
@@ -260,18 +288,22 @@ export default function Calorimetria() {
                   backgroundColor: tema.acaoFundo,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: salvando || !Number(tmb) ? 0.5 : 1,
+                  opacity: salvando || (numeroDoCampo(tmb) ?? 0) <= 0 ? 0.5 : 1,
                 }}
               >
                 <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>
-                  {salvando ? 'Salvando…' : Number(tmb) ? 'Salvar' : 'Informe o valor'}
+                  {salvando
+                    ? 'Salvando…'
+                    : (numeroDoCampo(tmb) ?? 0) > 0
+                      ? 'Salvar'
+                      : 'Informe o valor'}
                 </Text>
               </Pressable>
             </View>
           </View>
         )}
 
-        {exames.length === 0 ? (
+        {falhou ? null : exames.length === 0 ? (
           <View style={cartao}>
             <Text style={{ color: tema.textoSecundario }}>
               Nenhum exame registrado. Enquanto isso, o app estima seu metabolismo pela composição

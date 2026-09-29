@@ -115,10 +115,20 @@ export function metDe(tipo: TipoCardio, intensidade: Intensidade): number {
   return MET_POR_ATIVIDADE[tipo][intensidade];
 }
 
+/**
+ * Duração aceita para uma atividade de cardio, em MINUTOS INTEIROS.
+ *
+ * Exportada pela mesma razão da faixa de TMB: a tela recusa antes de mandar, e
+ * com a frase que diz o que fazer. O inteiro também é regra daqui — "42,5
+ * minutos" existe na cabeça de quem digita, não no registro: é arredondado, e
+ * não recusado.
+ */
+export const FAIXA_DURACAO_CARDIO = { min: 1, max: 600 } as const;
+
 export const registrarCardioSchema = z.object({
   tipo: z.nativeEnum(TipoCardio),
   intensidade: z.nativeEnum(Intensidade).default('MODERADA'),
-  duracaoMin: z.number().int().min(1).max(600),
+  duracaoMin: z.number().int().min(FAIXA_DURACAO_CARDIO.min).max(FAIXA_DURACAO_CARDIO.max),
   /** Opcional: nem toda esteira mostra distância, e nem todo mundo olha. */
   distanciaKm: z.number().min(0).max(500).optional(),
   /** Quando foi. O cliente manda porque o fuso dele não é o do servidor. */

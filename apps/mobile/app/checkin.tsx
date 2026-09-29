@@ -128,13 +128,30 @@ export default function Checkin() {
         dia dela vale mesmo sem o peso.
       */
       const emKg = numeroDoCampo(peso) ?? 0;
+      let pesoFalhou = false;
       if (pedirPeso && emKg > 0) {
         await sdk.medidas
           // MANUAL: a pessoa subiu na balança e digitou. A bioimpedância tem
           // fonte própria porque mede coisas que a balança de casa não mede.
           .registrar(usuario.id, { data: new Date(), pesoKg: emKg, fonte: 'MANUAL' })
-          .catch(() => setErro('Check-in salvo, mas o peso não. Registre em Evolução.'));
+          .catch(() => {
+            pesoFalhou = true;
+            setErro('Check-in salvo. O peso não foi — toque em salvar de novo para tentar.');
+          });
       }
+
+      /*
+        Sair da tela aqui apagaria o aviso antes de alguém ler.
+
+        O `router.back()` vinha depois do `catch` do peso, incondicional: a
+        mensagem "check-in salvo, mas o peso não" era escrita e a tela fechava
+        no mesmo instante. A pessoa saía achando que registrou os dois, e o
+        gráfico de evolução ficava sem o ponto daquela semana sem nenhum aviso.
+        Ficar na tela também é o que permite tentar de novo — registrar o
+        check-in duas vezes no mesmo dia SUBSTITUI o anterior, então repetir não
+        duplica nada.
+      */
+      if (pesoFalhou) return;
 
       router.back();
     } catch {

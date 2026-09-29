@@ -1,4 +1,4 @@
-import { SexoBiologico, type MeuPerfil } from '@vivio/contracts';
+import { FAIXA_ALTURA_CM, SexoBiologico, numeroDoCampo, type MeuPerfil } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useState } from 'react';
 import {
@@ -53,6 +53,23 @@ export default function Perfil() {
 
   async function salvar() {
     if (!perfil) return;
+    /*
+      A altura é conferida ANTES de sair da tela.
+
+      Era `altura.trim() ? Number(altura) : null`: "1,75" — o que se digita
+      pensando em metros — virava `NaN`, que o `JSON.stringify` manda como
+      `null`. E `null` aqui significa LIMPAR: a pessoa tentava corrigir a altura
+      e apagava a que já estava gravada, sem nada dizendo isso. Campo vazio
+      continua limpando, porque quem preencheu por engano precisa conseguir
+      apagar — isso é intencional e diferente.
+    */
+    const cm = altura.trim() ? numeroDoCampo(altura) : null;
+    if (altura.trim() && (cm === null || cm < FAIXA_ALTURA_CM.min || cm > FAIXA_ALTURA_CM.max)) {
+      setErro(
+        `Altura em centímetros, de ${FAIXA_ALTURA_CM.min} a ${FAIXA_ALTURA_CM.max} — 175, e não 1,75.`,
+      );
+      return;
+    }
     setSalvando(true);
     setErro(null);
     try {
@@ -62,7 +79,7 @@ export default function Perfil() {
         especialidades: [],
         // `null` limpa de propósito: quem preencheu por engano precisa
         // conseguir apagar, e string vazia viraria zero na conta.
-        alturaCm: altura.trim() ? Number(altura) : null,
+        alturaCm: cm === null ? null : Math.round(cm),
         sexoBiologico: sexo,
       });
       setPerfil(atualizado);

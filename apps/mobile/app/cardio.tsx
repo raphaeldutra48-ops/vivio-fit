@@ -1,4 +1,5 @@
 import {
+  FAIXA_DURACAO_CARDIO,
   Intensidade,
   NOME_DA_FORMULA,
   ROTULO_INTENSIDADE,
@@ -62,6 +63,8 @@ export default function Cardio() {
   const [lista, setLista] = useState<CardioResumo[] | null>(null);
   const [resumo, setResumo] = useState<ResumoDeCalorias | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /** true quando a busca falhou — diferente de não haver atividade. */
+  const [falhou, setFalhou] = useState(false);
 
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<TipoCardio>('CAMINHADA');
@@ -81,8 +84,19 @@ export default function Cardio() {
       setLista(atividades);
       setResumo(calorias);
       setErro(null);
+      setFalhou(false);
     } catch {
+      /*
+        `falhou`, e não uma lista vazia.
+
+        O `setLista([])` daqui fazia a tela mostrar "Nenhuma atividade ainda"
+        embaixo da mensagem de erro — e é a frase do cartão que fica, porque é a
+        que parece resposta. Quem tem trinta caminhadas registradas lia que não
+        tem nenhuma. A lista continua vazia para a tela poder ser desenhada, mas
+        quem decide o que dizer é o `falhou`.
+      */
       setErro('Não foi possível carregar suas atividades.');
+      setFalhou(true);
       setLista([]);
     }
   }, [usuario]);
@@ -92,14 +106,31 @@ export default function Cardio() {
   }, [carregar]);
 
   async function salvar() {
-    const minutos = Number(duracao);
-    if (!usuario || !minutos) return;
+    if (!usuario) return;
+    /*
+      `numeroDoCampo`, e não `Number(...)`.
+
+      Com `Number`, "1,5" e "30 min" davam `NaN`, o `if (!minutos)` devolvia em
+      silêncio e o toque em salvar NÃO FAZIA NADA — sem mensagem, com o campo
+      preenchido na frente da pessoa. O botão, que usava a mesma conta, ainda
+      dizia "Informe os minutos" enquanto os minutos estavam escritos ali.
+    */
+    const minutos = numeroDoCampo(duracao);
+    if (minutos === null || minutos < FAIXA_DURACAO_CARDIO.min || minutos > FAIXA_DURACAO_CARDIO.max) {
+      setErro(
+        `Diga a duração em minutos, de ${FAIXA_DURACAO_CARDIO.min} a ${FAIXA_DURACAO_CARDIO.max} — só números, como 30.`,
+      );
+      return;
+    }
+    setErro(null);
     setSalvando(true);
     try {
       await sdk.cardio.registrar(usuario.id, {
         tipo,
         intensidade,
-        duracaoMin: minutos,
+        // Inteiro, porque é o que o registro guarda: "42,5 minutos" existe na
+        // cabeça de quem digita, e arredondar é melhor do que recusar.
+        duracaoMin: Math.round(minutos),
         /*
           Vírgula é o separador que o brasileiro digita, e texto ilegível vira
           ausência — nunca `NaN`, que viaja como `null` e derruba o registro
@@ -501,7 +532,14 @@ export default function Cardio() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Salvar atividade"
-                disabled={salvando || !Number(duracao)}
+                /*
+                  `numeroDoCampo`, e não `!Number(...)`: com "42,5" o `Number`
+                  dava NaN e o botão ficava DESABILITADO, com o campo preenchido
+                  na frente da pessoa e o rótulo pedindo os minutos que já
+                  estavam escritos. Era o defeito mais frustrante da tela, porque
+                  não havia nada para corrigir — só um botão morto.
+                */
+                disabled={salvando || (numeroDoCampo(duracao) ?? 0) <= 0}
                 onPress={() => void salvar()}
                 style={{
                   flex: 2,
@@ -514,14 +552,18 @@ export default function Cardio() {
                 }}
               >
                 <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>
-                  {salvando ? 'Salvando…' : Number(duracao) ? 'Salvar' : 'Informe os minutos'}
+                  {salvando
+                    ? 'Salvando…'
+                    : (numeroDoCampo(duracao) ?? 0) > 0
+                      ? 'Salvar'
+                      : 'Informe os minutos'}
                 </Text>
               </Pressable>
             </View>
           </Cartao>
         )}
 
-        {lista.length === 0 ? (
+        {falhou ? null : lista.length === 0 ? (
           <Cartao>
             <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>
               Nenhuma atividade ainda

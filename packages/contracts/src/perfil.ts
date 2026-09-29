@@ -2,6 +2,16 @@ import { z } from 'zod';
 import { SexoBiologico } from './avaliacao';
 import type { Papel } from './enums';
 
+/**
+ * Altura aceita, em CENTÍMETROS.
+ *
+ * Exportada para a tela recusar antes de mandar: "1,75" é o que alguém digita
+ * pensando em metros, e sem a faixa isso chegava ao servidor como valor inválido
+ * — ou, pior, como `NaN`, que o JSON manda como `null` e APAGA a altura já
+ * gravada. A frase do erro precisa dizer a unidade, que é onde está o mal-entendido.
+ */
+export const FAIXA_ALTURA_CM = { min: 80, max: 260 } as const;
+
 export const atualizarPerfilSchema = z.object({
   nome: z.string().min(2).max(120),
   telefone: z.string().min(8).max(20).optional(),
@@ -23,7 +33,7 @@ export const atualizarPerfilSchema = z.object({
     bioimpedância nem precisa dele, porque a Katch-McArdle usa a massa magra
     medida e dispensa o atalho.
   */
-  alturaCm: z.number().int().min(80).max(260).nullish(),
+  alturaCm: z.number().int().min(FAIXA_ALTURA_CM.min).max(FAIXA_ALTURA_CM.max).nullish(),
   sexoBiologico: z.nativeEnum(SexoBiologico).nullish(),
 });
 export type AtualizarPerfilInput = z.infer<typeof atualizarPerfilSchema>;

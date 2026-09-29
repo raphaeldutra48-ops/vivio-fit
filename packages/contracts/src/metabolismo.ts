@@ -283,6 +283,16 @@ export function idadeEmAnos(nascimento: Date | null, agora: Date = new Date()): 
 
 // --- Registro do exame ------------------------------------------------------
 
+/**
+ * Faixa aceita para o gasto em repouso MEDIDO em laudo.
+ *
+ * Exportada porque a tela precisa recusar antes de mandar: "1.850", que é como
+ * o laudo imprime, é lido como 1,85 por qualquer conversão numérica — número
+ * válido, valor absurdo. Sem a faixa aqui, quem barrava era o servidor, com uma
+ * frase genérica sobre "confira os valores" que não diz o que conferir.
+ */
+export const FAIXA_TMB_MEDIDA = { min: 800, max: 4500 } as const;
+
 export const registrarCalorimetriaSchema = z.object({
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
   /**
@@ -290,7 +300,7 @@ export const registrarCalorimetriaSchema = z.object({
    * cobre atleta grande. Fora disso é quase certo erro de digitação — e um
    * zero a mais aqui contaminaria todo o planejamento alimentar.
    */
-  tmbMedidaKcal: z.number().int().min(800).max(4500),
+  tmbMedidaKcal: z.number().int().min(FAIXA_TMB_MEDIDA.min).max(FAIXA_TMB_MEDIDA.max),
   /** Peso do dia do exame — é a régua que diz quando o resultado envelheceu. */
   pesoNoExameKg: z.number().min(20).max(400).optional(),
   equipamento: z.string().max(120).optional(),

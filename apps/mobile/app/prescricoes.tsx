@@ -7,6 +7,7 @@ import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -14,15 +15,33 @@ export default function Prescricoes() {
   const { usuario, tema } = useSessao();
   const [prescricoes, setPrescricoes] = useState<PrescricaoResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
+  /*
+    Falha ao buscar NÃO pode virar "nenhuma prescrição".
+
+    Era o caso mais perigoso desta família de defeito no app inteiro: o `catch`
+    engolia o erro em silêncio, a lista ficava vazia e a tela dizia "Nenhuma
+    prescrição — quando seu nutricionista ou médico prescrever algo, aparece
+    aqui". Dito a quem está sem sinal, isso afirma que NÃO EXISTE prescrição de
+    medicamento — e a decisão que a pessoa toma em cima dessa frase é parar de
+    tomar, ou cobrar do profissional uma receita que ele já passou.
+  */
+  const [falhou, setFalhou] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     if (!usuario) return;
+    let ativo = true;
+    setCarregando(true);
+    setFalhou(false);
     sdk.prescricoes
       .listar(usuario.id)
-      .then(setPrescricoes)
-      .catch(() => undefined)
-      .finally(() => setCarregando(false));
-  }, [usuario]);
+      .then((lista) => ativo && setPrescricoes(lista))
+      .catch(() => ativo && setFalhou(true))
+      .finally(() => ativo && setCarregando(false));
+    return () => {
+      ativo = false;
+    };
+  }, [usuario, tentativa]);
 
   // Substituída e encerrada existem para consulta, não para seguir hoje.
   const valendo = prescricoes.filter((p) => p.status === 'ATIVA' || p.status === 'SUSPENSA');
@@ -103,7 +122,14 @@ export default function Prescricoes() {
       >
         {carregando && <Text style={{ color: tema.textoSecundario }}>Carregando…</Text>}
 
-        {!carregando && prescricoes.length === 0 && (
+        {!carregando && falhou && (
+          <FalhouAoCarregar
+            mensagem="Não deu para buscar suas prescrições agora. Elas continuam salvas — assim que a rede voltar, aparecem aqui. Não mude nada por conta própria enquanto isso."
+            aoTentarDeNovo={() => setTentativa((t) => t + 1)}
+          />
+        )}
+
+        {!carregando && !falhou && prescricoes.length === 0 && (
           <View style={cartao}>
             <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
               Nenhuma prescrição

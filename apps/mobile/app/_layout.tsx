@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { BarreiraDeErro } from '../src/componentes/BarreiraDeErro';
 import { SessaoProvider, useSessao } from '../src/sessao';
 import { SincronizacaoProvider } from '../src/sincronizacao';
 
@@ -41,7 +42,14 @@ export default function LayoutRaiz() {
     <SafeAreaProvider>
       <SessaoProvider>
         <SincronizacaoProvider>
-          <Navegacao />
+          {/*
+            Dentro do provedor de sessão, para a tela de falha ter tema; e em
+            volta da navegação inteira, porque é ela que precisa remontar quando
+            a pessoa toca em "tentar de novo".
+          */}
+          <BarreiraDeErro>
+            <Navegacao />
+          </BarreiraDeErro>
         </SincronizacaoProvider>
       </SessaoProvider>
     </SafeAreaProvider>

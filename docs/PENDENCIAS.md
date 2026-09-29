@@ -76,13 +76,42 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. A cobertura de tela do aplicativo: 13 áreas, incluindo as de exibição
+### 14b. RESOLVIDA — as 24 telas do aplicativo têm prova
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
-**Estado:** a web tem 322 provas, com render das seis telas que transformam
-entrada. O aplicativo tinha zero e passou a ter **113, em 13 áreas**: cadastro,
-autorizações, fila offline de treinos, rascunho do treino em andamento, nutrição
-do dia, fotos de evolução, execução do treino, medidas digitadas, tela inicial,
-aba de treino, aba de evolução, recordes e composição, e conversas.
+**Estado:** encerrada em 29/09. O aplicativo tinha ZERO prova e passou a ter
+**194**, cobrindo todas as 24 telas mais a barreira de erro: cadastro, login,
+autorizações, tela inicial, aba de treino, aba de evolução, agenda, execução do
+treino, fila offline, rascunho do treino, nutrição do dia, fotos, check-in,
+medidas, composição, recordes, metas, lembretes, conversas, prescrições,
+materiais, cardio, calorimetria e meus dados. A web segue com 322.
+**O que a varredura final encontrou** (24 telas, uma por uma):
+- **Prescrições** dizia "Nenhuma prescrição — quando seu nutricionista ou médico
+  prescrever algo, aparece aqui" quando a busca falhava, por um
+  `catch(() => undefined)`. Era o pior desta família no app inteiro: a frase
+  afirma que NÃO EXISTE receita, e a decisão tomada em cima dela é parar de tomar
+  o medicamento. Mesmo padrão corrigido em materiais, cardio e calorimetria.
+- **Cardio**: o botão de salvar ficava DESABILITADO com "42,5" no campo
+  (`!Number(duracao)` → NaN), pedindo os minutos que já estavam escritos. Nada a
+  corrigir na tela, só um botão morto.
+- **Calorimetria**: "1.850", como o laudo imprime, era lido como 1,85 — número
+  válido, valor absurdo, e um metabolismo de 1,85 kcal/dia contaminaria o
+  planejamento alimentar. Agora a faixa do laudo (800–4500) é conferida na tela.
+- **Meus dados**: "1,75" na altura virava `NaN` → `null` no JSON → e `null` ali
+  significa LIMPAR. Quem mexia na altura saía sem nenhuma, e a taxa metabólica
+  passava a ser calculada sem ela.
+- **Login**: profissional era recusado na mensagem mas a sessão FICAVA gravada;
+  na abertura seguinte ele entrava nas abas como aluno de si mesmo.
+- **Agenda**: "Não vou" cancelava consulta sem perguntar, encostado no botão de
+  confirmar — a única ação irreversível do app sem confirmação.
+- **Check-in**: o aviso "o peso não foi salvo" era escrito e a tela fechava no
+  mesmo instante, então ninguém o lia.
+- **Metas**: tipo de meta desconhecido escrevia "alvo 75 undefined" na tela.
+- **Barreira de erro**: não existia. Um campo ausente numa resposta derrubava a
+  árvore e deixava a tela BRANCA, sem texto nem saída — aconteceu duas vezes
+  durante a escrita das provas. Agora há tela de falha com "tentar de novo", e as
+  faixas de validação (`FAIXA_ALTURA_CM`, `FAIXA_TMB_MEDIDA`,
+  `FAIXA_DURACAO_CARDIO`) saíram dos schemas para constantes exportadas, para a
+  tela recusar antes de mandar com a frase que diz o que fazer.
 **O que as telas de EXIBIÇÃO encontraram** (elas não escrevem nada, e mesmo
 assim): a tela inicial sugeria a mesma sessão para sempre depois do quinto
 treino — a conta era `sessoes[execucoes.length % n]` e a lista de execuções vem

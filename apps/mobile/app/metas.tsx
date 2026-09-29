@@ -180,7 +180,13 @@ export default function Metas() {
   };
 
   const CartaoDaMeta = ({ meta }: { meta: MetaResumo }) => {
-    const unidade = UNIDADE_TIPO_META[meta.tipo];
+    /*
+      `?? ''` porque o mapa pode não conhecer o tipo: uma meta de tipo novo,
+      criada por uma versão mais recente do painel, escreveria "alvo 75
+      undefined" na tela do aluno. Sem unidade é ruim; com "undefined" é o app
+      parecendo quebrado.
+    */
+    const unidade = UNIDADE_TIPO_META[meta.tipo] ?? '';
     return (
       <View
         style={{
@@ -195,7 +201,7 @@ export default function Metas() {
         <View>
           <Text style={{ color: tema.textoPrimario, fontWeight: '700' }}>{meta.titulo}</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
-            {ROTULO_TIPO_META[meta.tipo]}
+            {ROTULO_TIPO_META[meta.tipo] ?? meta.tipo}
             {meta.exercicioNome ? ` · ${meta.exercicioNome}` : ''}
             {meta.alvo !== null ? ` · alvo ${numero(meta.alvo)} ${unidade}` : ''}
           </Text>

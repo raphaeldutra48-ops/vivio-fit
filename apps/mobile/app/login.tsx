@@ -8,7 +8,7 @@ import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
 export default function Login() {
-  const { entrar, tema } = useSessao();
+  const { entrar, sair, tema } = useSessao();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -25,6 +25,15 @@ export default function Login() {
     try {
       const usuario = await entrar(email.trim(), senha);
       if (usuario.papel !== 'ALUNO') {
+        /*
+          Recusar na tela não bastava: `entrar` já gravou a sessão no aparelho,
+          e a barreira das abas só olha se HÁ usuário. O profissional lia "este
+          aplicativo é do aluno", fechava o app e, na abertura seguinte, entrava
+          direto nas abas — como aluno de si mesmo, com todas as telas falhando
+          porque o banco (com razão) não devolve nada. Encerrar a sessão é o que
+          faz a recusa valer.
+        */
+        await sair();
         setErro('Este aplicativo é do aluno. Profissionais usam o painel na web.');
         return;
       }

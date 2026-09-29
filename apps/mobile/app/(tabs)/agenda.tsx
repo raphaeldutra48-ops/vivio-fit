@@ -6,7 +6,7 @@ import {
 } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -55,6 +55,30 @@ export default function Agenda() {
     }
   }
 
+  /*
+    Cancelar PERGUNTA antes; confirmar presença, não.
+
+    Os dois botões ficam lado a lado, e o dedo erra — mas o custo é muito
+    diferente: confirmar por engano se desfaz com outro toque, enquanto avisar
+    que não vai libera o horário, e o profissional pode entregá-lo a outra
+    pessoa antes de alguém perceber. É a mesma regra que vale para retirar
+    autorização e apagar foto: fricção onde a volta é cara.
+  */
+  function confirmarCancelamento(c: CompromissoResumo) {
+    Alert.alert(
+      'Avisar que não vai?',
+      `${ROTULO_TIPO_COMPROMISSO[c.tipo]} com ${c.profissional.nome}. O horário fica livre para outra pessoa.`,
+      [
+        { text: 'Manter o horário', style: 'cancel' },
+        {
+          text: 'Não vou',
+          style: 'destructive',
+          onPress: () => void responder(c.id, 'CANCELADO'),
+        },
+      ],
+    );
+  }
+
   const corDoStatus = (s: StatusCompromisso) =>
     s === 'CONFIRMADO' || s === 'REALIZADO' ? tema.sucesso : tema.textoSecundario;
 
@@ -66,7 +90,13 @@ export default function Agenda() {
       {carregando && <ActivityIndicator color={tema.primariaFundo} />}
       {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
-      {!carregando && compromissos.length === 0 && (
+      {/*
+        Sem o `!erro`, a falha de rede aparecia ACOMPANHADA de "Nenhum
+        atendimento marcado" — e a segunda frase é a que fica, porque é a que
+        está dentro de um cartão. Quem tem consulta marcada para amanhã lia que
+        não tem.
+      */}
+      {!carregando && !erro && compromissos.length === 0 && (
         <View
           style={{
             backgroundColor: tema.superficie,
@@ -166,7 +196,7 @@ export default function Agenda() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Cancelar este atendimento"
-                    onPress={() => void responder(c.id, 'CANCELADO')}
+                    onPress={() => confirmarCancelamento(c)}
                     style={{
                       minHeight: alvoToqueMin,
                       paddingHorizontal: espacamento.lg,
