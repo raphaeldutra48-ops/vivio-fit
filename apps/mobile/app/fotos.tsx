@@ -4,6 +4,7 @@ import {
   TipoMidia,
   type FotoEvolucaoResumo,
 } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
@@ -43,6 +44,8 @@ export default function Fotos() {
   const [enviando, setEnviando] = useState(false);
   const [angulo, setAngulo] = useState<AnguloFoto>('FRENTE');
   const [erro, setErro] = useState<string | null>(null);
+  /** Id da foto cuja visibilidade está sendo gravada — um pedido por vez. */
+  const [salvandoQuemVe, setSalvandoQuemVe] = useState<string | null>(null);
 
   const recarregar = useCallback(async () => {
     if (!usuario) return;
@@ -105,8 +108,24 @@ export default function Fotos() {
       });
 
       await recarregar();
-    } catch {
-      setErro('Não foi possível enviar a foto. Tente de novo.');
+    } catch (e: unknown) {
+      /*
+        Três recusas diferentes, três frases.
+
+        O SDK confere formato e tamanho antes de subir e devolve a frase exata
+        ("Formato de arquivo não aceito: image/gif."). Engolir isso num "tente
+        de novo" fazia a pessoa reenviar o MESMO arquivo, que seria recusado de
+        novo, sem nada na tela dizendo que o problema é o arquivo. Falta de sinal
+        é o oposto: o arquivo está bom, e mandar "tente de novo" sem dizer que é
+        a rede faz a pessoa procurar defeito na foto.
+      */
+      if (e instanceof ErroApi && e.codigo === 'ERRO_DE_REDE') {
+        setErro('Sem internet agora. A foto continua no seu aparelho — tente com sinal.');
+      } else if (e instanceof ErroApi && e.codigo === 'DADOS_INVALIDOS') {
+        setErro(e.message);
+      } else {
+        setErro('Não foi possível enviar a foto. Tente de novo.');
+      }
     } finally {
       setEnviando(false);
     }
@@ -114,6 +133,22 @@ export default function Fotos() {
 
   async function alternarVisibilidade(foto: FotoEvolucaoResumo, papel: string) {
     if (!usuario) return;
+    /*
+      Um pedido por vez, e a trava mora AQUI — não no `disabled` do botão.
+
+      A chamada manda a lista inteira de quem vê, montada a partir do que a tela
+      tem na mão. Enquanto o primeiro pedido não volta (e a lista não recarrega),
+      a tela continua com a lista ANTIGA: liberar a nutri logo depois do personal
+      mandava `['NUTRICIONISTA']` e apagava a liberação do personal que a pessoa
+      acabara de fazer — em silêncio, porque a tela então recarregava e mostrava
+      o resultado errado como se fosse o pedido.
+
+      Não se mostra o estado antes de o servidor confirmar, de propósito: aqui a
+      mentira otimista seria dizer "só você vê" sobre uma foto que o profissional
+      ainda vê.
+    */
+    if (salvandoQuemVe) return;
+    setSalvandoQuemVe(foto.id);
     const novos = foto.visivelPara.includes(papel)
       ? foto.visivelPara.filter((p) => p !== papel)
       : [...foto.visivelPara, papel];
@@ -122,6 +157,8 @@ export default function Fotos() {
       await recarregar();
     } catch {
       setErro('Não foi possível alterar quem vê esta foto.');
+    } finally {
+      setSalvandoQuemVe(null);
     }
   }
 
@@ -250,6 +287,7 @@ export default function Fotos() {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: liberado }}
                     accessibilityLabel={`Mostrar esta foto para ${p.rotulo}`}
+                    disabled={salvandoQuemVe !== null}
                     onPress={() => void alternarVisibilidade(foto, p.papel)}
                     style={{
                       flex: 1,
@@ -260,6 +298,7 @@ export default function Fotos() {
                       backgroundColor: liberado ? tema.primariaFundo : 'transparent',
                       borderWidth: 1,
                       borderColor: liberado ? tema.primariaFundo : tema.borda,
+                      opacity: salvandoQuemVe !== null ? 0.6 : 1,
                     }}
                   >
                     <Text

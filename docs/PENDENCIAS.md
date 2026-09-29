@@ -76,22 +76,27 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. A cobertura de tela é desigual: web coberta, aplicativo em 5 de 24
+### 14b. A cobertura de tela é desigual: web coberta, aplicativo em 6 de 24
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
 **Estado:** a web tem 322 provas, com render das seis telas que transformam
-entrada. O aplicativo tinha zero e passou a ter **31, em 5 áreas**: cadastro,
-autorizações, fila offline de treinos, rascunho do treino em andamento e
-nutrição do dia. Seguem sem prova as fotos (envio de arquivo com escolha de quem
-pode ver) e a tela de execução do treino em si — o resto é exibição do que o SDK
-devolveu.
+entrada. O aplicativo tinha zero e passou a ter **45, em 6 áreas**: cadastro,
+autorizações, fila offline de treinos, rascunho do treino em andamento, nutrição
+do dia e fotos de evolução. Falta a tela de execução do treino — as duas peças
+que a sustentam (fila e rascunho) já têm prova própria, o que falta é a tela. O
+resto das 24 é exibição do que o SDK devolveu.
 **Como escolher a próxima:** onde a tela DECIDE algo — o que ela manda, o que ela
 impede, o que ela diz quando recusam. Tela que só exibe o que o SDK devolveu não
 precisa: o typecheck e as provas do SDK já cobrem.
-**As candidatas que restam, por risco:** as fotos (envio de arquivo, e a escolha
-de quem pode ver é a decisão mais difícil de desfazer no aplicativo) e a tela de
-execução do treino — a fila e o rascunho que a sustentam já têm prova própria, o
-que falta é a tela.
-**O que as três últimas encontraram:** cada leva pagou o próprio custo. A
+**A candidata que resta:** a tela de execução do treino.
+**O que as fotos encontraram:** dois defeitos, ambos silenciosos. O envio
+recusado por FORMATO devolve do SDK a frase exata ("Formato de arquivo não
+aceito: image/gif."), e a tela trocava por "Não foi possível enviar a foto. Tente
+de novo." — que faz a pessoa reenviar o mesmo arquivo para sempre; e falta de
+sinal dizia a mesma coisa, mandando procurar defeito numa foto que está boa. Pior:
+liberar dois profissionais em sequência APAGAVA a primeira liberação, porque cada
+toque manda a lista inteira de quem vê montada a partir do que a tela tinha na
+mão, e ela ainda não havia recarregado. Agora é um pedido por vez.
+**O que as três anteriores encontraram:** cada leva pagou o próprio custo. A
 nutrição do dia estava contando refeição DESMARCADA como registrada (guardava a
 chave vazia em vez de esquecê-la), de modo que quem tocasse por engano e
 desfizesse saía da cobrança sem nunca ter respondido. Antes dela, o dublê de
