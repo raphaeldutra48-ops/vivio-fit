@@ -32,7 +32,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['teste/**/*.test.tsx', 'teste/**/*.spec.ts'],
+    /*
+      As três terminações, e isto já custou: o primeiro `*.test.ts` (sem o `x`)
+      ficou de fora do padrão e a suíte rodou 17 provas como se fossem todas,
+      sem acusar nada. Arquivo de teste que não roda é pior que arquivo que
+      falha — ele conta como cobertura e não cobre.
+    */
+    include: ['teste/**/*.test.ts', 'teste/**/*.test.tsx', 'teste/**/*.spec.ts'],
     setupFiles: ['./teste/preparo.ts'],
     /*
       Sem isto o histórico de chamadas de um `vi.fn()` sobra para o teste

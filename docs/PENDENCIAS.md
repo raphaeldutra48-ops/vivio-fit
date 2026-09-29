@@ -155,6 +155,42 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### A fila de treinos e o rascunho ganharam prova — e duas suítes estavam invisíveis — 29/09/2026
+Continuação da cobertura do aplicativo, pelas duas peças onde mora o risco de
+"treinou e o sistema não viu". Academia é o pior lugar de rede que existe:
+subsolo, paredão, wi-fi de visitante. Nada disso aparece na tela quando dá
+errado — é o silêncio que torna a prova necessária.
+
+**Fila de saída (6 casos), com o armazenamento de verdade** (o módulo real sobre
+um AsyncStorage em memória, porque um dublê da fila provaria só o dublê): com
+rede envia e entrega os recordes da sessão; sem rede o treino **fica gravado** com
+a tentativa e o erro anotados; a rede volta e a tentativa seguinte envia; fechar e
+reabrir o app não perde nada; erro definitivo sai da fila em vez de travá-la para
+sempre; e o mesmo treino registrado duas vezes não vira dois.
+
+Provei que pegam o defeito **simulando a perda**: troquei a anotação de falha por
+remoção da fila — o erro clássico de "limpar a fila quando falha" — e **quatro dos
+seis** ficaram vermelhos.
+
+**Rascunho do treino em andamento (6 casos):** o que foi registrado volta ao
+reabrir a mesma sessão; rascunho de outra sessão ou velho demais é **apagado** ao
+ser lido, não só ignorado; gravação truncada não derruba a tela; cada aluno tem o
+seu; descartar limpa de verdade.
+
+**Duas coisas piores que um teste vermelho apareceram no caminho:**
+
+1. **Um arquivo de teste que não rodava.** O padrão de inclusão da suíte do
+   aplicativo pegava `*.test.tsx` e `*.spec.ts`; o primeiro `*.test.ts` (sem o
+   `x`) ficou fora e a suíte rodou 17 provas **como se fossem todas**, sem acusar
+   nada. Arquivo de teste que não roda conta como cobertura e não cobre.
+2. **`packages/ui` tinha 64 provas que ninguém rodava** — nem o CI, nem as minhas
+   auditorias. São contraste de acessibilidade (42) e a matemática dos gráficos
+   (22), justamente o tipo de regra que ninguém revisa a olho. Passam todas, e
+   agora rodam no CI.
+
+A varredura que achou as duas foi comparar **arquivos de teste no disco** com
+**arquivos que cada suíte executa**, pacote por pacote. Virou parte da auditoria.
+
 ### O aplicativo passou a ter suíte — começando pelas telas que mais doem — 28/09/2026
 Eram 24 telas e **zero teste**, e a assimetria ficou evidente no mesmo dia: a
 correção do limite de e-mail nasceu com quatro provas na web e nenhuma no

@@ -87,6 +87,7 @@ jobs:
       - name: Provas que não precisam do banco
         run: |
           pnpm --filter @vivio/contracts test
+          pnpm --filter @vivio/ui test
           pnpm --filter @vivio/web test
           pnpm --filter @vivio/mobile test
           pnpm --filter @vivio/banco run test:sem-banco
