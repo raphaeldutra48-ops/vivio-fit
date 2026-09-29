@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSondagem } from '../src/sondagem';
 import { useSessao } from '../src/sessao';
@@ -51,6 +52,7 @@ export default function Chat() {
   const lista = useRef<FlatList<MensagemResumo>>(null);
 
   const carregarConversas = useCallback(async () => {
+    setErro(null);
     try {
       const encontradas = await sdk.chat.listarConversas();
       setConversas(encontradas);
@@ -76,14 +78,24 @@ export default function Chat() {
     }
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      const encontradas = await carregarConversas();
-      // Com uma conversa só, abrir a lista para a pessoa escolher entre uma
-      // opção é passo perdido: entra direto.
-      if (encontradas.length === 1) await abrir(encontradas[0]!);
-    })();
+  /*
+    Buscar e, se for o caso, entrar.
+
+    Está num gancho próprio porque o "tentar de novo" precisa fazer o MESMO que
+    a abertura da tela. Quando era só o efeito, quem recuperava a conexão caía
+    numa lista de um item — a tela de escolha entre uma opção que o comentário
+    abaixo existe para evitar.
+  */
+  const carregarEEntrar = useCallback(async () => {
+    const encontradas = await carregarConversas();
+    // Com uma conversa só, abrir a lista para a pessoa escolher entre uma
+    // opção é passo perdido: entra direto.
+    if (encontradas.length === 1) await abrir(encontradas[0]!);
   }, [carregarConversas, abrir]);
+
+  useEffect(() => {
+    void carregarEEntrar();
+  }, [carregarEEntrar]);
 
   /*
     Sondagem leve enquanto o WebSocket não está ligado nesta tela.
@@ -128,6 +140,29 @@ export default function Chat() {
     return (
       <View style={{ flex: 1, backgroundColor: tema.fundo, justifyContent: 'center' }}>
         <ActivityIndicator color={tema.acaoFundo} />
+      </View>
+    );
+  }
+
+  /*
+    Falha ao buscar NÃO é "ninguém falou com você".
+
+    As duas caíam na mesma tela: quem estivesse sem sinal lia "Nenhuma conversa
+    ainda — quando seu personal enviar uma mensagem, ela aparece aqui", com três
+    conversas gravadas no servidor. Aqui o estrago é maior que na lista de
+    treinos: é o canal por onde vem resposta de médico, e a leitura natural é
+    que ninguém respondeu.
+  */
+  if (erro && conversas.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: tema.fundo, padding: espacamento.lg }}>
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar suas conversas agora. Elas continuam salvas — assim que a rede voltar, aparecem aqui."
+          aoTentarDeNovo={() => {
+            setCarregando(true);
+            void carregarEEntrar();
+          }}
+        />
       </View>
     );
   }

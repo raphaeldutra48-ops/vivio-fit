@@ -76,12 +76,20 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. A cobertura de tela do aplicativo: 7 áreas, e as que decidem estão cobertas
+### 14b. A cobertura de tela do aplicativo: 13 áreas, incluindo as de exibição
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
 **Estado:** a web tem 322 provas, com render das seis telas que transformam
-entrada. O aplicativo tinha zero e passou a ter **66, em 8 áreas**: cadastro,
+entrada. O aplicativo tinha zero e passou a ter **113, em 13 áreas**: cadastro,
 autorizações, fila offline de treinos, rascunho do treino em andamento, nutrição
-do dia, fotos de evolução, execução do treino e medidas digitadas. Com essa última, toda tela
+do dia, fotos de evolução, execução do treino, medidas digitadas, tela inicial,
+aba de treino, aba de evolução, recordes e composição, e conversas.
+**O que as telas de EXIBIÇÃO encontraram** (elas não escrevem nada, e mesmo
+assim): a tela inicial sugeria a mesma sessão para sempre depois do quinto
+treino — a conta era `sessoes[execucoes.length % n]` e a lista de execuções vem
+limitada a cinco, então `5 % 2` congelava em 1 e o plano A/B virava só B. O chat
+mostrava "Nenhuma conversa ainda" a quem estava sem sinal, no canal por onde vem
+resposta de médico. E a composição corporal era a única tela do app escrevendo
+ponto decimal ("77.5 kg") em vez de vírgula. Com essa última, toda tela
 do aplicativo que DECIDE algo tem prova; o que segue sem ela é exibição do que o
 SDK devolveu, coberta pelo typecheck e pelas 291 provas do SDK.
 **Como escolher a próxima:** onde a tela DECIDE algo — o que ela manda, o que ela

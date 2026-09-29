@@ -21,6 +21,16 @@ const COR_DA_METRICA: Partial<Record<MetricaCorporal, (t: ReturnType<typeof useS
 
 const DESTAQUES: MetricaCorporal[] = ['PESO', 'GORDURA_PERCENTUAL', 'MASSA_MAGRA', 'MASSA_GORDA'];
 
+/**
+ * Número como se escreve em português: 77,5 e não 77.5.
+ *
+ * Esta era a única tela do app que mostrava o ponto decimal cru — os recordes,
+ * o volume de treino e o dinheiro todos passam por `toLocaleString`. Além de
+ * desalinhar com o resto, "77.5" ao lado de "1.200" faz o ponto significar duas
+ * coisas na mesma tela: decimal aqui, milhar ali.
+ */
+const num = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+
 export default function Composicao() {
   const { usuario, tema } = useSessao();
   const router = useRouter();
@@ -50,8 +60,8 @@ export default function Composicao() {
     return (
       <Text style={{ color: cor, fontSize: tipografia.tamanho.sm, fontWeight: '700' }}>
         {sinal}
-        {serie.variacao} {serie.unidade}
-        {serie.variacaoPercentual !== null && ` (${sinal}${serie.variacaoPercentual}%)`}
+        {num(serie.variacao)} {serie.unidade}
+        {serie.variacaoPercentual !== null && ` (${sinal}${num(serie.variacaoPercentual)}%)`}
       </Text>
     );
   }
@@ -129,7 +139,7 @@ export default function Composicao() {
                   fontVariant: ['tabular-nums'],
                 }}
               >
-                {serie.ultimo ?? '—'}
+                {serie.ultimo === null ? '—' : num(serie.ultimo)}
                 <Text style={{ fontSize: tipografia.tamanho.sm, color: tema.textoSecundario }}>
                   {' '}
                   {serie.unidade}
@@ -192,7 +202,7 @@ export default function Composicao() {
               <Text style={{ color: tema.textoPrimario }}>{serie.rotulo}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento.sm }}>
                 <Text style={{ color: tema.textoPrimario, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
-                  {serie.ultimo} {serie.unidade}
+                  {serie.ultimo === null ? '—' : num(serie.ultimo)} {serie.unidade}
                 </Text>
                 <Variacao serie={serie} />
               </View>

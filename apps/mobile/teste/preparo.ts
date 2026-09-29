@@ -59,6 +59,31 @@ vi.mock('expo-video', () => ({
 vi.mock('react-native-webview', () => ({ WebView: () => null }));
 
 /*
+  O desenho do gráfico.
+
+  `react-native-svg` chega ao Vitest como fonte TypeScript — `node_modules` não
+  passa pelo transformador, e o arquivo estoura no primeiro tipo que aparece.
+  Dublar é também o que faz sentido: geometria de SVG não se prova em jsdom, e o
+  que importa nas telas de evolução é a LEITURA do gráfico — o rótulo acessível
+  com "de X para Y" e os pontos tocáveis, que são desenhados FORA do `<Svg>` e
+  continuam de pé aqui.
+*/
+const nada = () => null;
+vi.mock('react-native-svg', () => ({
+  default: nada,
+  Svg: nada,
+  Circle: nada,
+  Defs: nada,
+  G: nada,
+  Line: nada,
+  LinearGradient: nada,
+  Path: nada,
+  Rect: nada,
+  Stop: nada,
+  Text: nada,
+}));
+
+/*
   O `Alert` do React Native não existe no navegador, e é por ele que o app pede
   confirmação de coisa irreversível. Espiá-lo permite provar que a pergunta foi
   feita — e, em teste, responder por ela sem travar.

@@ -104,7 +104,26 @@ export default function Inicio() {
   */
   useFocusEffect(buscarAoVoltar);
 
-  const proxima = plano?.sessoes[execucoes.length % Math.max(1, plano.sessoes.length)];
+  /*
+    A próxima sessão é a SEGUINTE À ÚLTIMA TREINADA, e não a de número
+    "quantidade de treinos".
+
+    Era `sessoes[execucoes.length % sessoes.length]`, e a lista de execuções vem
+    com limite de 5. Passados cinco treinos, `execucoes.length` congela em 5 e a
+    conta congela junto: num plano A/B, `5 % 2` é sempre 1, e o app passava a
+    sugerir o treino B para sempre. A pessoa que confia no cartão da tela
+    inicial — que é quem ele existe para servir — treinava B indefinidamente.
+
+    A lista vem da mais recente para a mais antiga, então a última treinada é a
+    primeira. Sessão que não está mais no plano (o personal trocou o plano no
+    meio da semana) recomeça do início, em vez de sumir com o cartão.
+  */
+  const proxima = (() => {
+    if (!plano || plano.sessoes.length === 0) return undefined;
+    const ultima = execucoes[0];
+    const indice = ultima ? plano.sessoes.findIndex((s) => s.id === ultima.sessaoId) : -1;
+    return plano.sessoes[indice === -1 ? 0 : (indice + 1) % plano.sessoes.length];
+  })();
 
   return (
     <ScrollView
