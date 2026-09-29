@@ -86,6 +86,22 @@ export function responderAlerta(texto: string): void {
   interceptava nada: o teste da revogação passava reto sem registrar pergunta
   nenhuma. O resto do módulo é preservado, senão a tela perde `View` e `Text`.
 */
+/*
+  Ir para segundo plano é um EVENTO de teste aqui.
+
+  É nesse instante que o Android encerra o processo do app, e é por ele que a
+  tela de treino grava o que está em andamento. O `AppState` do
+  `react-native-web` escuta `visibilitychange` do navegador, que o jsdom não
+  dispara de verdade — então os ouvintes ficam aqui, e o teste os chama.
+*/
+type OuvinteDeEstado = (estado: string) => void;
+const ouvintesDeEstado = new Set<OuvinteDeEstado>();
+
+/** Manda o app para segundo plano (ou o traz de volta), como o sistema faria. */
+export function mudarEstadoDoApp(estado: 'active' | 'background' | 'inactive'): void {
+  for (const ouvinte of [...ouvintesDeEstado]) ouvinte(estado);
+}
+
 vi.mock('react-native', async () => {
   const real = await import('react-native-web');
   return {
@@ -94,6 +110,13 @@ vi.mock('react-native', async () => {
     Alert: {
       alert: (titulo: string, mensagem?: string, botoes: BotaoDeAlerta[] = []) => {
         alertas.push({ titulo, mensagem, botoes });
+      },
+    },
+    AppState: {
+      currentState: 'active',
+      addEventListener: (_evento: string, ouvinte: OuvinteDeEstado) => {
+        ouvintesDeEstado.add(ouvinte);
+        return { remove: () => ouvintesDeEstado.delete(ouvinte) };
       },
     },
   };

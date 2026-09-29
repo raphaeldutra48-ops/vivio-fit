@@ -6,6 +6,7 @@ import {
   SIGLA_TIPO_SERIE,
   TipoSerie,
   formatarSerieAnterior,
+  numeroDoCampo,
   type AnterioresDaSessao,
   type ExercicioResumo,
   type Intensidade,
@@ -376,11 +377,24 @@ export default function Execucao() {
     setEnviando(true);
     setErro(null);
     try {
+      /*
+        `numeroDoCampo`, e não `Number(texto || 0)`.
+
+        O teclado decimal daqui oferece VÍRGULA, e `Number('22,5')` é `NaN` —
+        que o `JSON.stringify` grava como `null` e o schema recusa. O treino
+        inteiro falhava ao salvar, no fim da série, dizendo só "não foi possível
+        salvar o treino no aparelho". Todas as outras telas do app já faziam a
+        troca por vírgula; esta, a mais usada, era a única que não fazia.
+
+        O `?? 0` fica: aqui o campo em branco é série concluída sem número
+        digitado, e zero é o que ela vale — diferente dos formulários de
+        avaliação, onde vazio precisa continuar vazio.
+      */
       const payload: SerieExecutadaInput[] = feitas.map((s) => ({
         itemTreinoId: s.itemTreinoId,
         serieNum: s.serieNum,
-        repsFeitas: Number(s.repsFeitas || 0),
-        cargaKg: Number(s.cargaKg || 0),
+        repsFeitas: numeroDoCampo(s.repsFeitas) ?? 0,
+        cargaKg: numeroDoCampo(s.cargaKg) ?? 0,
         tipo: s.tipo,
       }));
 
@@ -424,7 +438,7 @@ export default function Execucao() {
         de que precisa lançar pela tela de Cardio, em vez de o registro sumir
         em silêncio.
       */
-      const minutosDeCardio = Number(cardioMin);
+      const minutosDeCardio = numeroDoCampo(cardioMin) ?? 0;
       if (fezCardio && minutosDeCardio > 0 && usuario) {
         if (resumo) {
           try {

@@ -54,3 +54,4 @@ export * from './resumo';
 export * from './rascunho-treino';
 export * from './enderecos';
 export * from './conselho';
+export * from './numeros';

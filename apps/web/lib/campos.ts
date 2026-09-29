@@ -8,22 +8,20 @@
  * genérica, depois de o formulário inteiro estar preenchido.
  *
  * Campo numérico em formulário é sempre texto no estado — precisa ser, senão
- * apagar para redigitar vira zero a cada tecla — e a conversão mora aqui.
+ * apagar para redigitar vira zero a cada tecla — e a conversão mora em
+ * `@vivio/contracts`, de onde os dois aplicativos a leem.
  */
 
-/**
- * Texto → número, ou `null` quando não dá para ler.
- *
- * Aceita vírgula: é como se escreve decimal em português. Devolver `null` em
- * vez de `0` é o ponto — quem chama precisa distinguir "o campo está vazio" de
- * "a pessoa digitou zero".
- */
-export function numeroDoCampo(texto: string | undefined): number | null {
-  const limpo = (texto ?? '').trim().replace(/,/g, '.');
-  if (limpo === '') return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
-}
+/*
+  A conversão em si mudou de casa: virou `numeroDoCampo` em `@vivio/contracts`,
+  porque o APLICATIVO precisava da mesma regra e não podia importar de `apps/web`
+  — e foi justamente por isso que a tela de execução de treino ficou sem ela,
+  convertendo "22,5" em NaN. Reexportada aqui para os chamadores da web não
+  mudarem de import.
+*/
+import { numeroDoCampo } from '@vivio/contracts';
+
+export { numeroDoCampo };
 
 export interface Faixa {
   min: number;

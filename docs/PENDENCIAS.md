@@ -76,18 +76,27 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. A cobertura de tela é desigual: web coberta, aplicativo em 6 de 24
+### 14b. A cobertura de tela do aplicativo: 7 áreas, e as que decidem estão cobertas
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
 **Estado:** a web tem 322 provas, com render das seis telas que transformam
-entrada. O aplicativo tinha zero e passou a ter **45, em 6 áreas**: cadastro,
+entrada. O aplicativo tinha zero e passou a ter **61, em 7 áreas**: cadastro,
 autorizações, fila offline de treinos, rascunho do treino em andamento, nutrição
-do dia e fotos de evolução. Falta a tela de execução do treino — as duas peças
-que a sustentam (fila e rascunho) já têm prova própria, o que falta é a tela. O
-resto das 24 é exibição do que o SDK devolveu.
+do dia, fotos de evolução e **execução do treino**. Com essa última, toda tela
+do aplicativo que DECIDE algo tem prova; o que segue sem ela é exibição do que o
+SDK devolveu, coberta pelo typecheck e pelas 291 provas do SDK.
 **Como escolher a próxima:** onde a tela DECIDE algo — o que ela manda, o que ela
 impede, o que ela diz quando recusam. Tela que só exibe o que o SDK devolveu não
 precisa: o typecheck e as provas do SDK já cobrem.
-**A candidata que resta:** a tela de execução do treino.
+**O que a execução do treino encontrou:** o defeito mais caro achado até aqui.
+A conversão dos números digitados era `Number(texto || 0)` crua, e o teclado
+decimal brasileiro oferece VÍRGULA: uma carga de "22,5" virava `NaN`, que o
+`JSON.stringify` grava como `null` e o schema recusa. O treino inteiro falhava ao
+salvar, no fim de uma hora de academia, dizendo só "não foi possível salvar o
+treino no aparelho". Todas as outras telas do aplicativo já trocavam a vírgula
+por conta própria — esta, a mais usada de todas, era a única que não trocava,
+porque a regra morava em `apps/web/lib/campos.ts` e o aplicativo não podia
+importar de lá. Agora ela é `numeroDoCampo` em `@vivio/contracts`, com prova
+própria, e a web a reexporta.
 **O que as fotos encontraram:** dois defeitos, ambos silenciosos. O envio
 recusado por FORMATO devolve do SDK a frase exata ("Formato de arquivo não
 aceito: image/gif."), e a tela trocava por "Não foi possível enviar a foto. Tente
