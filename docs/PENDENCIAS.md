@@ -79,7 +79,7 @@ apontando para ele. O caminho já existe no arranjo das suítes.
 ### 14b. RESOLVIDA — as 24 telas do aplicativo têm prova
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
 **Estado:** encerrada em 29/09. O aplicativo tinha ZERO prova e passou a ter
-**194**, cobrindo todas as 24 telas mais a barreira de erro: cadastro, login,
+**196**, cobrindo todas as 24 telas mais a barreira de erro: cadastro, login,
 autorizações, tela inicial, aba de treino, aba de evolução, agenda, execução do
 treino, fila offline, rascunho do treino, nutrição do dia, fotos, check-in,
 medidas, composição, recordes, metas, lembretes, conversas, prescrições,
@@ -106,6 +106,13 @@ materiais, cardio, calorimetria e meus dados. A web segue com 322.
 - **Check-in**: o aviso "o peso não foi salvo" era escrito e a tela fechava no
   mesmo instante, então ninguém o lia.
 - **Metas**: tipo de meta desconhecido escrevia "alvo 75 undefined" na tela.
+- **Varredura final dos `catch` mudos:** sobravam dois que afirmavam coisas
+  falsas. A tela inicial dizia "Nenhum treino registrado ainda" quando a busca do
+  histórico falhava, e a nutrição concluía "0 de 4 refeições registradas hoje"
+  quando não conseguia saber o que já havia sido registrado — cobrando a pessoa
+  pelo que ela fez. Os outros `catch(() => undefined)` do app foram conferidos um
+  a um e são deliberados: reenvio de verificação (a API não diz se a conta
+  existe), logout, sondagem do chat, e as buscas cujo padrão já é o seguro.
 - **Barreira de erro**: não existia. Um campo ausente numa resposta derrubava a
   árvore e deixava a tela BRANCA, sem texto nem saída — aconteceu duas vezes
   durante a escrita das provas. Agora há tela de falha com "tentar de novo", e as

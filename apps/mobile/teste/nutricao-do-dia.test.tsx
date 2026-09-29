@@ -206,6 +206,20 @@ describe('nutrição do dia', () => {
     await waitFor(() => expect(textoDaTela()).toMatch(/1 de 2 refeições registradas hoje/i));
   });
 
+  it('sem saber o que foi registrado hoje, a cobrança se CALA', async () => {
+    /*
+      A falha em `registrosDoDia` deixava o mapa vazio, e a cobrança concluía
+      "0 de 2 refeições registradas hoje" para quem já havia registrado as duas.
+      Cobrar alguém pelo que ele fez é o jeito mais rápido de ensinar a ignorar o
+      aviso — e o aviso é a razão desta aba existir.
+    */
+    registrosDoDia.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Cutting 1.800 kcal')).toBeInTheDocument());
+
+    expect(textoDaTela()).not.toMatch(/refeições registradas hoje/i);
+  });
+
   it('desmarcar devolve a refeição à cobrança', async () => {
     /*
       O outro lado do toque que desmarca, e onde estava o defeito: a tela

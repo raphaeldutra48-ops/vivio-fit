@@ -16,6 +16,8 @@ export default function Inicio() {
   const hoje = dataLocalDoCheckin();
   const [plano, setPlano] = useState<PlanoTreinoCompleto | null>(null);
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
+  /** true quando a lista de treinos não pôde ser buscada — ver o vazio abaixo. */
+  const [falhouOHistorico, setFalhouOHistorico] = useState(false);
   const [semPlano, setSemPlano] = useState(false);
   /** Falha de rede — dizer "seu personal não montou" aqui seria acusá-lo à toa. */
   const [falhouOPlano, setFalhouOPlano] = useState(false);
@@ -44,10 +46,21 @@ export default function Inicio() {
         if (e instanceof ErroApi && e.status === 404) setSemPlano(true);
         else setFalhouOPlano(true);
       });
+    /*
+      O histórico tem o mesmo cuidado do plano: falhar não é "nunca treinou".
+
+      O `.catch(() => undefined)` deixava a lista vazia, e o vazio dizia "Nenhum
+      treino registrado ainda" — para quem tem cinquenta treinos gravados. É a
+      mesma frase que a aba de evolução já tinha aprendido a não dizer.
+    */
+    setFalhouOHistorico(false);
     sdk.execucoes
       .listar(usuario.id, 5)
-      .then(setExecucoes)
-      .catch(() => undefined);
+      .then((lista) => {
+        setExecucoes(lista);
+        setFalhouOHistorico(false);
+      })
+      .catch(() => setFalhouOHistorico(true));
   }, [usuario, tentativa]);
 
   const buscarAoVoltar = useCallback(() => {
@@ -374,7 +387,11 @@ export default function Inicio() {
         <Text style={{ fontSize: tipografia.tamanho.lg, fontWeight: '600', color: tema.textoPrimario }}>
           Últimos treinos
         </Text>
-        {execucoes.length === 0 ? (
+        {falhouOHistorico ? (
+          <Text style={{ color: tema.textoSecundario }}>
+            Não deu para buscar seus últimos treinos. Eles continuam salvos.
+          </Text>
+        ) : execucoes.length === 0 ? (
           <Text style={{ color: tema.textoSecundario }}>Nenhum treino registrado ainda.</Text>
         ) : (
           execucoes.map((e) => (

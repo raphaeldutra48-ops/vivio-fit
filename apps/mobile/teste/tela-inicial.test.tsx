@@ -300,4 +300,17 @@ describe('tela inicial: o que ela cobra', () => {
 
     await waitFor(() => expect(textoDaTela()).toMatch(/nenhum treino registrado ainda/i));
   });
+
+  it('falha ao buscar o histórico NÃO vira "nenhum treino registrado"', async () => {
+    /*
+      A mesma regra do plano, na lista de baixo: o `.catch` engolia o erro e o
+      vazio afirmava que a pessoa nunca treinou. A aba de evolução já tinha
+      aprendido a não dizer isso; a tela inicial, não.
+    */
+    listarExecucoes.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
+    await abrirTela();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar seus últimos treinos/i));
+    expect(textoDaTela()).not.toMatch(/nenhum treino registrado ainda/i);
+  });
 });

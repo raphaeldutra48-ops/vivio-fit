@@ -24,6 +24,8 @@ export default function Nutricao() {
   const [dieta, setDieta] = useState<PlanoDietaCompleto | null>(null);
   const [agua, setAgua] = useState<ResumoDeAgua | null>(null);
   const [registros, setRegistros] = useState<Record<string, string>>({});
+  /** true quando não se sabe o que já foi registrado hoje — a cobrança se cala. */
+  const [falhouOsRegistros, setFalhouOsRegistros] = useState(false);
   const [semDieta, setSemDieta] = useState(false);
   /** Falha de rede — diferente de não ter plano. */
   const [falhou, setFalhou] = useState(false);
@@ -69,12 +71,23 @@ export default function Nutricao() {
         else setFalhou(true);
       });
     sdk.agua.resumo(usuario.id).then(setAgua).catch(() => undefined);
+    /*
+      Sem os registros do dia, a cobrança CALA — não chuta zero.
+
+      Com o `.catch(() => undefined)`, uma falha nesta chamada deixava o mapa
+      vazio e a cobrança concluía "0 de 4 refeições registradas hoje" para quem
+      já havia registrado todas. Cobrar alguém pelo que ele fez é o jeito mais
+      rápido de ensinar a ignorar o aviso — e o aviso é a razão de esta aba
+      existir.
+    */
+    setFalhouOsRegistros(false);
     sdk.dietas
       .registrosDoDia(usuario.id)
-      .then((lista) =>
-        setRegistros(Object.fromEntries(lista.map((r) => [r.refeicaoId, r.status]))),
-      )
-      .catch(() => undefined);
+      .then((lista) => {
+        setRegistros(Object.fromEntries(lista.map((r) => [r.refeicaoId, r.status])));
+        setFalhouOsRegistros(false);
+      })
+      .catch(() => setFalhouOsRegistros(true));
     /*
       A lista de dependências era `[usuario]` escrita à mão, e estava certa por
       manutenção, não por construção. Com `useCallback` é o compilador que cobra:
@@ -147,7 +160,7 @@ export default function Nutricao() {
         Ela é o motivo de a pessoa abrir esta aba num dia em que já sabe o que
         vai comer — e no fim da lista ninguém a veria.
       */}
-      {cobranca.urgencia !== 'NADA' && cobranca.pendentes.length > 0 && (
+      {!falhouOsRegistros && cobranca.urgencia !== 'NADA' && cobranca.pendentes.length > 0 && (
         <View
           style={{
             ...cartao,
