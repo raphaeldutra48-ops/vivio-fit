@@ -111,7 +111,18 @@ export default function Nutricao() {
     if (!usuario) return;
     const anterior = registros[refeicaoId];
     const novo = anterior === status ? undefined : status;
-    setRegistros((r) => ({ ...r, [refeicaoId]: novo ?? '' }));
+    /*
+      Desmarcar ESQUECE a chave, e nao a guarda vazia. A cobranca conta
+      `Object.keys(registros)`: com a chave vazia sobrando, quem desmarcasse
+      continuaria contado como registrado enquanto o botao dizia o contrario, e
+      a refeicao sairia da cobranca sem nunca ter sido respondida.
+    */
+    setRegistros((r) => {
+      const proximo = { ...r };
+      if (novo) proximo[refeicaoId] = novo;
+      else delete proximo[refeicaoId];
+      return proximo;
+    });
     if (!novo) return;
     await sdk.dietas
       .registrarRefeicao(usuario.id, { refeicaoId, status: novo, data: new Date() })

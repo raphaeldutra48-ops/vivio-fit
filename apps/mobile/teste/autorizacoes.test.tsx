@@ -38,13 +38,18 @@ vi.mock('../src/sdk', () => ({
   },
 }));
 
-vi.mock('../src/sessao', () => ({
-  useSessao: () => ({
-    tema: obterTema('claro'),
-    usuario: { id: 'aluna-1', nome: 'Ana Souza', email: 'ana@exemplo.com', papel: 'ALUNO' },
-    carregando: false,
-  }),
-}));
+/*
+  Objeto fixo, e não um novo a cada chamada: a identidade do `usuario` decide se
+  o efeito da tela recarrega. O provedor real o mantém estável, porque ele é
+  estado; um dublê descuidado põe a tela em laço e o teste fica lento sem motivo.
+*/
+const sessao = {
+  tema: obterTema('claro'),
+  usuario: { id: 'aluna-1', nome: 'Ana Souza', email: 'ana@exemplo.com', papel: 'ALUNO' },
+  carregando: false,
+};
+
+vi.mock('../src/sessao', () => ({ useSessao: () => sessao }));
 
 const personal = {
   id: 'vinculo-1',
