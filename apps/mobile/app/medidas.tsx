@@ -1,3 +1,4 @@
+import { numeroDoCampo } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -43,10 +44,21 @@ export default function Medidas() {
     setSalvando(true);
     setErro(null);
     try {
+      /*
+        `numeroDoCampo` cuida da vírgula (é o separador decimal daqui) E do
+        ilegível. Antes era `Number(texto.replace(...))` direto: um "78kg" ou um
+        "1,7,5" digitado por engano virava `NaN`, que o `JSON.stringify` manda
+        como `null`, e o servidor recusava o formulário INTEIRO com a frase
+        genérica do `catch` — sem dizer qual campo tinha o problema.
+      */
       const corpo: Record<string, number | Date> = { data: new Date() };
       for (const campo of preenchidos) {
-        // Vírgula é o separador decimal que o brasileiro digita.
-        corpo[campo.chave] = Number(valores[campo.chave]!.replace(',', '.'));
+        const valor = numeroDoCampo(valores[campo.chave]);
+        if (valor === null) {
+          setErro(`Não consegui ler o valor de ${campo.rotulo.toLowerCase()}. Confira o número.`);
+          return;
+        }
+        corpo[campo.chave] = valor;
       }
       await sdk.medidas.registrar(usuario.id, corpo as never);
       router.replace('/composicao');

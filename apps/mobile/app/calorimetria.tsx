@@ -1,4 +1,8 @@
-import { VALIDADE_CALORIMETRIA_MESES, type CalorimetriaResumo } from '@vivio/contracts';
+import {
+  VALIDADE_CALORIMETRIA_MESES,
+  numeroDoCampo,
+  type CalorimetriaResumo,
+} from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -74,7 +78,8 @@ export default function Calorimetria() {
       await sdk.calorimetrias.registrar(usuario.id, {
         data,
         tmbMedidaKcal: valor,
-        pesoNoExameKg: peso.trim() ? Number(peso.replace(',', '.')) : undefined,
+        // Campo opcional: ilegível é ausência, e não `NaN` — ver `numeroDoCampo`.
+        pesoNoExameKg: numeroDoCampo(peso) ?? undefined,
         equipamento: equipamento.trim() || undefined,
       });
       setAberto(false);

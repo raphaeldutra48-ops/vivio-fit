@@ -2,6 +2,7 @@ import {
   Intensidade,
   NOME_DA_FORMULA,
   ROTULO_INTENSIDADE,
+  numeroDoCampo,
   ROTULO_TIPO_CARDIO,
   TipoCardio,
   dataLocalDoCheckin,
@@ -99,8 +100,12 @@ export default function Cardio() {
         tipo,
         intensidade,
         duracaoMin: minutos,
-        // Vírgula é o separador que o brasileiro digita.
-        distanciaKm: distancia.trim() ? Number(distancia.replace(',', '.')) : undefined,
+        /*
+          Vírgula é o separador que o brasileiro digita, e texto ilegível vira
+          ausência — nunca `NaN`, que viaja como `null` e derruba o registro
+          inteiro por causa de um campo opcional.
+        */
+        distanciaKm: numeroDoCampo(distancia) ?? undefined,
         data: dataLocalDoCheckin(),
         observacao: observacao.trim() || undefined,
       });

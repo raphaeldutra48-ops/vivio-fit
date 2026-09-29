@@ -1,4 +1,4 @@
-import { ENERGIA_MAX, dataLocalDoCheckin } from '@vivio/contracts';
+import { ENERGIA_MAX, dataLocalDoCheckin, numeroDoCampo } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -127,7 +127,7 @@ export default function Checkin() {
         Falhar aqui não desfaz o check-in — o que a pessoa respondeu sobre o
         dia dela vale mesmo sem o peso.
       */
-      const emKg = Number(peso.replace(',', '.'));
+      const emKg = numeroDoCampo(peso) ?? 0;
       if (pedirPeso && emKg > 0) {
         await sdk.medidas
           // MANUAL: a pessoa subiu na balança e digitou. A bioimpedância tem

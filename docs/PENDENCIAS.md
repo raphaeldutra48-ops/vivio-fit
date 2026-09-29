@@ -79,9 +79,9 @@ apontando para ele. O caminho já existe no arranjo das suítes.
 ### 14b. A cobertura de tela do aplicativo: 7 áreas, e as que decidem estão cobertas
 **Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
 **Estado:** a web tem 322 provas, com render das seis telas que transformam
-entrada. O aplicativo tinha zero e passou a ter **61, em 7 áreas**: cadastro,
+entrada. O aplicativo tinha zero e passou a ter **66, em 8 áreas**: cadastro,
 autorizações, fila offline de treinos, rascunho do treino em andamento, nutrição
-do dia, fotos de evolução e **execução do treino**. Com essa última, toda tela
+do dia, fotos de evolução, execução do treino e medidas digitadas. Com essa última, toda tela
 do aplicativo que DECIDE algo tem prova; o que segue sem ela é exibição do que o
 SDK devolveu, coberta pelo typecheck e pelas 291 provas do SDK.
 **Como escolher a próxima:** onde a tela DECIDE algo — o que ela manda, o que ela
@@ -97,6 +97,12 @@ por conta própria — esta, a mais usada de todas, era a única que não trocav
 porque a regra morava em `apps/web/lib/campos.ts` e o aplicativo não podia
 importar de lá. Agora ela é `numeroDoCampo` em `@vivio/contracts`, com prova
 própria, e a web a reexporta.
+**E o mesmo buraco estava em mais quatro telas do aplicativo:** medidas, cardio,
+calorimetria e check-in trocavam a vírgula por conta própria, mas nenhuma
+tratava o ILEGÍVEL — "84,,5" (acontece ao corrigir sem apagar) virava `NaN`, ia
+como `null` e o servidor recusava o formulário inteiro com uma frase genérica
+sobre sete campos. As quatro passaram a usar a mesma regra; a de medidas agora
+aponta o campo pelo nome e não manda nada pela metade, com cinco provas.
 **O que as fotos encontraram:** dois defeitos, ambos silenciosos. O envio
 recusado por FORMATO devolve do SDK a frase exata ("Formato de arquivo não
 aceito: image/gif."), e a tela trocava por "Não foi possível enviar a foto. Tente
