@@ -1,13 +1,22 @@
 'use client';
 
 import { Papel } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Marca } from '../../components/Marca';
 import { Aviso, Botao, Cartao } from '../../components/ui';
 import { sdk } from '../../lib/sdk';
 
-type Estado = 'confirmando' | 'pronto' | 'falhou';
+/*
+  `semRede` é um estado próprio, e não um caso de `falhou`.
+
+  Todo erro virava "Link inválido ou expirado" — inclusive a queda de conexão. O
+  conselho que vem junto ("peça um novo na tela de entrada") é o pior possível
+  nesse caso: o link continua válido, e pedir outro invalida este. Quem estava só
+  sem sinal perde o que tinha na mão.
+*/
+type Estado = 'confirmando' | 'pronto' | 'falhou' | 'semRede';
 
 function Confirmacao() {
   const parametros = useSearchParams();
@@ -45,7 +54,7 @@ function Confirmacao() {
         setEhAluno(r.usuario.papel === Papel.ALUNO);
         setEstado('pronto');
       })
-      .catch(() => setEstado('falhou'));
+      .catch((e: unknown) => setEstado(e instanceof ErroApi && e.status === 0 ? 'semRede' : 'falhou'));
   }, [erroDoLink]);
 
   return (
@@ -71,6 +80,16 @@ function Confirmacao() {
                   <Botao onClick={() => router.push('/alunos')}>Ir para o painel</Botao>
                 </div>
               )}
+            </>
+          )}
+
+          {estado === 'semRede' && (
+            <>
+              <p className="mb-xs text-lg font-semibold">Não deu para confirmar agora</p>
+              <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+                Foi a conexão, não o link — ele continua valendo. Recarregue esta página em alguns
+                instantes. Não peça um link novo: isso invalidaria o que você já tem.
+              </p>
             </>
           )}
 

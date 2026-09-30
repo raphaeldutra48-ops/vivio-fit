@@ -253,6 +253,27 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Recuperar acesso: as três telas que trancam a pessoa do lado de fora — 30/09/2026
+**Era:** pedir o link, escolher senha nova e confirmar o e-mail não tinham prova
+nenhuma. É a única parte do sistema em que o erro tranca alguém para fora — e quem
+não consegue entrar não abre chamado: desiste, e o profissional perde o aluno sem
+saber por quê.
+**O defeito:** em `verificar-email`, TODO erro virava "Link inválido ou expirado",
+com o conselho de pedir um novo. Para uma falha de rede esse conselho é o pior
+possível: o link continua valendo, e pedir outro invalida o que a pessoa tem na
+mão — com o agravante de que o segundo e-mail pode esbarrar no limite de envio
+(pendência do SMTP). Agora falta de conexão tem estado próprio, e a tela diz
+explicitamente para NÃO pedir link novo.
+**O que as provas também trancam:** a resposta do "esqueci minha senha" é a mesma
+exista ou não a conta — inclusive quando a API recusa — porque confirmar
+existência transformaria a tela num verificador de quem é cliente de qual
+profissional de saúde; a senha nova é conferida pelo MESMO `senhaSchema` do
+servidor, sem regra reescrita que aceite o que ele recusa; o link só é gasto uma
+vez, mesmo com o React montando duas vezes em desenvolvimento; e o aluno que
+redefine senha na web vai para a entrada, não para o painel.
+**Prova:** 14 casos em `apps/web/teste/recuperar-acesso.test.tsx`, um confirmado
+por mutação.
+
 ### A página pública e o site do profissional — 30/09/2026
 **A única tela que um estranho abre**, e a que decide se ele vira aluno. Duas
 falhas, as duas por a tela falar com certeza sobre o que não sabia:
