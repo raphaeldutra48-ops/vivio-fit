@@ -30,9 +30,18 @@ de desenvolvimento.
 **Consequência:** o monorepo perde o isolamento estrito do pnpm — um pacote passa
 a conseguir importar dependência que não declarou, e o erro só aparece no build
 de produção.
-**Mitigação atual:** `pnpm build` roda os 7 workspaces no CI e pegaria o caso, e
-`apps/web/teste/versoes-do-react.spec.ts` cobre a consequência mais cara (duas
-cópias de React), que era a pendência 8.
+**Mitigação atual — 30/09:** a consequência virou TESTE.
+`apps/web/teste/dependencias-declaradas.spec.ts` lê os imports dos 7 pacotes e
+exige que cada um esteja no `package.json` daquele pacote, nomeando o arquivo
+quando falha. Os 7 estão limpos hoje, e o guarda foi confirmado por mutação (um
+import de `date-fns` em `packages/contracts` deixa a prova vermelha).
+Antes disso o preço era real: em 29/09 custou duas rodadas vermelhas de CI — um
+teste do aplicativo importava `@vivio/ui` (pacote da web) e passava localmente, e
+`@testing-library/user-event` sumiu quando a árvore foi remontada. Nos dois casos
+a mensagem não dizia nada sobre a causa.
+`apps/web/teste/versoes-do-react.spec.ts` continua cobrindo a consequência mais
+cara (duas cópias de React), que era a pendência 8, e o `pnpm build` dos 7
+workspaces segue como rede final.
 **Alternativa futura:** isolar o mobile em workspace próprio, ou reavaliar quando
 o Metro melhorar o suporte a symlinks.
 
