@@ -253,6 +253,22 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Perder a verificação tira a página do ar — 30/09/2026
+**A composição que ninguém testava.** Publicar exige registro conferido, e isso já
+tinha prova. Mas o selo pode CAIR depois: trocar o registro no conselho o zera por
+gatilho, e `publicado` continua `true` — ninguém despublica nada. Se a página
+seguisse no ar nesse intervalo, a plataforma estaria emprestando credibilidade a um
+registro que ninguém conferiu, justamente no caso mais suspeito: o de quem acabou
+de trocar o número.
+**A conferência é feita na LEITURA** (`28-site.sql`, na função `pagina_publica`), e
+agora tem prova: a página é lida no ar, o selo cai, a página sai do ar, o selo volta
+e ela retorna sozinha — nada ficou despublicado. O dono continua vendo a própria
+página em todo o intervalo, que é como ele entende o que aconteceu.
+**Sobre a prova ser suficiente:** ela não precisa de mutação. A asserção "está no
+ar" roda ANTES de derrubar o selo, no mesmo teste — se a conferência de leitura não
+existisse, a asserção seguinte falharia. O estado é devolvido num `finally`, e a
+suíte inteira do SDK (292 provas) roda limpa depois.
+
 ### A verificação do conselho virou prova de banco — 30/09/2026
 **Era:** o selo `verificadoEm` é o que decide quem pode ler dado de saúde de outra
 pessoa, e duas regras o sustentam em `15-perfil.sql` — ninguém se verifica, e

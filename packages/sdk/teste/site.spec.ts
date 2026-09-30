@@ -192,6 +192,67 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: página pública', () =
     expect(texto).not.toContain('publicado');
   });
 
+  it('perder a verificação tira a página do ar, mesmo publicada', async () => {
+    /*
+      A composição de duas regras que ninguém testava junto.
+
+      Publicar exige registro conferido, e isso já tem prova acima. Mas o selo
+      pode CAIR depois: trocar o registro no conselho o zera por gatilho
+      (`packages/banco/teste/verificacao-do-conselho.spec.ts`), e `publicado`
+      continua `true` — ninguém despublica nada.
+
+      Se a página seguisse no ar nesse intervalo, a plataforma estaria
+      emprestando credibilidade a um registro que ninguém conferiu, justamente
+      no caso mais suspeito: o de quem acabou de trocar o número. A conferência
+      é feita na LEITURA, e é isso que esta prova tranca.
+    */
+    await personal.site.salvar({
+      slug,
+      titulo: 'Treino que cabe na sua semana',
+      apresentacao: 'Personal há 10 anos.',
+      cidade: 'São Paulo',
+      uf: 'SP',
+      atendeOnline: true,
+      atendePresencial: false,
+      whatsapp: '11999998888',
+      instagram: 'personaldaprova',
+      publicado: true,
+    });
+    // No ar antes de mexer no selo: é o que dá sentido à comparação.
+    expect((await visitante.site.porSlug(slug)).slug).toBe(slug);
+
+    const antes =
+      ((
+        await admin
+          .from('PerfilProfissional')
+          .select('verificadoEm')
+          .eq('userId', personalId)
+          .single()
+      ).data as { verificadoEm: string | null }).verificadoEm ?? null;
+
+    try {
+      await admin
+        .from('PerfilProfissional')
+        .update({ verificadoEm: null })
+        .eq('userId', personalId);
+
+      await expect(visitante.site.porSlug(slug)).rejects.toMatchObject({
+        codigo: 'RECURSO_NAO_ENCONTRADO',
+      });
+
+      // E o dono continua vendo a própria página, para entender o que aconteceu.
+      expect((await personal.site.meu())?.publicado).toBe(true);
+    } finally {
+      await admin
+        .from('PerfilProfissional')
+        .update({ verificadoEm: antes })
+        .eq('userId', personalId);
+    }
+
+    // Devolvido o selo, a página volta sozinha — nada ficou despublicado.
+    expect((await visitante.site.porSlug(slug)).slug).toBe(slug);
+  });
+
   it('sem sessão, as tabelas continuam fechadas', async () => {
     /*
       A página vem de uma função de propósito: abrir uma política de leitura
