@@ -28,6 +28,20 @@ export const CONSELHO_POR_PAPEL: Partial<Record<Papel, string>> = {
   [Papel.MEDICO]: 'CRM',
 };
 
+/**
+ * Mínimo de letras no motivo de uma recusa.
+ *
+ * Exportado porque a TELA precisa conferir antes de mandar: com a verificação só
+ * no servidor, qualquer falha de rede caía no mesmo `catch` e a tela dizia "o
+ * motivo precisa ter ao menos 5 caracteres" — acusando o texto que a pessoa
+ * escreveu por um problema que não era dela.
+ *
+ * O motivo existe para o profissional recusado entender o que corrigir: ele é
+ * enviado a alguém que investiu em cadastro e documento, e "não" sem explicação é
+ * o que gera a resposta irritada no suporte.
+ */
+export const MINIMO_DO_MOTIVO = 5;
+
 export const listarProfissionaisSchema = z.object({
   status: z.nativeEnum(StatusVerificacao).optional(),
   q: z.string().max(80).optional(),
@@ -59,7 +73,7 @@ export interface ProfissionalParaVerificar {
  * e quem recusou precisa ter dito por quê.
  */
 export const recusarProfissionalSchema = z.object({
-  motivo: z.string().min(5, 'Explique o motivo da recusa').max(500),
+  motivo: z.string().min(MINIMO_DO_MOTIVO, 'Explique o motivo da recusa').max(500),
 });
 export type RecusarProfissionalInput = z.infer<typeof recusarProfissionalSchema>;
 

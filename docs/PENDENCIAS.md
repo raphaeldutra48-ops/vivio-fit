@@ -237,6 +237,29 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### O portão do painel: verificação de conselho e sessão de aluno — 30/09/2026
+**Duas telas sem prova, as duas decidindo QUEM entra.**
+**Verificação de profissionais.** Um clique aqui decide quem passa a ler dado de
+saúde de outra pessoa, e não se desfaz retroativamente — o que foi lido já foi
+lido. A confirmação já era boa (repete registro, UF, nome e conselho, e diz o que
+libera), e ganhou prova. O defeito estava na RECUSA: a verificação do motivo
+existia só no servidor, e todo erro caía no mesmo `catch` — uma queda de conexão
+dizia "o motivo precisa ter ao menos 5 caracteres" sobre um texto de três linhas.
+A pessoa reescreve o que já estava certo e tenta de novo, com o mesmo resultado.
+Agora o mínimo é `MINIMO_DO_MOTIVO`, exportado do contrato, conferido na tela; e o
+botão deixou de ficar CINZA sem explicação — quem toca recebe a frase que diz para
+que o motivo serve (ele vai para quem se cadastrou, e é o que permite corrigir).
+**Sessão de aluno no painel.** O espelho exato do defeito que o aplicativo tinha
+com o profissional: o aluno lia "esta área é do profissional", mas `entrar` já
+havia criado a sessão e a barreira da área só verificava se HÁ usuário. Fechar a
+aba e voltar levava para dentro do painel — menu vazio, todas as telas falhando,
+nenhuma explicação. Agora o login encerra a sessão, **e a área tem porta própria**:
+sessão de aluno é encerrada ali também, porque ela não vem só do formulário desta
+versão — vem de sessão antiga no navegador, de aba aberta antes da correção, de
+link compartilhado.
+**Prova:** 11 casos em `verificar-profissionais.test.tsx` e 9 em
+`entrar-no-painel.test.tsx`, quatro confirmados por mutação.
+
 ### O painel também ganhou barreira de erro — 30/09/2026
 **Era:** o aplicativo ganhou barreira em 29/09; o painel não tinha nenhuma. Um
 erro de render derrubava a árvore e a página ficava BRANCA — sem texto, sem botão,

@@ -3,12 +3,14 @@
 import {
   CONSELHO_POR_PAPEL,
   CONSULTA_DO_CONSELHO,
+  MINIMO_DO_MOTIVO,
   ROTULO_STATUS_VERIFICACAO,
   StatusVerificacao,
   type ProfissionalParaVerificar,
 } from '@vivio/contracts';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../../components/ui';
+import { fraseDeErro } from '../../../../lib/erros';
 import { sdk } from '../../../../lib/sdk';
 
 const corDoStatus: Record<StatusVerificacao, string> = {
@@ -63,22 +65,37 @@ export default function VerificarProfissionais() {
     try {
       await sdk.admin.verificar(p.id);
       await carregar();
-    } catch {
-      setErro('Não foi possível verificar.');
+    } catch (e) {
+      setErro(fraseDeErro(e, 'Não foi possível verificar agora. Nada mudou.'));
     } finally {
       setSalvando(false);
     }
   }
 
   async function recusar(p: ProfissionalParaVerificar) {
+    /*
+      O motivo é conferido AQUI, e a falha de rede deixou de ser culpa dele.
+
+      Antes a verificação existia só no servidor, e todo erro caía no mesmo
+      `catch`: uma queda de conexão dizia "o motivo precisa ter ao menos 5
+      caracteres" sobre um texto de três linhas. A pessoa reescreve o que já
+      estava certo e tenta de novo, com o mesmo resultado.
+    */
+    if (motivo.trim().length < MINIMO_DO_MOTIVO) {
+      setErro(
+        `Explique o motivo da recusa em pelo menos ${MINIMO_DO_MOTIVO} letras — ele vai para quem se cadastrou, e é o que permite corrigir.`,
+      );
+      return;
+    }
+    setErro(null);
     setSalvando(true);
     try {
       await sdk.admin.recusar(p.id, { motivo: motivo.trim() });
       setRecusando(null);
       setMotivo('');
       await carregar();
-    } catch {
-      setErro('Não foi possível recusar. O motivo precisa ter ao menos 5 caracteres.');
+    } catch (e) {
+      setErro(fraseDeErro(e, 'Não foi possível recusar agora. Nada mudou.'));
     } finally {
       setSalvando(false);
     }
@@ -211,11 +228,14 @@ export default function VerificarProfissionais() {
                     >
                       Cancelar
                     </Botao>
-                    <Botao
-                      variante="perigo"
-                      onClick={() => recusar(p)}
-                      disabled={motivo.trim().length < 5 || salvando}
-                    >
+                    {/*
+                      Habilitado mesmo com o motivo curto, de propósito: botão
+                      cinza não diz por que está cinza. Quem toca recebe a frase
+                      que explica para que serve o motivo — a mesma escolha feita
+                      no cardio do aplicativo, onde o botão morto era o defeito
+                      mais frustrante da tela.
+                    */}
+                    <Botao variante="perigo" onClick={() => recusar(p)} disabled={salvando}>
                       Confirmar recusa
                     </Botao>
                   </div>

@@ -11,7 +11,7 @@ import { sdk } from '../../lib/sdk';
 import { useSessao } from '../../lib/sessao';
 
 export default function Login() {
-  const { entrar } = useSessao();
+  const { entrar, sair } = useSessao();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -29,6 +29,15 @@ export default function Login() {
     try {
       const usuario = await entrar(email, senha);
       if (usuario.papel === Papel.ALUNO) {
+        /*
+          Recusar na tela não bastava: `entrar` já criou a sessão, e a barreira da
+          área profissional só olha se HÁ usuário. O aluno lia "esta área é do
+          profissional", fechava a aba e, na volta, caía dentro do painel — com
+          menu vazio e todas as telas falhando, porque o banco (com razão) não lhe
+          devolve nada. É o mesmo defeito que o aplicativo tinha do outro lado,
+          com o profissional.
+        */
+        await sair();
         setErro('Esta área é do profissional. Alunos usam o aplicativo no celular.');
         return;
       }

@@ -53,11 +53,26 @@ function PainelProfissional({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
 
-  useEffect(() => {
-    if (!carregando && !usuario) router.replace('/login');
-  }, [usuario, carregando, router]);
+  /*
+    Duas portas, e a segunda existe porque a primeira não cobre tudo.
 
-  if (carregando || !usuario) {
+    Sessão de ALUNO aqui não vem só do formulário de login desta versão: vem de
+    uma sessão antiga guardada no navegador, de um link compartilhado, de uma aba
+    aberta antes da correção. Barrar só no login deixaria essas de fora — e quem
+    entra por elas vê um painel que não funciona, sem entender por quê.
+  */
+  const ehAluno = usuario?.papel === Papel.ALUNO;
+
+  useEffect(() => {
+    if (carregando) return;
+    if (!usuario) {
+      router.replace('/login');
+      return;
+    }
+    if (ehAluno) void sair();
+  }, [usuario, carregando, ehAluno, router, sair]);
+
+  if (carregando || !usuario || ehAluno) {
     return (
       <main className="grid min-h-dvh place-items-center">
         <p style={{ color: 'var(--vv-texto-secundario)' }}>Carregando…</p>
