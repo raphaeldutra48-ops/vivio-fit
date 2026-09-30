@@ -37,16 +37,30 @@ export default function RecebaFacil() {
   const [pix, setPix] = useState<CobrancaComPix | null>(null);
   const [copiado, setCopiado] = useState(false);
 
+  /*
+    As duas buscas desta tela afirmavam coisas falsas ao falhar.
+
+    Sem a chave, a tela dizia "Cadastre sua chave PIX acima" a quem JÁ tem chave
+    cadastrada — e desabilitava "Gerar PIX" dando esse motivo. Sem o resumo, dizia
+    "Nenhuma cobrança em aberto neste mês" a quem tem cinco em atraso: o
+    profissional conclui que ninguém deve nada.
+  */
+  const [falhouAChave, setFalhouAChave] = useState(false);
+  const [falhouAsCobrancas, setFalhouAsCobrancas] = useState(false);
+
   const carregar = async () => {
-    const d = await sdk.financeiro.obterPagamento().catch(() => null);
-    if (d) {
+    const d = await sdk.financeiro.obterPagamento().catch(() => 'falhou' as const);
+    setFalhouAChave(d === 'falhou');
+    if (d && d !== 'falhou') {
       setDados(d);
       setTipoChave(d.tipoChave);
       setChave(d.chave);
       setRecebedor(d.recebedor);
       setCidade(d.cidade);
     }
-    const resumo = await sdk.financeiro.resumo({}).catch(() => null);
+    const resumo = await sdk.financeiro.resumo({}).catch(() => 'falhou' as const);
+    setFalhouAsCobrancas(resumo === 'falhou');
+    if (resumo === 'falhou') return;
     setAReceber(
       (resumo?.cobrancas ?? []).filter(
         (c) => c.situacao === 'PENDENTE' || c.situacao === 'ATRASADA',
@@ -222,8 +236,13 @@ export default function RecebaFacil() {
       <div>
         <h2 className="mb-md text-lg font-semibold">Cobranças a receber neste mês</h2>
 
-        {!dados && (
-          <Aviso tipo="info">Cadastre sua chave PIX acima para gerar os códigos.</Aviso>
+        {falhouAChave ? (
+          <Aviso tipo="erro">
+            Não deu para ler sua chave PIX agora. Ela continua salva — recarregue a página para
+            tentar de novo.
+          </Aviso>
+        ) : (
+          !dados && <Aviso tipo="info">Cadastre sua chave PIX acima para gerar os códigos.</Aviso>
         )}
 
         <div className="mt-md flex flex-col gap-md">
@@ -250,7 +269,14 @@ export default function RecebaFacil() {
             </Cartao>
           ))}
 
-          {aReceber.length === 0 && (
+          {falhouAsCobrancas && (
+            <p style={{ color: 'var(--vv-erro)' }}>
+              Não foi possível carregar as cobranças em aberto. Nada mudou — recarregue para tentar
+              de novo.
+            </p>
+          )}
+
+          {aReceber.length === 0 && !falhouAsCobrancas && (
             <p style={{ color: 'var(--vv-texto-secundario)' }}>
               Nenhuma cobrança em aberto neste mês. Crie em{' '}
               <Link href="/financeiro" className="underline">

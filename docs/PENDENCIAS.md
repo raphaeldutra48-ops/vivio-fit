@@ -237,6 +237,25 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Receba Fácil ganhou prova, e parou de dizer que a chave não existe — 30/09/2026
+**Era:** a tela da chave PIX e do "copia e cola" de cada cobrança, sem teste. O
+dado central dela é o DESTINO DO DINHEIRO: chave errada não dá erro em lugar
+nenhum — o código é gerado, o aluno paga, e o valor cai na conta de outra pessoa.
+A conferência já existia (`validarChavePix`, do contrato), mas nada garantia que a
+tela a usava.
+**Os dois defeitos:** as duas buscas afirmavam coisas falsas ao falhar. Sem
+conseguir ler a chave, a tela dizia "Cadastre sua chave PIX acima" a quem JÁ tem
+chave — e desabilitava "Gerar PIX" dando esse motivo. Sem conseguir ler o resumo,
+dizia "Nenhuma cobrança em aberto neste mês" a quem tem cinco em atraso.
+**Prova:** 11 casos em `apps/web/teste/receba-facil.test.tsx`, dois confirmados
+por mutação. Inclui que cobrança PAGA não entra na lista de a receber — gerar
+código do que já foi pago é o caminho para receber duas vezes e devolver depois.
+**Achado de bandeja:** `CobrancaComPix` é um tipo próprio, e o `aluno` dele é uma
+string. A primeira fixture espalhou a cobrança normal (com `aluno: {id, nome}`), e
+objeto como filho de React derruba a árvore inteira: a tela ficou EM BRANCO. É a
+terceira vez que isso acontece numa suíte nova, e o painel — diferente do
+aplicativo — ainda não tem barreira de erro.
+
 ### O financeiro ganhou prova, e a mensagem técnica saiu da tela — 30/09/2026
 **Era:** a única tela que mexe em dinheiro não tinha teste nenhum, e o pagamento
 é registrado à MÃO por quem recebeu — não há gateway. Isso põe três ações de um
