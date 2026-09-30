@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Cartao } from '../../../../../components/ui';
 import { sdk } from '../../../../../lib/sdk';
+import { fraseDeErro } from '../../../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -212,7 +213,7 @@ export default function AnamneseDoAluno() {
       setAplicando(null);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar a anamnese.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar a anamnese.'));
     } finally {
       setSalvando(false);
     }

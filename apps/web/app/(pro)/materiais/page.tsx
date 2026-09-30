@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
+import { fraseDeErro } from '../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -119,7 +120,7 @@ export default function Materiais() {
       limpar();
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar o material.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar o material.'));
     } finally {
       setSalvando(false);
     }
@@ -145,7 +146,7 @@ export default function Materiais() {
       else await sdk.materiais.compartilhar(m.id, { alunoIds: [alunoId] });
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível alterar o compartilhamento.');
+      setErro(fraseDeErro(e, 'Não foi possível alterar o compartilhamento.'));
     }
   }
 

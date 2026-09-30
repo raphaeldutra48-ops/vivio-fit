@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
+import { fraseDeErro } from '../../../lib/erros';
 
 export default function CarteiraDeAlunos() {
   const [vinculos, setVinculos] = useState<VinculoResumo[]>([]);
@@ -65,7 +66,7 @@ export default function CarteiraDeAlunos() {
       setMensagem('Convite enviado. O aluno precisa aceitar para o vínculo ficar ativo.');
       await recarregar();
     } catch (e) {
-      setMensagem(e instanceof Error ? e.message : 'Não foi possível convidar.');
+      setMensagem(fraseDeErro(e, 'Não foi possível convidar.'));
     }
   }
 

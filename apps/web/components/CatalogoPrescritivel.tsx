@@ -4,6 +4,7 @@ import type { CriarPrescritivelInput, PrescritivelResumo, TipoPrescritivel } fro
 import { useEffect, useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from './ui';
+import { fraseDeErro } from '../lib/erros';
 
 const vazio: CriarPrescritivelInput = {
   nome: '',
@@ -65,7 +66,7 @@ export function CatalogoPrescritivel({
       setAbrindo(false);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar.'));
     } finally {
       setSalvando(false);
     }
@@ -77,7 +78,7 @@ export function CatalogoPrescritivel({
       await sdk.prescritiveis.remover(item.id);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível remover.');
+      setErro(fraseDeErro(e, 'Não foi possível remover.'));
     }
   }
 

@@ -8,6 +8,7 @@ import {
 } from '../../../../components/EditorDeItensPrescritos';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
+import { fraseDeErro } from '../../../../lib/erros';
 
 export default function ModelosDePrescricao() {
   const [modelos, setModelos] = useState<ModeloPrescricaoResumo[]>([]);
@@ -48,7 +49,7 @@ export default function ModelosDePrescricao() {
       limpar();
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar o modelo.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar o modelo.'));
     } finally {
       setSalvando(false);
     }

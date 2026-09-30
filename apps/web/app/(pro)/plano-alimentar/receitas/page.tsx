@@ -14,6 +14,7 @@ import {
   type IngredienteDigitado,
 } from '../../../../lib/plano-alimentar';
 import { sdk } from '../../../../lib/sdk';
+import { fraseDeErro } from '../../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -108,7 +109,7 @@ export default function Receitas() {
       setEditando(null);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar a receita.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar a receita.'));
     } finally {
       setSalvando(false);
     }

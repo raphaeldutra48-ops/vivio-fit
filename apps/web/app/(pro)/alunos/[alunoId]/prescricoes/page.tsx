@@ -16,6 +16,7 @@ import {
 } from '../../../../../components/EditorDeItensPrescritos';
 import { Aviso, Botao, Cartao, Etiqueta } from '../../../../../components/ui';
 import { sdk } from '../../../../../lib/sdk';
+import { fraseDeErro } from '../../../../../lib/erros';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -129,7 +130,7 @@ export default function PrescricoesDoAluno() {
       setItens([]);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível emitir a prescrição.');
+      setErro(fraseDeErro(e, 'Não foi possível emitir a prescrição.'));
     } finally {
       setSalvando(false);
     }
@@ -140,7 +141,7 @@ export default function PrescricoesDoAluno() {
       await sdk.prescricoes.mudarStatus(alunoId, p.id, { status });
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível alterar o status.');
+      setErro(fraseDeErro(e, 'Não foi possível alterar o status.'));
     }
   }
 

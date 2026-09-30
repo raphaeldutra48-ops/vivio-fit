@@ -12,7 +12,9 @@ import {
 } from '@vivio/contracts';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
+import { fraseDeErro } from '../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -32,7 +34,6 @@ const mesAtual = () => new Date().toISOString().slice(0, 7);
 export default function Financeiro() {
   const [mes, setMes] = useState(mesAtual());
   const [dados, setDados] = useState<ResumoFinanceiro | null>(null);
-  const [alunos, setAlunos] = useState<{ id: string; nome: string }[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -47,6 +48,14 @@ export default function Financeiro() {
   const [pagando, setPagando] = useState<string | null>(null);
   const [forma, setForma] = useState<FormaPagamento>('PIX');
 
+  /*
+    Do gancho compartilhado, e não de um bloco próprio com o erro engolido: aqui
+    a lista de alunos é o que permite criar cobrança, e um seletor vazio em
+    silêncio faz o profissional achar que o sistema perdeu a carteira dele.
+  */
+  const { alunos: vinculos, falhou: falhouOsAlunos } = useAlunosAtivos();
+  const alunos = vinculos.map((v) => ({ id: v.contraparte.id, nome: v.contraparte.nome }));
+
   const carregar = () =>
     sdk.financeiro
       .resumo({ mes })
@@ -58,12 +67,6 @@ export default function Financeiro() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mes]);
 
-  useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((v) => setAlunos(v.map((x) => ({ id: x.contraparte.id, nome: x.contraparte.nome }))))
-      .catch(() => undefined);
-  }, []);
 
   const centavos = paraCentavos(valorTexto);
   const podeSalvar = Boolean(alunoId) && descricao.trim().length >= 2 && centavos && vencimento;
@@ -86,7 +89,7 @@ export default function Financeiro() {
       setRepetir(1);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível criar a cobrança.');
+      setErro(fraseDeErro(e, 'Não foi possível criar a cobrança.'));
     } finally {
       setSalvando(false);
     }
@@ -98,19 +101,40 @@ export default function Financeiro() {
       setPagando(null);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível registrar o pagamento.');
+      setErro(fraseDeErro(e, 'Não foi possível registrar o pagamento.'));
     }
   }
 
+  /*
+    As três ações mexem em dinheiro, e as três perguntam.
+
+    Só "remover" perguntava. "Estornar" desfaz um pagamento JÁ REGISTRADO — a
+    cobrança volta a pendente, e quem fizer isso por engano vai cobrar de novo
+    alguém que pagou. "Cancelar" faz o contrário: o aluno deixa de dever, e a
+    receita desaparece do mês sem ninguém perceber. Um clique cada, em botões
+    vizinhos, numa lista onde as linhas se parecem.
+  */
+  const PERGUNTA: Record<'estornar' | 'cancelar' | 'remover', (c: CobrancaResumo) => string> = {
+    estornar: (c) =>
+      `Estornar o pagamento de "${c.descricao}"?
+
+A cobrança volta a ficar pendente, como se não tivesse sido paga.`,
+    cancelar: (c) =>
+      `Cancelar a cobrança "${c.descricao}"?
+
+O aluno deixa de dever este valor, e ele sai do total do mês.`,
+    remover: (c) => `Remover "${c.descricao}" e as parcelas não pagas?`,
+  };
+
   async function acao(c: CobrancaResumo, qual: 'estornar' | 'cancelar' | 'remover') {
-    if (qual === 'remover' && !confirm(`Remover "${c.descricao}" e as parcelas não pagas?`)) return;
+    if (!confirm(PERGUNTA[qual](c))) return;
     try {
       if (qual === 'estornar') await sdk.financeiro.estornar(c.id);
       if (qual === 'cancelar') await sdk.financeiro.cancelar(c.id);
       if (qual === 'remover') await sdk.financeiro.remover(c.id);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível concluir a ação.');
+      setErro(fraseDeErro(e, 'Não foi possível concluir a ação.'));
     }
   }
 
@@ -174,7 +198,9 @@ export default function Financeiro() {
                 value={alunoId}
                 onChange={(e) => setAlunoId(e.target.value)}
               >
-                <option value="">Selecione…</option>
+                <option value="">
+                  {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) ?? 'Selecione…'}
+                </option>
                 {alunos.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.nome}
@@ -223,7 +249,12 @@ export default function Financeiro() {
                 className="min-h-toque rounded-md border px-md"
                 style={entrada}
                 value={repetirMeses}
-                onChange={(e) => setRepetir(Math.max(1, Number(e.target.value)))}
+                /*
+                  `Math.min(36, ...)`: o schema recusa acima de 36, e o atributo
+                  `max` do HTML não impede digitar 99 — o servidor devolveria erro
+                  depois de a pessoa preencher tudo.
+                */
+                onChange={(e) => setRepetir(Math.min(36, Math.max(1, Number(e.target.value))))}
               />
               <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
                 {repetirMeses > 1

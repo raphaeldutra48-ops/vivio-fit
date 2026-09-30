@@ -228,6 +228,31 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### O financeiro ganhou prova, e a mensagem técnica saiu da tela — 30/09/2026
+**Era:** a única tela que mexe em dinheiro não tinha teste nenhum, e o pagamento
+é registrado à MÃO por quem recebeu — não há gateway. Isso põe três ações de um
+clique lado a lado, numa lista de linhas parecidas, e duas não perguntavam nada:
+**estornar** desfaz um pagamento já registrado (a cobrança volta a pendente, e
+quem erra vai cobrar de novo alguém que pagou) e **cancelar** faz o oposto (o
+aluno deixa de dever e a receita sai do mês, em silêncio). Só "remover"
+perguntava.
+**O que mais apareceu:** o seletor de alunos ficava mudo quando a busca falhava —
+sem aluno não se cria cobrança, e o profissional não tinha como saber por quê; e o
+campo de parcelas aceitava digitar acima de 36, que o schema recusa, devolvendo
+erro só depois de o formulário estar preenchido.
+**A família nova encontrada aqui:** `e instanceof Error ? e.message : 'frase'`,
+repetido em **19 lugares de 13 arquivos**. O `Error` genérico é justamente o que
+não se mostra: dele saem "Failed to fetch", "NetworkError when attempting to fetch
+resource" e "Cannot read properties of undefined". Virou `fraseDeErro` em
+`apps/web/lib/erros.ts`: só `ErroApi` passa direto (é escrita para gente, e o SDK
+já traduz recusa de política e limite de envio), falta de rede recebe frase
+própria dizendo que nada foi perdido, e o resto cai na frase da tela — que sabe o
+que a pessoa estava tentando fazer.
+**Prova:** 13 casos em `apps/web/teste/financeiro.test.tsx`, quatro confirmados
+por mutação. Inclui o que a leitura de valor aceita DE PROPÓSITO: "R$ 150 reais"
+vira R$ 150,00, porque `paraCentavos` descarta o que não é dígito — tolerância
+com quem copia de outro sistema, e não descuido.
+
 ### O painel do profissional passou pela mesma varredura — 30/09/2026
 **Era:** a auditoria de 29/09 cobriu as 24 telas do aplicativo e encontrou nove
 defeitos, quase todos da mesma família: **a tela afirmando "não tem" quando o que

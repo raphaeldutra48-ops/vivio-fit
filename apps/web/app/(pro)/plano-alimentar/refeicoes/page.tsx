@@ -19,6 +19,7 @@ import {
   type ItemDigitado,
 } from '../../../../lib/plano-alimentar';
 import { sdk } from '../../../../lib/sdk';
+import { fraseDeErro } from '../../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -122,7 +123,7 @@ export default function RefeicoesSalvas() {
       setEditando(null);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar a refeição.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar a refeição.'));
     } finally {
       setSalvando(false);
     }

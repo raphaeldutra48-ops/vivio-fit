@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../components/ui';
 import { sdk } from '../../../lib/sdk';
+import { fraseDeErro } from '../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -76,7 +77,7 @@ export default function RecebaFacil() {
       setChave(salvo.chave);
       setAviso('Chave salva. Agora dá para gerar o código de qualquer cobrança.');
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar a chave.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar a chave.'));
     } finally {
       setSalvando(false);
     }
@@ -88,7 +89,7 @@ export default function RecebaFacil() {
     try {
       setPix(await sdk.financeiro.gerarPix(c.id));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o código.');
+      setErro(fraseDeErro(e, 'Não foi possível gerar o código.'));
     }
   }
 

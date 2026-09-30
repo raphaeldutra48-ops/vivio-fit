@@ -4,6 +4,7 @@ import { CONSELHO_POR_PAPEL, type MeuPerfil } from '@vivio/contracts';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../../components/ui';
 import { sdk } from '../../../../lib/sdk';
+import { fraseDeErro } from '../../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -86,7 +87,7 @@ export default function MeuPerfilPagina() {
           : 'Perfil salvo.',
       );
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar.'));
     } finally {
       setSalvando(false);
     }

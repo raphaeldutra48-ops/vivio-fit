@@ -19,6 +19,7 @@ import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
 import { corpoDoModelo, podeSalvarModelo, problemasDasPerguntas } from '../../../../lib/anamnese';
 import { anuncioDeMovimento, reordenar } from '../../../../lib/reordenar';
 import { sdk } from '../../../../lib/sdk';
+import { fraseDeErro } from '../../../../lib/erros';
 
 const entrada = {
   background: 'var(--vv-superficie)',
@@ -114,7 +115,7 @@ export default function ModelosDeAnamnese() {
       setEditando(null);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar.');
+      setErro(fraseDeErro(e, 'Não foi possível salvar.'));
     } finally {
       setSalvando(false);
     }
