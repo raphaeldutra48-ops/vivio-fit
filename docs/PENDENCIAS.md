@@ -6,6 +6,22 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 ## Abertas
 
 
+### 28. O Railway continua conectado ao repositório (só o dono da conta desliga)
+**Assumida em:** 2026-09-30 · **Depende de:** você, no painel do Railway.
+**Estado:** o código não tem mais nada de Railway — isso foi removido em 24/09 e
+confirmado. O que sobrou é a integração **GitHub ↔ Railway**, que vive na conta do
+Railway e não no repositório: cada push dispara DOIS deploys (`artistic-grace` e
+`spectacular-wisdom`, ambos "production"), e ao menos um falha. Todos os commits
+de 30/09 têm o par registrado.
+**Por que importa:** são minutos de build — possivelmente cobrados — para publicar
+um serviço que não existe mais, e cada push deixa um status vermelho no histórico
+do repositório, que atrapalha quem for ler o que falhou de verdade.
+**Como desligar:** no painel do Railway, projeto
+`cd9fa41f-b8b1-4fe8-8043-6fe65f28846e`, em cada um dos dois serviços:
+**Settings → Source → Disconnect**. Se nada mais viver ali, apagar o projeto
+inteiro resolve de uma vez. Os deploys param no push seguinte.
+**Por que não faço:** é a sua conta, e a operação é destrutiva do lado deles.
+
 ### 27. Os documentos legais são rascunho, e não há botão de excluir conta
 **Assumida em:** 2026-09-25, na auditoria geral
 **Estado:** `/termos` e `/privacidade` existem, são públicas, descrevem o sistema
