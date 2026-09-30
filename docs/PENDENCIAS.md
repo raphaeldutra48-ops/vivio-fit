@@ -273,6 +273,13 @@ confirmados por mutação.
 seu. Um método faltando no dublê não some da tela — derruba o render inteiro. É a
 quarta vez que isso aparece, e é o melhor argumento a favor da barreira de erro que
 as duas interfaces ganharam esta semana.
+**E o CI pegou o que eu não peguei:** o primeiro dublê do painel de progresso
+devolveu outra forma, e o componente estourou DEPOIS de o teste terminar. As 429
+provas passaram, o resumo na tela ficou verde — e o `vitest` saiu com código 1,
+porque exceção não capturada reprova a suíte inteira mesmo sem reprovar caso
+nenhum. Eu tinha filtrado a saída pelas linhas de resumo e não olhei o código de
+saída; o CI não tem esse vício. Desde então a conferência local roda a mesma
+sequência do CI, encadeada, para que qualquer código diferente de zero interrompa.
 
 ### Recuperar acesso: as três telas que trancam a pessoa do lado de fora — 30/09/2026
 **Era:** pedir o link, escolher senha nova e confirmar o e-mail não tinham prova

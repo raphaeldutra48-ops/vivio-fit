@@ -47,8 +47,30 @@ vi.mock('../lib/sdk', () => ({
       evolucao: () =>
         Promise.resolve({ de: '2026-09-01', ate: '2026-09-30', totalMedicoes: 0, series: [] }),
     },
+    /*
+      O painel de progresso lê `painel.treino.total` direto. A primeira versão
+      deste dublê devolveu outra forma, e o componente estourou DEPOIS do teste
+      terminar: as 429 provas passaram e o `vitest` saiu com erro, porque exceção
+      não capturada conta como falha da suíte mesmo sem reprovar caso nenhum. Foi
+      assim que o CI ficou vermelho com tudo verde na tela.
+    */
     progresso: {
-      painel: () => Promise.resolve({ linhas: [], dias: 30, total: 0, precisamDeOlhar: 0 }),
+      painel: () =>
+        Promise.resolve({
+          dias: 30,
+          treino: {
+            total: 0,
+            volumeKg: 0,
+            minutos: 0,
+            duracaoMediaMin: null,
+            porSemana: 0,
+            ultimoEm: null,
+            diasSemTreinar: null,
+          },
+          checkins: null,
+          cargas: [],
+          variacaoPesoKg: null,
+        }),
     },
     exercicios: { listar: vazio },
   },
