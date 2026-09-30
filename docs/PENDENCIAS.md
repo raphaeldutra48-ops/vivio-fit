@@ -237,6 +237,29 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### A página pública e o site do profissional — 30/09/2026
+**A única tela que um estranho abre**, e a que decide se ele vira aluno. Duas
+falhas, as duas por a tela falar com certeza sobre o que não sabia:
+- **`.catch(() => setNaoExiste(true))`**: qualquer tropeço de rede — sinal fraco no
+  celular de quem recebeu o link — dizia "Este endereço não existe ou saiu do ar".
+  Não é um vazio inofensivo: é a plataforma afirmando, a um cliente em potencial,
+  que aquele profissional fechou as portas. Só 404 é inexistência.
+- **O formulário de contato não dizia para onde vão os dados.** Quem preenche não
+  tem conta e não aceitou termo nenhum, e entrega nome, e-mail e telefone a duas
+  partes: o profissional e a plataforma. Agora há uma linha antes do envio, com o
+  nome de quem recebe e o link da política — mínimo da LGPD, e o que permite
+  decidir.
+**E o estrago mais caro desta dupla, do lado do painel:** `sdk.site.meu()` com
+`.catch(() => null)` fazia a falha cair no ramo de PRIMEIRA VISITA — a tela sugeria
+um endereço novo a partir do nome e preenchia o título. Publicar depois disso
+trocaria a URL pública, e todo link já divulgado (Instagram, cartão, WhatsApp)
+deixaria de abrir. Silencioso: parece que nada aconteceu. Agora só 404 é primeira
+visita, e enquanto não se sabe o que está no ar a tela avisa para recarregar antes
+de publicar. A lista de pedidos de contato recebeu o mesmo tratamento: quem recebeu
+três contatos lia "Nenhum pedido ainda. Divulgue o endereço" e parava de divulgar.
+**Prova:** 13 casos em `apps/web/teste/pagina-publica.test.tsx`, quatro confirmados
+por mutação.
+
 ### O portão do painel: verificação de conselho e sessão de aluno — 30/09/2026
 **Duas telas sem prova, as duas decidindo QUEM entra.**
 **Verificação de profissionais.** Um clique aqui decide quem passa a ler dado de

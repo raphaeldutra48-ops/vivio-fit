@@ -8,6 +8,7 @@ import {
 } from '@vivio/contracts';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
+import { ErroApi } from '@vivio/sdk';
 import { sdk } from '../../../lib/sdk';
 import { useSessao } from '../../../lib/sessao';
 import { fraseDeErro } from '../../../lib/erros';
@@ -42,9 +43,27 @@ export default function SiteProfissional() {
   const [instagram, setInstagram] = useState('');
   const [publicado, setPublicado] = useState(false);
 
+  /*
+    Falhar ao ler a página NÃO é "ainda não tem página".
+
+    Era `.catch(() => null)`, e o `null` caía no ramo de PRIMEIRA VISITA: a tela
+    sugeria um endereço novo a partir do nome e preenchia o título. Quem
+    publicasse depois disso trocaria o endereço público da própria página — e todo
+    link já divulgado, no Instagram, no cartão, no WhatsApp, deixaria de abrir. É
+    o estrago mais caro desta tela, e o mais silencioso: parece que nada
+    aconteceu.
+  */
+  const [falhouAPagina, setFalhouAPagina] = useState(false);
+  const [falhouOsPedidos, setFalhouOsPedidos] = useState(false);
+
   const carregar = async () => {
-    const p = await sdk.site.meu().catch(() => null);
-    if (p) {
+    const p = await sdk.site
+      .meu()
+      .catch((e: unknown) =>
+        e instanceof ErroApi && e.status === 404 ? null : ('falhou' as const),
+      );
+    setFalhouAPagina(p === 'falhou');
+    if (p && p !== 'falhou') {
       setPerfil(p);
       setSlug(p.slug);
       setTitulo(p.titulo);
@@ -56,12 +75,14 @@ export default function SiteProfissional() {
       setWhatsapp(p.whatsapp ?? '');
       setInstagram(p.instagram ?? '');
       setPublicado(p.publicado);
-    } else if (usuario) {
-      // Primeira visita: sugere um endereço a partir do nome.
+    } else if (p === null && usuario) {
+      // Primeira visita DE VERDADE (404): sugere um endereço a partir do nome.
       setSlug(sugerirSlug(usuario.nome));
       setTitulo(`Acompanhamento com ${usuario.nome.split(' ')[0]}`);
     }
-    setPedidos(await sdk.site.listarPedidos().catch(() => []));
+    const lista = await sdk.site.listarPedidos().catch(() => 'falhou' as const);
+    setFalhouOsPedidos(lista === 'falhou');
+    if (lista !== 'falhou') setPedidos(lista);
   };
 
   useEffect(() => {
@@ -235,6 +256,19 @@ export default function SiteProfissional() {
             <Aviso tipo="erro">{erro}</Aviso>
           </div>
         )}
+
+        {/*
+          Enquanto não se sabe o que está no ar, publicar é escrever por cima do
+          que não se leu — inclusive o endereço já divulgado.
+        */}
+        {falhouAPagina && (
+          <div className="mt-md">
+            <Aviso tipo="erro">
+              Não foi possível ler a sua página. Recarregue antes de publicar: salvar agora poderia
+              trocar o endereço que você já divulgou.
+            </Aviso>
+          </div>
+        )}
         {aviso && (
           <div className="mt-md">
             <Aviso tipo="info">{aviso}</Aviso>
@@ -303,7 +337,14 @@ export default function SiteProfissional() {
             </Cartao>
           ))}
 
-          {pedidos.length === 0 && (
+          {falhouOsPedidos && (
+            <p style={{ color: 'var(--vv-erro)' }}>
+              Não foi possível carregar os pedidos de contato. Eles continuam guardados — recarregue
+              para tentar de novo.
+            </p>
+          )}
+
+          {pedidos.length === 0 && !falhouOsPedidos && (
             <p style={{ color: 'var(--vv-texto-secundario)' }}>
               Nenhum pedido ainda. Divulgue o endereço da sua página nas redes.
             </p>

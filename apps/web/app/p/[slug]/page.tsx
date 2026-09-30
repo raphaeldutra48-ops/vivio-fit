@@ -1,6 +1,7 @@
 'use client';
 
-import { linkDoWhatsapp, type PaginaPublica } from '@vivio/contracts';
+import { DOCUMENTOS_LEGAIS, linkDoWhatsapp, type PaginaPublica } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Marca } from '../../../components/Marca';
@@ -23,6 +24,15 @@ export default function PaginaDoProfissional() {
   const { slug } = useParams<{ slug: string }>();
   const [pagina, setPagina] = useState<PaginaPublica | null>(null);
   const [naoExiste, setNaoExiste] = useState(false);
+  /*
+    Falha de rede NÃO é página inexistente.
+
+    Era `.catch(() => setNaoExiste(true))`: qualquer tropeço — sinal fraco no
+    celular de quem recebeu o link, Supabase lento — dizia "Este endereço não
+    existe ou saiu do ar" a um cliente em potencial. Ele conclui que o
+    profissional fechou as portas e não volta. Só 404 é inexistência.
+  */
+  const [falhou, setFalhou] = useState(false);
 
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
@@ -33,10 +43,14 @@ export default function PaginaDoProfissional() {
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
+    setFalhou(false);
     sdk.site
       .porSlug(slug)
       .then(setPagina)
-      .catch(() => setNaoExiste(true));
+      .catch((e: unknown) => {
+        if (e instanceof ErroApi && e.status === 404) setNaoExiste(true);
+        else setFalhou(true);
+      });
   }, [slug]);
 
   async function enviar(evento: React.FormEvent) {
@@ -66,6 +80,20 @@ export default function PaginaDoProfissional() {
           <p className="mt-xl text-lg font-semibold">Página não encontrada</p>
           <p className="mt-xs text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
             Este endereço não existe ou saiu do ar.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (falhou) {
+    return (
+      <main className="grid min-h-dvh place-items-center p-lg">
+        <div className="w-full max-w-sm text-center">
+          <Marca tamanho={32} id="falhou" />
+          <p className="mt-xl text-lg font-semibold">Não deu para abrir esta página agora</p>
+          <p className="mt-xs text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
+            A página existe — o que faltou foi conexão. Recarregue em alguns instantes.
           </p>
         </div>
       </main>
@@ -193,6 +221,21 @@ export default function PaginaDoProfissional() {
               >
                 {enviando ? 'Enviando…' : 'Enviar contato'}
               </Botao>
+
+              {/*
+                Quem preenche aqui não tem conta, não aceitou termo nenhum e está
+                entregando nome, e-mail e telefone a duas partes: o profissional e
+                a plataforma. Dizer isso ANTES do envio, com o link da política, é
+                o mínimo da LGPD — e é também o que a pessoa precisa para decidir.
+              */}
+              <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
+                Ao enviar, seu nome e contato vão para {pagina.profissional.nome} e ficam guardados
+                no Vívio Fit para que essa resposta aconteça.{' '}
+                <a href={DOCUMENTOS_LEGAIS.privacidade} className="underline">
+                  Como tratamos seus dados
+                </a>
+                .
+              </p>
             </form>
           )}
         </Cartao>
