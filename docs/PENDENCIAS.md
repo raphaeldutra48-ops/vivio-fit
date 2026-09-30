@@ -253,6 +253,27 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### A verificação do conselho virou prova de banco — 30/09/2026
+**Era:** o selo `verificadoEm` é o que decide quem pode ler dado de saúde de outra
+pessoa, e duas regras o sustentam em `15-perfil.sql` — ninguém se verifica, e
+trocar o registro derruba a verificação. As duas estavam **impostas e sem prova**.
+A tela de perfil avisa que a troca remove o selo; nada garantia que o aviso fosse
+verdade.
+**Por que importa:** sem a primeira, um profissional que consiga escrever o próprio
+selo dispensa a análise inteira e passa a ler exame e prescrição sem que ninguém
+tenha olhado o registro dele. Sem a segunda, bastaria ser aprovado com um número
+válido e trocar depois: o selo ficaria de pé sobre um registro que ninguém
+conferiu. E a UF conta — CREF 12345 de São Paulo e do Ceará são pessoas diferentes.
+**Prova:** 6 casos em `packages/banco/teste/verificacao-do-conselho.spec.ts`,
+rodando contra o banco com a claim que o PostgREST monta. Inclui o lado oposto, que
+é o que impede a regra de virar armadilha: corrigir telefone ou bio NÃO derruba o
+selo — senão arrumar um dígito custaria uma nova análise e dias sem receber aluno.
+**Confirmado por mutação, com cuidado:** o gatilho foi desligado DENTRO de uma
+transação revertida, com a escrita e a leitura na mesma transação. Sem ele o selo
+fica de pé (a prova ficaria vermelha); no rollback o gatilho volta, e nenhuma
+sessão fora dali viu o banco desprotegido. Conferido depois: `tgenabled = 'O'`.
+Banco: 204 provas (22 arquivos).
+
 ### A ficha do aluno e a importação de dieta — 30/09/2026
 **A ficha** só tratava o 403 de consentimento ao listar planos; qualquer outro erro
 era engolido, a lista ficava vazia, e o histórico — que não sabe a diferença —
