@@ -9,6 +9,7 @@ import {
 } from '@vivio/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
+import { useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
 
 const entrada = {
@@ -20,7 +21,6 @@ const entrada = {
 export default function Materiais() {
   const [materiais, setMateriais] = useState<MaterialResumo[]>([]);
   /** Só vínculos ativos: a API recusa compartilhar com quem não é seu aluno. */
-  const [alunos, setAlunos] = useState<{ id: string; nome: string }[]>([]);
   const [etiqueta, setEtiqueta] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -43,19 +43,19 @@ export default function Materiais() {
       .then(setMateriais)
       .catch(() => setErro('Não foi possível carregar os materiais.'));
 
+  /*
+    A lista de alunos vem do gancho compartilhado: aqui ela decide para QUEM o
+    material é compartilhado, e "Nenhum aluno ativo na carteira" dito por falha de
+    rede faria o profissional publicar o arquivo sem destinatário nenhum.
+  */
+  const { alunos: vinculos, falhou: falhouOsAlunos } = useAlunosAtivos();
+  const alunos = vinculos.map((v) => ({ id: v.contraparte.id, nome: v.contraparte.nome }));
+
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etiqueta]);
 
-  useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((vinculos) =>
-        setAlunos(vinculos.map((v) => ({ id: v.contraparte.id, nome: v.contraparte.nome }))),
-      )
-      .catch(() => undefined);
-  }, []);
 
   function limpar() {
     setAbrindo(false);
@@ -151,8 +151,17 @@ export default function Materiais() {
 
   async function remover(m: MaterialResumo) {
     if (!confirm(`Remover "${m.titulo}"?\n\nQuem já recebeu perde o acesso.`)) return;
-    await sdk.materiais.remover(m.id).catch(() => undefined);
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.materiais.remover(m.id).then(() => false).catch(() => true);
     await carregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   return (
@@ -342,7 +351,9 @@ export default function Materiais() {
                   })}
                   {alunos.length === 0 && (
                     <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                      Nenhum aluno ativo na carteira.
+                      {falhouOsAlunos
+                        ? 'Não foi possível carregar seus alunos.'
+                        : 'Nenhum aluno ativo na carteira.'}
                     </p>
                   )}
                 </div>
@@ -362,7 +373,9 @@ export default function Materiais() {
         ))}
       </div>
 
-      {materiais.length === 0 && !abrindo && (
+      {/* `!erro`: a mensagem de falha já está na tela; o cartão de vazio, ao lado
+          dela, diria que o profissional nunca compartilhou nada. */}
+      {materiais.length === 0 && !erro && !abrindo && (
         <p style={{ color: 'var(--vv-texto-secundario)' }}>
           {etiqueta
             ? 'Nenhum material com essa etiqueta.'

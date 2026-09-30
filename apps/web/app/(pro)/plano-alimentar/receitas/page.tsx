@@ -117,8 +117,23 @@ export default function Receitas() {
   async function remover(r: ReceitaResumo) {
     if (!confirm(`Remover "${r.nome}"?\n\nRefeições que já usam esta receita continuam válidas.`))
       return;
-    await sdk.receitas.remover(r.id).catch(() => undefined);
+    /*
+      A falha precisa aparecer. Engolida, o `carregar()` abaixo traz a receita de
+      volta e a tela fica idêntica ao que era antes do clique — a pessoa confirmou
+      uma exclusão e nada aconteceu, sem nenhuma explicação. É o mesmo "toque que
+      não faz nada" que o cardio do aplicativo tinha.
+    */
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.receitas.remover(r.id).then(() => false).catch(() => true);
     await carregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   return (
@@ -330,7 +345,7 @@ export default function Receitas() {
             ))}
           </div>
 
-          {receitas.length === 0 && (
+          {receitas.length === 0 && !erro && (
             <p style={{ color: 'var(--vv-texto-secundario)' }}>
               {busca
                 ? 'Nenhuma receita com esse nome.'

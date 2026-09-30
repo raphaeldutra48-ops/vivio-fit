@@ -137,7 +137,12 @@ export default function Chat() {
       <div className="grid gap-lg lg:grid-cols-[280px_1fr]">
         {/* Lista de conversas */}
         <aside className="flex flex-col gap-sm">
-          {conversas.length === 0 && (
+          {/*
+            A mesma correção feita no aplicativo, do outro lado da conversa: a
+            lista vazia por falha de rede dizia que ninguém escreveu, e do lado do
+            profissional isso significa deixar aluno sem resposta.
+          */}
+          {conversas.length === 0 && !erro && (
             <Aviso tipo="info">
               Nenhuma conversa ainda. Ela aparece aqui quando você ou o aluno enviarem a primeira
               mensagem.

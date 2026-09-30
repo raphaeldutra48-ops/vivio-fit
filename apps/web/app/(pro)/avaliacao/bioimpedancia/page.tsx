@@ -1,6 +1,6 @@
 'use client';
 
-import type { AvaliacaoResumo, SexoBiologico, VinculoResumo } from '@vivio/contracts';
+import type { AvaliacaoResumo, SexoBiologico } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
@@ -13,10 +13,10 @@ import {
   type ValoresDaBalanca,
 } from '../../../../lib/bioimpedancia';
 import { erroVisivel } from '../../../../lib/campos';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../../lib/alunos';
 import { sdk } from '../../../../lib/sdk';
 
 export default function Bioimpedancia() {
-  const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [alunoId, setAlunoId] = useState('');
   const [sexo, setSexo] = useState<SexoBiologico>('F');
   const [valores, setValores] = useState<ValoresDaBalanca>({});
@@ -25,15 +25,16 @@ export default function Bioimpedancia() {
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  /*
+    O gancho no lugar do bloco de sete linhas que esta tela repetia com outras
+    quatro — e que engolia o erro, fazendo o seletor dizer "Nenhum aluno ativo" a
+    quem tem trinta alunos e está sem rede.
+  */
+  const { alunos, falhou: falhouOsAlunos } = useAlunosAtivos();
+
   useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((lista) => {
-        setAlunos(lista);
-        setAlunoId((a) => a || (lista[0]?.contraparte.id ?? ''));
-      })
-      .catch(() => undefined);
-  }, []);
+    setAlunoId((atual) => atual || (alunos[0]?.contraparte.id ?? ''));
+  }, [alunos]);
 
   useEffect(() => {
     if (!alunoId) return;
@@ -97,7 +98,9 @@ export default function Bioimpedancia() {
                 value={alunoId}
                 onChange={(e) => setAlunoId(e.target.value)}
               >
-                {alunos.length === 0 && <option value="">Nenhum aluno ativo</option>}
+                {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) && (
+                  <option value="">{avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos)}</option>
+                )}
                 {alunos.map((v) => (
                   <option key={v.contraparte.id} value={v.contraparte.id}>
                     {v.contraparte.nome}

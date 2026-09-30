@@ -56,8 +56,17 @@ export default function ModelosDePrescricao() {
 
   async function remover(modelo: ModeloPrescricaoResumo) {
     if (!confirm(`Remover o modelo "${modelo.nome}"?`)) return;
-    await sdk.modelosPrescricao.remover(modelo.id).catch(() => undefined);
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.modelosPrescricao.remover(modelo.id).then(() => false).catch(() => true);
     await carregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   return (
@@ -157,7 +166,7 @@ export default function ModelosDePrescricao() {
         ))}
       </div>
 
-      {modelos.length === 0 && !montando && (
+      {modelos.length === 0 && !montando && !erro && (
         <p style={{ color: 'var(--vv-texto-secundario)' }}>
           Nenhum modelo ainda. Monte o primeiro a partir do seu catálogo.
         </p>

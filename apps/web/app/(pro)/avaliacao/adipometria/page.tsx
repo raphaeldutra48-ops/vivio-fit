@@ -7,7 +7,6 @@ import {
   ROTULO_PROTOCOLO,
   type AvaliacaoResumo,
   type SexoBiologico,
-  type VinculoResumo,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useMemo, useState } from 'react';
@@ -23,10 +22,10 @@ import {
   problemasDaAvaliacao,
   type EntradaNaTela,
 } from '../../../../lib/adipometria';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../../lib/alunos';
 import { sdk } from '../../../../lib/sdk';
 
 export default function Adipometria() {
-  const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [alunoId, setAlunoId] = useState('');
   const [protocolo, setProtocolo] = useState<ProtocoloDobras>(ProtocoloDobras.POLLOCK_3);
   const [sexo, setSexo] = useState<SexoBiologico>('M');
@@ -41,15 +40,16 @@ export default function Adipometria() {
 
   const exigidas = DOBRAS_DO_PROTOCOLO[protocolo][sexo];
 
+  /*
+    O gancho no lugar do bloco de sete linhas que esta tela repetia com outras
+    quatro — e que engolia o erro, fazendo o seletor dizer "Nenhum aluno ativo" a
+    quem tem trinta alunos e está sem rede.
+  */
+  const { alunos, falhou: falhouOsAlunos } = useAlunosAtivos();
+
   useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((lista) => {
-        setAlunos(lista);
-        setAlunoId((a) => a || (lista[0]?.contraparte.id ?? ''));
-      })
-      .catch(() => undefined);
-  }, []);
+    setAlunoId((atual) => atual || (alunos[0]?.contraparte.id ?? ''));
+  }, [alunos]);
 
   useEffect(() => {
     if (!alunoId) return;
@@ -122,7 +122,9 @@ export default function Adipometria() {
                   value={alunoId}
                   onChange={(e) => setAlunoId(e.target.value)}
                 >
-                  {alunos.length === 0 && <option value="">Nenhum aluno ativo</option>}
+                  {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) && (
+                  <option value="">{avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos)}</option>
+                )}
                   {alunos.map((v) => (
                     <option key={v.contraparte.id} value={v.contraparte.id}>
                       {v.contraparte.nome}

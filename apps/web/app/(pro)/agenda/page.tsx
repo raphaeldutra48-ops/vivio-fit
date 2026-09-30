@@ -8,11 +8,11 @@ import {
   type HorarioLivre,
   type StatusCompromisso,
   type TipoCompromisso,
-  type VinculoResumo,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useCallback, useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
@@ -32,7 +32,6 @@ export default function Agenda() {
   const [dia, setDia] = useState(hojeISO());
   const [compromissos, setCompromissos] = useState<CompromissoResumo[]>([]);
   const [livres, setLivres] = useState<HorarioLivre[]>([]);
-  const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -60,19 +59,20 @@ export default function Agenda() {
     }
   }, [dia, tipo]);
 
+  const { alunos, falhou: falhouOsAlunos } = useAlunosAtivos();
+
   useEffect(() => {
     void recarregar();
   }, [recarregar]);
 
+  /*
+    O gancho no lugar do bloco de sete linhas que esta tela repetia com outras
+    quatro — e que engolia o erro, fazendo o seletor dizer "Nenhum aluno ativo" a
+    quem tem trinta alunos e está sem rede.
+  */
   useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((lista) => {
-        setAlunos(lista);
-        setAlunoId((atual) => atual || (lista[0]?.contraparte.id ?? ''));
-      })
-      .catch(() => undefined);
-  }, []);
+    setAlunoId((atual) => atual || (alunos[0]?.contraparte.id ?? ''));
+  }, [alunos]);
 
   async function marcar() {
     if (!alunoId || !horarioEscolhido) return;
@@ -137,10 +137,17 @@ export default function Agenda() {
 
       <div className="grid gap-xl lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-md">
+          {/*
+            "Nenhum atendimento neste dia" é uma afirmação sobre a agenda de
+            alguém. Dita por falha de rede, faz o profissional marcar outra coisa
+            no horário — ou simplesmente não aparecer.
+          */}
           <h2 className="text-lg font-semibold">
-            {compromissos.length === 0
-              ? 'Nenhum atendimento neste dia'
-              : `${compromissos.length} ${compromissos.length === 1 ? 'atendimento' : 'atendimentos'}`}
+            {erro
+              ? 'Não foi possível ler este dia'
+              : compromissos.length === 0
+                ? 'Nenhum atendimento neste dia'
+                : `${compromissos.length} ${compromissos.length === 1 ? 'atendimento' : 'atendimentos'}`}
           </h2>
 
           {compromissos.map((c) => (
@@ -191,7 +198,9 @@ export default function Agenda() {
                   value={alunoId}
                   onChange={(e) => setAlunoId(e.target.value)}
                 >
-                  {alunos.length === 0 && <option value="">Nenhum aluno ativo</option>}
+                  {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) && (
+                  <option value="">{avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos)}</option>
+                )}
                   {alunos.map((v) => (
                     <option key={v.contraparte.id} value={v.contraparte.id}>
                       {v.contraparte.nome}

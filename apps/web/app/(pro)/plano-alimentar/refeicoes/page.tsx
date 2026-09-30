@@ -130,8 +130,17 @@ export default function RefeicoesSalvas() {
 
   async function remover(r: RefeicaoSalvaResumo) {
     if (!confirm(`Remover "${r.nome}"?`)) return;
-    await sdk.refeicoesSalvas.remover(r.id).catch(() => undefined);
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.refeicoesSalvas.remover(r.id).then(() => false).catch(() => true);
     await carregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   return (
@@ -335,7 +344,7 @@ export default function RefeicoesSalvas() {
             ))}
           </div>
 
-          {refeicoes.length === 0 && (
+          {refeicoes.length === 0 && !erro && (
             <p style={{ color: 'var(--vv-texto-secundario)' }}>
               Nenhuma refeição salva ainda. Se você monta o mesmo café da manhã toda semana, salve
               aqui — e considere criar{' '}

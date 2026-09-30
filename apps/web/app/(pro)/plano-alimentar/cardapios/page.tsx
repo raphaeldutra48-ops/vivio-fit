@@ -82,10 +82,29 @@ export default function Cardapios() {
     }
   }
 
-  async function remover(id: string) {
-    await sdk.cardapios.remover(id).catch(() => undefined);
+  async function remover(id: string, nome: string) {
+    /*
+      PERGUNTA antes — era a única exclusão do painel que não perguntava, num
+      botão vermelho ao lado de "Aplicar". O cardápio é trabalho acumulado do
+      profissional: montado a partir de uma dieta que deu certo, para servir de
+      ponto de partida das próximas. Um clique errado apagava isso sem volta.
+    */
+    if (!confirm(`Excluir o cardápio "${nome}"?
+
+As dietas já aplicadas a partir dele continuam valendo.`))
+      return;
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.cardapios.remover(id).then(() => false).catch(() => true);
     setAberto(null);
     await recarregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   const seletor = {
@@ -164,7 +183,7 @@ export default function Cardapios() {
         </label>
       </div>
 
-      {modelos.length === 0 && (
+      {modelos.length === 0 && !erro && (
         <Aviso tipo="info">
           Nenhum cardápio no seu acervo ainda. Monte uma dieta para um paciente e salve como
           cardápio — daí em diante ela vira ponto de partida para os próximos.
@@ -203,7 +222,7 @@ export default function Cardapios() {
                 <Botao disabled={!alunoParaAplicar || aplicando} onClick={() => void aplicar(m.id)}>
                   Aplicar
                 </Botao>
-                <Botao variante="perigo" onClick={() => void remover(m.id)}>
+                <Botao variante="perigo" onClick={() => void remover(m.id, m.nome)}>
                   Excluir
                 </Botao>
               </div>

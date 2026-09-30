@@ -1,9 +1,10 @@
 'use client';
 
-import type { ListaDeCompras, VinculoResumo } from '@vivio/contracts';
+import type { ListaDeCompras } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Cartao } from '../../../components/ui';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
 
 const PERIODOS = [
@@ -15,22 +16,22 @@ const PERIODOS = [
 ];
 
 export default function ListaDeComprasPagina() {
-  const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [alunoId, setAlunoId] = useState('');
   const [dias, setDias] = useState(7);
   const [lista, setLista] = useState<ListaDeCompras | null>(null);
   const [comprados, setComprados] = useState<Set<string>>(new Set());
   const [erro, setErro] = useState<string | null>(null);
 
+  /*
+    O gancho no lugar do bloco de sete linhas que esta tela repetia com outras
+    quatro — e que engolia o erro, fazendo o seletor dizer "Nenhum aluno ativo" a
+    quem tem trinta alunos e está sem rede.
+  */
+  const { alunos, falhou: falhouOsAlunos } = useAlunosAtivos();
+
   useEffect(() => {
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then((l) => {
-        setAlunos(l);
-        setAlunoId((a) => a || (l[0]?.contraparte.id ?? ''));
-      })
-      .catch(() => undefined);
-  }, []);
+    setAlunoId((atual) => atual || (alunos[0]?.contraparte.id ?? ''));
+  }, [alunos]);
 
   useEffect(() => {
     if (!alunoId) return;
@@ -87,7 +88,9 @@ export default function ListaDeComprasPagina() {
             value={alunoId}
             onChange={(e) => setAlunoId(e.target.value)}
           >
-            {alunos.length === 0 && <option value="">Nenhum aluno ativo</option>}
+            {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) && (
+                  <option value="">{avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos)}</option>
+                )}
             {alunos.map((v) => (
               <option key={v.contraparte.id} value={v.contraparte.id}>
                 {v.contraparte.nome}

@@ -386,7 +386,13 @@ export default function AnamneseDoAluno() {
             </Cartao>
           ))}
 
-          {anamneses.length === 0 && (
+          {/*
+            Mesma regra das prescrições, e pelo mesmo motivo: é aqui que estão
+            alergia, restrição e condição de saúde. "Nenhuma anamnese aplicada"
+            dito por falha de rede faz o profissional montar dieta ou treino como
+            se não houvesse nada a evitar.
+          */}
+          {anamneses.length === 0 && !erro && (
             <p style={{ color: 'var(--vv-texto-secundario)' }}>
               Nenhuma anamnese aplicada ainda.
             </p>

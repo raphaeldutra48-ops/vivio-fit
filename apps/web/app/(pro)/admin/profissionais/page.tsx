@@ -245,7 +245,9 @@ export default function VerificarProfissionais() {
         })}
       </div>
 
-      {!carregando && lista.length === 0 && (
+      {/* `!erro`: "Nenhum profissional aguardando análise" ao lado do aviso de
+          falha faz a fila de análise parecer vazia — e ninguém volta a olhar. */}
+      {!carregando && !erro && lista.length === 0 && (
         <p style={{ color: 'var(--vv-texto-secundario)' }}>
           {aba === 'PENDENTE'
             ? 'Nenhum profissional aguardando análise.'

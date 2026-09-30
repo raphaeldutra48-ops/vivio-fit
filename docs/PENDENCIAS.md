@@ -228,6 +228,43 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### O painel do profissional passou pela mesma varredura — 30/09/2026
+**Era:** a auditoria de 29/09 cobriu as 24 telas do aplicativo e encontrou nove
+defeitos, quase todos da mesma família: **a tela afirmando "não tem" quando o que
+houve foi "não sei"**. O painel tinha as mesmas frases, e do lado de quem
+PRESCREVE elas custam mais.
+**O que estava errado, e o que cada frase fazia:**
+- **Prescrições do aluno:** "Nenhuma prescrição emitida ainda" aparecia ao lado do
+  aviso de erro — e é a frase que parece resposta. Quem prescreve em cima dela
+  emite de novo o que já está valendo, ou algo que interage com o que não viu.
+- **Anamnese:** "Nenhuma anamnese aplicada ainda" esconde alergia, restrição e
+  condição de saúde. Lida por quem vai montar a dieta, significa "pode usar
+  qualquer ingrediente".
+- **Agenda:** "Nenhum atendimento neste dia" faz marcar outra coisa no horário —
+  ou não aparecer.
+- **Meus alunos:** "Nenhum aluno ativo. Convide alguém" é a frase de quem está
+  começando, dita a quem tem trinta alunos e está sem rede.
+- **Conversas, materiais, cardápios, receitas, refeições, modelos de anamnese e de
+  prescrição, fila de análise do admin:** mesmo padrão, consequência menor.
+- **Cinco telas repetiam o mesmo bloco de sete linhas** para listar alunos, com o
+  erro engolido: o seletor escrevia "Nenhum aluno ativo" e o profissional
+  concluía que perdeu a carteira. Virou o gancho `useAlunosAtivos`, com `falhou`.
+- **Seis exclusões falhavam em silêncio:** a recarga trazia o item de volta e a
+  tela ficava idêntica ao que era antes do clique — exclusão confirmada, nada
+  aconteceu, nenhuma palavra. O aviso agora vem DEPOIS da recarga, porque a
+  recarga limpa o erro ao dar certo.
+- **O cardápio era a única exclusão do painel sem confirmação:** botão vermelho ao
+  lado de "Aplicar", apagando sem volta um molde montado a partir de uma dieta que
+  deu certo.
+**Prova:** 13 casos em `apps/web/teste/painel-nao-mente.test.tsx`, três deles
+confirmados por mutação (reintroduzir o defeito deixa a prova vermelha). A web
+passou de 322 para 335 provas.
+**O que a varredura NÃO encontrou:** a família do `Number()` cru, que no
+aplicativo custou quatro defeitos, não existe no painel — os campos são
+`type="number"`, e o navegador já recusa texto antes de o valor chegar ao código.
+É a mesma regra em dois lugares onde o mesmo código tem consequências
+diferentes.
+
 ### A fila de treinos e o rascunho ganharam prova — e duas suítes estavam invisíveis — 29/09/2026
 Continuação da cobertura do aplicativo, pelas duas peças onde mora o risco de
 "treinou e o sistema não viu". Academia é o pior lugar de rede que existe:

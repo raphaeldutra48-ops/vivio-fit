@@ -125,7 +125,11 @@ export default function CarteiraDeAlunos() {
       )}
 
       <section className="flex flex-col gap-md">
-        {ativos.length === 0 && !carregando && (
+        {/*
+          `!erro`: sem ele, quem tem trinta alunos e está sem rede lê "Nenhum
+          aluno ativo ainda. Convide alguém" — a frase de quem está começando.
+        */}
+        {ativos.length === 0 && !carregando && !erro && (
           <Aviso tipo="info">
             Nenhum aluno ativo ainda. Convide alguém pelo e-mail acima para começar.
           </Aviso>

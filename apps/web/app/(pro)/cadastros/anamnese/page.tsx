@@ -123,8 +123,17 @@ export default function ModelosDeAnamnese() {
   async function remover(m: ModeloAnamneseResumo) {
     if (!confirm(`Remover o modelo "${m.nome}"?\n\nAnamneses já aplicadas continuam no histórico.`))
       return;
-    await sdk.modelosAnamnese.remover(m.id).catch(() => undefined);
+    /*
+      O aviso vem DEPOIS da recarga, e não dentro do `catch`.
+
+      A recarga limpa o erro ao dar certo — é o que a torna confiável no caminho
+      normal — então um `setErro` antes dela era apagado no mesmo instante e a
+      tela voltava a ficar idêntica ao que era antes do clique: exclusão
+      confirmada, nada aconteceu, nenhuma palavra.
+    */
+    const falhou = await sdk.modelosAnamnese.remover(m.id).then(() => false).catch(() => true);
     await carregar();
+    if (falhou) setErro('Não foi possível remover. Tente de novo.');
   }
 
   return (
@@ -357,7 +366,7 @@ export default function ModelosDeAnamnese() {
         ))}
       </div>
 
-      {modelos.length === 0 && editando === null && (
+      {modelos.length === 0 && editando === null && !erro && (
         <p style={{ color: 'var(--vv-texto-secundario)' }}>
           Nenhum modelo ainda. As perguntas sugeridas cobrem o básico de quase toda anamnese — é um
           bom ponto de partida para editar.

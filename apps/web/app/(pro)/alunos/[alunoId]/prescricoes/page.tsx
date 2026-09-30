@@ -340,7 +340,16 @@ export default function PrescricoesDoAluno() {
         ))}
       </div>
 
-      {prescricoes.length === 0 && emitindo === null && (
+      {/*
+        O `!erro` é a parte clínica desta tela.
+
+        Falhando a busca, a lista fica vazia e esta frase dizia "Nenhuma
+        prescrição emitida ainda" ao lado do aviso de erro — e é a frase que
+        parece resposta. Quem prescreve em cima dela emite de novo o que já está
+        valendo, ou algo que interage com o que não viu. O aviso de erro sozinho
+        deixa claro que a resposta é "não sei", que é a verdade.
+      */}
+      {prescricoes.length === 0 && emitindo === null && !erro && (
         <p style={{ color: 'var(--vv-texto-secundario)' }}>Nenhuma prescrição emitida ainda.</p>
       )}
     </div>
