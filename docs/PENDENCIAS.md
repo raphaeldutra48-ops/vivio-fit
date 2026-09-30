@@ -5,6 +5,13 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 
 ## Abertas
 
+> **Para o primeiro teste com pessoas de verdade, o roteiro está em
+> [`TESTE-REAL.md`](TESTE-REAL.md)** — o que precisa estar pronto antes, em que
+> ordem testar, o que olhar em cada tela e o que fazer quando algo falhar. Ele
+> também registra a decisão que não pode ser tomada no susto: **no instante em
+> que a primeira pessoa real criar conta, as suítes param de poder rodar contra
+> este banco** (a guarda de produção recusa, e é para isso que ela existe).
+
 
 ### 28. O Railway continua conectado ao repositório (só o dono da conta desliga)
 **Assumida em:** 2026-09-30 · **Depende de:** você, no painel do Railway.
