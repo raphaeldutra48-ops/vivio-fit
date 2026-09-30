@@ -237,6 +237,23 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### O painel também ganhou barreira de erro — 30/09/2026
+**Era:** o aplicativo ganhou barreira em 29/09; o painel não tinha nenhuma. Um
+erro de render derrubava a árvore e a página ficava BRANCA — sem texto, sem botão,
+sem caminho de volta. Três suítes novas deste mês encontraram isso ao montar
+fixture sem um campo que a tela lê (a última: `CobrancaComPix.aluno` é string, e um
+objeto no lugar dela derruba tudo). Em produção a causa é idêntica: campo novo
+chegando `null`, resposta parcial, formato mudado de um lado só — e quem vê é um
+profissional no meio de um atendimento.
+**Agora:** `apps/web/app/error.tsx`, no formato que o Next exige, com a tela em
+`components/TelaQuebrada.tsx` — separada de propósito, porque regra de produto não
+deve depender do roteador para ser provada. Ela promete só o que pode cumprir (o
+que já estava salvo continua salvo; o que estava sendo preenchido, não), e tem duas
+saídas: `reset` do Next, que remonta só o trecho quebrado mantendo menu e sessão, e
+um link COMUM para a lista de alunos — a navegação do Next pode ser justamente o
+que quebrou. Mostra o `digest` quando existe, que é o que o suporte pede.
+**Prova:** 5 casos em `apps/web/teste/tela-quebrada.test.tsx`.
+
 ### Receba Fácil ganhou prova, e parou de dizer que a chave não existe — 30/09/2026
 **Era:** a tela da chave PIX e do "copia e cola" de cada cobrança, sem teste. O
 dado central dela é o DESTINO DO DINHEIRO: chave errada não dá erro em lugar
