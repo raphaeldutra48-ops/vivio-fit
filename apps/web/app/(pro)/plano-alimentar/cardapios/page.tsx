@@ -1,15 +1,15 @@
 'use client';
 
-import type { ModeloCardapioCompleto, ModeloCardapioResumo, VinculoResumo } from '@vivio/contracts';
+import type { ModeloCardapioCompleto, ModeloCardapioResumo } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
+import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../../lib/alunos';
 import { sdk } from '../../../../lib/sdk';
 
 export default function Cardapios() {
   const [modelos, setModelos] = useState<ModeloCardapioResumo[]>([]);
   const [aberto, setAberto] = useState<ModeloCardapioCompleto | null>(null);
-  const [alunos, setAlunos] = useState<VinculoResumo[]>([]);
   const [alunoParaAplicar, setAlunoParaAplicar] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
@@ -29,25 +29,52 @@ export default function Cardapios() {
     }
   }
 
+  /*
+    Duas falhas caladas viviam aqui, e as duas mentiam por omissão.
+
+    A lista de alunos vinha de um bloco próprio com `.catch(() => undefined)`: o
+    seletor "Aplicar em" escrevia "Nenhum aluno ativo" para quem tem trinta, e
+    aplicar um cardápio ficava impossível sem explicação. Agora ela vem do gancho
+    compartilhado, que sabe a diferença entre vazio e falha.
+
+    E os planos de cada aluno tinham `.catch(() => [])` POR ALUNO: o plano que
+    serviria de molde simplesmente não aparecia na lista, e o profissional
+    procurava um plano que ele sabe que existe. Agora as falhas são contadas, e a
+    tela diz quantos alunos não puderam ser lidos.
+  */
+  const { alunos, falhou: falhouOsAlunos } = useAlunosAtivos();
+  /** Quantos alunos tiveram os planos ilegíveis nesta carga. */
+  const [alunosIlegiveis, setAlunosIlegiveis] = useState(0);
+
   useEffect(() => {
     void recarregar();
-    sdk.vinculos
-      .meusAlunos('ATIVO')
-      .then(async (lista) => {
-        setAlunos(lista);
-        setAlunoParaAplicar((a) => a || (lista[0]?.contraparte.id ?? ''));
-
-        // Junta os planos de todos os alunos — é de onde nasce um molde novo.
-        const todos = await Promise.all(
-          lista.map(async (v) => {
-            const doAluno = await sdk.dietas.listar(v.contraparte.id).catch(() => []);
-            return doAluno.map((p) => ({ id: p.id, nome: p.nome, aluno: v.contraparte.nome }));
-          }),
-        );
-        setPlanos(todos.flat());
-      })
-      .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setAlunoParaAplicar((a) => a || (alunos[0]?.contraparte.id ?? ''));
+    if (alunos.length === 0) return;
+
+    let ativo = true;
+    void (async () => {
+      // Junta os planos de todos os alunos — é de onde nasce um molde novo.
+      const porAluno = await Promise.all(
+        alunos.map(async (v) =>
+          sdk.dietas
+            .listar(v.contraparte.id)
+            .then((planosDoAluno) =>
+              planosDoAluno.map((p) => ({ id: p.id, nome: p.nome, aluno: v.contraparte.nome })),
+            )
+            .catch(() => null),
+        ),
+      );
+      if (!ativo) return;
+      setPlanos(porAluno.filter((x) => x !== null).flat());
+      setAlunosIlegiveis(porAluno.filter((x) => x === null).length);
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [alunos]);
 
   async function salvarDoPlano() {
     if (!planoEscolhido || nomeDoModelo.trim().length < 2) return;
@@ -139,7 +166,9 @@ As dietas já aplicadas a partir dele continuam valendo.`))
               value={planoEscolhido}
               onChange={(e) => setPlanoEscolhido(e.target.value)}
             >
-              <option value="">Escolha um plano</option>
+              <option value="">
+                {alunosIlegiveis > 0 ? 'Lista incompleta — veja o aviso abaixo' : 'Escolha um plano'}
+              </option>
               {planos.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nome} — {p.aluno}
@@ -159,6 +188,18 @@ As dietas já aplicadas a partir dele continuam valendo.`))
           >
             Salvar
           </Botao>
+
+          {/*
+            Dito com número: "1 aluno" e "12 alunos" pedem reações diferentes, e
+            sem isso quem não encontra o plano conclui que ele não existe.
+          */}
+          {alunosIlegiveis > 0 && (
+            <Aviso tipo="erro">
+              Não foi possível ler os planos de {alunosIlegiveis}{' '}
+              {alunosIlegiveis === 1 ? 'aluno' : 'alunos'}. A lista acima está incompleta —
+              recarregue antes de concluir que um plano não existe.
+            </Aviso>
+          )}
         </div>
       </Cartao>
 
@@ -173,7 +214,9 @@ As dietas já aplicadas a partir dele continuam valendo.`))
             value={alunoParaAplicar}
             onChange={(e) => setAlunoParaAplicar(e.target.value)}
           >
-            {alunos.length === 0 && <option value="">Nenhum aluno ativo</option>}
+            {avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos) && (
+              <option value="">{avisoDoSeletorDeAlunos(alunos.length, falhouOsAlunos)}</option>
+            )}
             {alunos.map((v) => (
               <option key={v.contraparte.id} value={v.contraparte.id}>
                 {v.contraparte.nome}

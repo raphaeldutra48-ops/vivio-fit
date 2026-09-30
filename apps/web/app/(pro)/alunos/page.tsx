@@ -28,6 +28,16 @@ export default function CarteiraDeAlunos() {
    * profissional de ver os proprios alunos.
    */
   const [atencaoPorAluno, setAtencaoPorAluno] = useState<Map<string, MotivoDeAtencao>>(new Map());
+  /*
+    Falhar o relatório NÃO é "está todo mundo bem".
+
+    O comentário acima diz que a falha não quebra a lista, e isso continua certo —
+    mas sem o relatório NENHUM aluno aparece marcado, e a ausência de selo se lê
+    como tranquilidade. Quem parou de treinar ou de fazer check-in é exatamente
+    quem desaparece nesse silêncio. A lista segue útil; o que muda é a tela dizer
+    que não conferiu.
+  */
+  const [falhouAAtencao, setFalhouAAtencao] = useState(false);
 
   async function recarregar() {
     setCarregando(true);
@@ -53,8 +63,9 @@ export default function CarteiraDeAlunos() {
           if (motivo) mapa.set(linha.alunoId, motivo);
         }
         setAtencaoPorAluno(mapa);
+        setFalhouAAtencao(false);
       })
-      .catch(() => undefined);
+      .catch(() => setFalhouAAtencao(true));
   }, []);
 
   async function convidar(evento: React.FormEvent) {
@@ -130,6 +141,18 @@ export default function CarteiraDeAlunos() {
           `!erro`: sem ele, quem tem trinta alunos e está sem rede lê "Nenhum
           aluno ativo ainda. Convide alguém" — a frase de quem está começando.
         */}
+        {/*
+          Dito antes da lista, porque é a leitura dela que muda: sem o relatório,
+          "Ativo" em todos os cartões quer dizer "não conferimos", e não "sem
+          pendência".
+        */}
+        {falhouAAtencao && !erro && (
+          <Aviso tipo="erro">
+            Não foi possível conferir quem precisa de atenção. Os alunos abaixo aparecem todos como
+            ativos porque o relatório não respondeu — recarregue para ver as pendências.
+          </Aviso>
+        )}
+
         {ativos.length === 0 && !carregando && !erro && (
           <Aviso tipo="info">
             Nenhum aluno ativo ainda. Convide alguém pelo e-mail acima para começar.

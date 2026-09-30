@@ -11,9 +11,23 @@ export default function Alimentos() {
   const [busca, setBusca] = useState('');
   const [grupo, setGrupo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Falhar a lista de grupos deixava o filtro com "Todos" e nada mais.
+
+    Parece inofensivo, e não é: sem os grupos o filtro se torna inútil
+    justamente na tabela de onde sai o cálculo de todo cardápio — e quem procura
+    "leguminosas" conclui que o catálogo não tem a categoria, quando o que houve
+    foi a rede. A busca por nome continua funcionando; o que muda é a tela dizer
+    que o filtro está incompleto.
+  */
+  const [falhouOsGrupos, setFalhouOsGrupos] = useState(false);
 
   useEffect(() => {
-    sdk.alimentos.grupos().then(setGrupos).catch(() => undefined);
+    setFalhouOsGrupos(false);
+    sdk.alimentos
+      .grupos()
+      .then(setGrupos)
+      .catch(() => setFalhouOsGrupos(true));
   }, []);
 
   useEffect(() => {
@@ -31,6 +45,13 @@ export default function Alimentos() {
           Composição nutricional por 100 g. É desta tabela que sai o cálculo dos cardápios.
         </p>
       </div>
+
+      {falhouOsGrupos && (
+        <Aviso tipo="erro">
+          Não foi possível carregar os grupos de alimentos, então o filtro por categoria ficou
+          vazio. A busca por nome continua funcionando — recarregue para ter o filtro de volta.
+        </Aviso>
+      )}
 
       <div className="grid gap-md sm:grid-cols-[1fr_220px]">
         <Campo
@@ -53,7 +74,7 @@ export default function Alimentos() {
             value={grupo}
             onChange={(e) => setGrupo(e.target.value)}
           >
-            <option value="">Todos</option>
+            <option value="">{falhouOsGrupos ? 'Todos (filtro indisponível)' : 'Todos'}</option>
             {grupos.map((g) => (
               <option key={g} value={g}>
                 {g.charAt(0) + g.slice(1).toLowerCase()}

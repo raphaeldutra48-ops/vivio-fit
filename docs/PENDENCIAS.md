@@ -273,12 +273,26 @@ dos 13 commits.
    lê isso monta de novo um questionário que já existe e passa a ter dois para
    escolher. E marcar um pedido de contato como atendido falhava em silêncio: o
    pedido voltava não atendido e o profissional clicava de novo até desistir.
-**O que ficou julgado como aceitável, e por quê:** na tela de prescrições do aluno
-os modelos aparecem só quando existem (não há frase falsa — o atalho apenas não
-aparece, e a prescrição manual segue); o filtro de grupos do catálogo de alimentos
-e o resumo da carteira degradam sem afirmar nada; e a lista de planos por aluno na
-tela de cardápios pode vir incompleta em silêncio — anotado, não corrigido, porque
-o conserto certo é o mesmo gancho de alunos e não caberia sem refazer aquela tela.
+**O que eu havia julgado aceitável foi CORRIGIDO no mesmo dia**, a pedido — e
+revendo com o objetivo de começar teste real, nenhuma das quatro era aceitável:
+- **Carteira de alunos:** sem o relatório, NENHUM aluno aparecia marcado como
+  precisando de atenção, e todos ficavam com o selo "Ativo". Quem parou de treinar
+  ou de fazer check-in é exatamente quem desaparecia nesse silêncio. A lista segue
+  útil; o que mudou é a tela dizer que não conferiu.
+- **Cardápios:** duas falhas caladas. O seletor "Aplicar em" escrevia "Nenhum aluno
+  ativo" para quem tem trinta, e o `.catch(() => [])` POR ALUNO fazia o plano que
+  serviria de molde desaparecer da lista — o profissional procura um plano que sabe
+  que existe, não acha, e conclui que precisa montar de novo. Agora a lista de
+  alunos vem do gancho compartilhado e as falhas por aluno são CONTADAS, com a
+  tela declarando a lista incompleta.
+- **Prescrições do aluno:** o atalho "partir de um modelo" desaparecia na falha, e
+  sem ele a posologia é redigitada à mão — é redigitando que se troca "1
+  comprimido" por "1 mL".
+- **Catálogo de alimentos:** o filtro por grupo ficava vazio na tabela de onde sai o
+  cálculo de todo cardápio, e quem procura "leguminosas" concluía que a categoria
+  não existe.
+**Prova:** 7 casos em `apps/web/teste/nada-mais-mente.test.tsx`, os quatro
+principais confirmados por mutação.
 **O que NÃO está errado, apesar de parecer:** a chave `eyJ...` em
 `packages/sdk/src/projeto.ts` é a chave ANÔNIMA, publicável por desenho — o papel
 dentro do JWT é `anon`, e ela já vai no pacote do navegador. Nenhum `.env` está

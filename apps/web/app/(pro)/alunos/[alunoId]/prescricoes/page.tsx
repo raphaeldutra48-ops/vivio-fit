@@ -31,6 +31,8 @@ export default function PrescricoesDoAluno() {
   const { alunoId } = useParams<{ alunoId: string }>();
   const [prescricoes, setPrescricoes] = useState<PrescricaoResumo[]>([]);
   const [modelos, setModelos] = useState<ModeloPrescricaoResumo[]>([]);
+  /** true quando a busca de modelos falhou — diferente de não haver modelo. */
+  const [falhouOsModelos, setFalhouOsModelos] = useState(false);
   const [semConsentimento, setSemConsentimento] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -55,10 +57,18 @@ export default function PrescricoesDoAluno() {
 
   useEffect(() => {
     void carregar();
+    /*
+      O atalho "partir de um modelo" aparecia só quando havia modelo, e a falha
+      era indistinguível de não ter nenhum. Numa tela de prescrição isso custa
+      mais que um atalho: o profissional digita a posologia inteira à mão, onde o
+      modelo existia justamente para não redigitar dose e via — e é redigitando
+      que se troca "1 comprimido" por "1 mL".
+    */
+    setFalhouOsModelos(false);
     sdk.modelosPrescricao
       .listar()
       .then(setModelos)
-      .catch(() => undefined);
+      .catch(() => setFalhouOsModelos(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alunoId]);
 
@@ -233,6 +243,15 @@ export default function PrescricoesDoAluno() {
                 />
               </label>
             </div>
+
+            {falhouOsModelos && (
+              <div className="mt-lg">
+                <Aviso tipo="erro">
+                  Não foi possível carregar seus modelos de prescrição. Eles continuam salvos — se
+                  for usar um, recarregue a página em vez de redigitar a posologia.
+                </Aviso>
+              </div>
+            )}
 
             {modelos.length > 0 && (
               <div className="mt-lg">
