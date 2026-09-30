@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,15 +29,29 @@ import { describe, expect, it } from 'vitest';
 */
 const RAIZ = fileURLToPath(new URL('../../..', import.meta.url));
 
-const PACOTES = [
-  'apps/web',
-  'apps/mobile',
-  'packages/contracts',
-  'packages/sdk',
-  'packages/ui',
-  'packages/ui-native',
-  'packages/banco',
-] as const;
+/*
+  Os pacotes são DESCOBERTOS, e não listados.
+
+  A primeira versão trazia sete nomes escritos à mão — e já nascia incompleta:
+  `packages/config` ficou de fora e nunca foi conferido. Uma lista fixa num
+  guarda como este é pior que nenhuma, porque ela dá a impressão de cobrir o
+  repositório inteiro. Aqui a origem é a mesma do `pnpm-workspace.yaml`:
+  `apps/*` e `packages/*` que tenham `package.json`.
+*/
+function pacotesDoWorkspace(): string[] {
+  const achados: string[] = [];
+  for (const grupo of ['apps', 'packages']) {
+    for (const nome of readdirSync(join(RAIZ, grupo))) {
+      const dir = join(RAIZ, grupo, nome);
+      if (!statSync(dir).isDirectory()) continue;
+      if (!existsSync(join(dir, 'package.json'))) continue;
+      achados.push(`${grupo}/${nome}`);
+    }
+  }
+  return achados.sort();
+}
+
+const PACOTES = pacotesDoWorkspace();
 
 /** Pastas que não são código do pacote. */
 const IGNORAR = new Set(['node_modules', 'dist', '.next', '.expo', 'build', 'coverage']);
@@ -138,6 +152,18 @@ function declaradasEm(pacote: string): Set<string> {
 const nativos = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
 describe('todo import vem de uma dependência declarada', () => {
+  it('descobre todos os pacotes do workspace', () => {
+    /*
+      Se a descoberta quebrar, os testes abaixo simplesmente não existem — e uma
+      suíte que não roda nada passa por aprovação. Este caso é o que impede o
+      guarda de virar decoração.
+    */
+    expect(PACOTES).toContain('apps/web');
+    expect(PACOTES).toContain('apps/mobile');
+    expect(PACOTES).toContain('packages/config');
+    expect(PACOTES.length).toBeGreaterThanOrEqual(8);
+  });
+
   for (const pacote of PACOTES) {
     it(pacote, () => {
       const declaradas = declaradasEm(pacote);

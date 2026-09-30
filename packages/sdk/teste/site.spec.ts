@@ -32,6 +32,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: página pública', () =
   /** O que havia antes, para devolver: a página é do profissional semeado. */
   let paginaOriginal: Record<string, unknown> | null = null;
   let verificacaoDoMedico: string | null = null;
+  /** Rede de segurança: o selo do personal, para devolver mesmo em falha feia. */
+  let verificacaoDoPersonal: string | null = null;
 
   const cliente = (): VivioClient =>
     new VivioClient({
@@ -69,6 +71,25 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: página pública', () =
       await admin.from('PerfilPublico').delete().eq('profissionalId', personalId);
     }
 
+    /*
+      O selo do personal é guardado aqui, e não só dentro do teste que o derruba.
+
+      Uma das provas precisa tirar a verificação por um instante para conferir
+      que a página sai do ar. O `finally` dela devolve — mas `finally` não roda
+      se o processo morrer no meio (Ctrl+C, timeout do runner), e isto é o BANCO
+      DE PRODUÇÃO: o personal semeado ficaria não verificado, e as outras suítes
+      quebrariam na rodada seguinte por um motivo que não tem nada a ver com elas.
+      O `afterAll` fecha essa fresta.
+    */
+    verificacaoDoPersonal =
+      ((
+        await admin
+          .from('PerfilProfissional')
+          .select('verificadoEm')
+          .eq('userId', personalId)
+          .single()
+      ).data as { verificadoEm: string | null }).verificadoEm ?? null;
+
     // O médico entra na prova como NÃO verificado.
     verificacaoDoMedico =
       ((
@@ -102,6 +123,10 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: página pública', () =
       .from('PerfilProfissional')
       .update({ verificadoEm: verificacaoDoMedico })
       .eq('userId', medicoId);
+    await admin
+      .from('PerfilProfissional')
+      .update({ verificadoEm: verificacaoDoPersonal })
+      .eq('userId', personalId);
   });
 
   it('o rascunho é do dono, e ele o lê antes de publicar', async () => {

@@ -253,6 +253,37 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 30/09: o que ela encontrou no que foi feito hoje
+Varredura do próprio trabalho do dia, com as suítes rodadas por CÓDIGO DE SAÍDA (e
+não pelo resumo na tela), diagnóstico ao vivo, auditoria de RLS e o CI de cada um
+dos 13 commits.
+**Três defeitos nas minhas próprias correções:**
+1. **O guarda de dependências nascia incompleto.** A lista de pacotes era escrita à
+   mão, e `packages/config` ficou de fora — nunca foi conferido. Lista fixa num
+   guarda desses é pior que guarda nenhum, porque dá a impressão de cobrir o
+   repositório. Agora os pacotes são descobertos em `apps/*` e `packages/*`, e um
+   caso novo falha se a descoberta quebrar (senão a suíte passaria sem testar nada).
+2. **O teste que derruba o selo do personal podia deixar o banco sujo.** O
+   `finally` devolve a verificação, mas `finally` não roda se o processo morrer —
+   e este é o banco de PRODUÇÃO: o personal semeado ficaria não verificado e as
+   outras suítes quebrariam na rodada seguinte por um motivo alheio. Agora o selo
+   é guardado no `beforeAll` e devolvido também no `afterAll`.
+3. **Duas sobras da família "vazio que mente".** A tela de anamnese do aluno dizia
+   "Você ainda não tem modelos. Montar o primeiro" quando a busca falhava — quem
+   lê isso monta de novo um questionário que já existe e passa a ter dois para
+   escolher. E marcar um pedido de contato como atendido falhava em silêncio: o
+   pedido voltava não atendido e o profissional clicava de novo até desistir.
+**O que ficou julgado como aceitável, e por quê:** na tela de prescrições do aluno
+os modelos aparecem só quando existem (não há frase falsa — o atalho apenas não
+aparece, e a prescrição manual segue); o filtro de grupos do catálogo de alimentos
+e o resumo da carteira degradam sem afirmar nada; e a lista de planos por aluno na
+tela de cardápios pode vir incompleta em silêncio — anotado, não corrigido, porque
+o conserto certo é o mesmo gancho de alunos e não caberia sem refazer aquela tela.
+**O que NÃO está errado, apesar de parecer:** a chave `eyJ...` em
+`packages/sdk/src/projeto.ts` é a chave ANÔNIMA, publicável por desenho — o papel
+dentro do JWT é `anon`, e ela já vai no pacote do navegador. Nenhum `.env` está
+rastreado, e o único arquivo de ambiente no repositório é o `.env.example`.
+
 ### Perder a verificação tira a página do ar — 30/09/2026
 **A composição que ninguém testava.** Publicar exige registro conferido, e isso já
 tinha prova. Mas o selo pode CAIR depois: trocar o registro no conselho o zera por

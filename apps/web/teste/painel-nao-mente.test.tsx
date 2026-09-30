@@ -276,3 +276,28 @@ describe('acervo do nutricionista: excluir', () => {
     expect(textoDaTela()).not.toMatch(/nenhum cardápio no seu acervo ainda/i);
   });
 });
+
+describe('sobras que a auditoria de 30/09 encontrou', () => {
+  it('falha ao buscar modelos de questionário NÃO vira "você ainda não tem modelos"', async () => {
+    /*
+      A frase do vazio convida a montar o primeiro. Quem a lê por causa de rede
+      monta de novo um questionário que já existe, com outro nome — e passa a ter
+      dois para escolher na hora de aplicar, sem saber qual é o bom.
+    */
+    listarModelosAnamnese.mockRejectedValue(semRede());
+    const { default: Anamnese } = await import('../app/(pro)/alunos/[alunoId]/anamnese/page');
+    render(<Anamnese />);
+
+    await waitFor(() =>
+      expect(textoDaTela()).toMatch(/não foi possível carregar seus modelos de questionário/i),
+    );
+    expect(textoDaTela()).not.toMatch(/você ainda não tem modelos/i);
+  });
+
+  it('sem modelo nenhum de verdade, continua convidando a montar o primeiro', async () => {
+    const { default: Anamnese } = await import('../app/(pro)/alunos/[alunoId]/anamnese/page');
+    render(<Anamnese />);
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/você ainda não tem modelos/i));
+  });
+});

@@ -148,6 +148,8 @@ export default function AnamneseDoAluno() {
   const [modelos, setModelos] = useState<ModeloAnamneseResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** true quando a busca de modelos falhou — diferente de não haver modelo. */
+  const [falhouOsModelos, setFalhouOsModelos] = useState(false);
 
   const [aplicando, setAplicando] = useState<ModeloAnamneseResumo | null>(null);
   const [respostas, setRespostas] = useState<Respostas>({});
@@ -166,10 +168,18 @@ export default function AnamneseDoAluno() {
 
   useEffect(() => {
     void carregar();
+    /*
+      Falhar ao buscar os modelos NÃO é "você ainda não tem modelos".
+
+      A frase do vazio convida a montar o primeiro — e quem a lê por causa de
+      rede monta de novo um questionário que já existe, com outro nome, e passa a
+      ter dois para escolher. O `falhouOsModelos` separa as duas coisas.
+    */
+    setFalhouOsModelos(false);
     sdk.modelosAnamnese
       .listar()
       .then(setModelos)
-      .catch(() => undefined);
+      .catch(() => setFalhouOsModelos(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alunoId]);
 
@@ -267,7 +277,12 @@ export default function AnamneseDoAluno() {
       {!aplicando && (
         <Cartao>
           <p className="mb-md font-semibold">Aplicar um questionário</p>
-          {modelos.length === 0 ? (
+          {falhouOsModelos ? (
+            <Aviso tipo="erro">
+              Não foi possível carregar seus modelos de questionário. Eles continuam salvos —
+              recarregue a página antes de montar outro.
+            </Aviso>
+          ) : modelos.length === 0 ? (
             <Aviso tipo="info">
               Você ainda não tem modelos.{' '}
               <Link href="/cadastros/anamnese" className="underline">

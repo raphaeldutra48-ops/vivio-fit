@@ -121,8 +121,17 @@ export default function SiteProfissional() {
   }
 
   async function alternarAtendido(p: PedidoResumo) {
-    await sdk.site.marcarAtendido(p.id).catch(() => undefined);
+    /*
+      Falha aqui não pode ser silêncio: o pedido volta marcado como não atendido
+      depois da recarga, e o profissional clica de novo achando que não pegou —
+      até desistir e perder a conta de quem já respondeu.
+    */
+    const falhou = await sdk.site
+      .marcarAtendido(p.id)
+      .then(() => false)
+      .catch(() => true);
     setPedidos(await sdk.site.listarPedidos().catch(() => pedidos));
+    if (falhou) setErro('Não foi possível marcar este pedido como atendido. Tente de novo.');
   }
 
   const enderecoCompleto =
