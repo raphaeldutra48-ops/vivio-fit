@@ -362,8 +362,15 @@ export default function ImportarDieta() {
               </Aviso>
             ) : (
               <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                Tudo conferido. Salvar cria o plano como qualquer outro — o histórico e as versões
-                seguem valendo.
+                {/*
+                  Diz o que cada botão FAZ, e não só que está tudo certo. Ativar
+                  troca o que o aluno vê no aplicativo hoje: ele abre o app e
+                  encontra outro cardápio. Quem clica sem saber disso descobre pela
+                  pergunta do aluno.
+                */}
+                Tudo conferido. <strong>Salvar e ativar</strong> passa a valer hoje no aplicativo do
+                aluno, e a dieta ativa de agora vai para o histórico — nada se perde.{' '}
+                <strong>Salvar como rascunho</strong> não muda nada para ele.
               </p>
             )}
             <div className="mt-lg flex flex-wrap gap-md">

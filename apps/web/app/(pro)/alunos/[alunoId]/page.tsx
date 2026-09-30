@@ -24,6 +24,16 @@ export default function FichaDoAluno() {
   const [aluno, setAluno] = useState<ResumoAluno | null>(null);
   const [planos, setPlanos] = useState<PlanoTreinoResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
+  /*
+    Falhar ao listar os planos NÃO é "aluno sem plano".
+
+    O `catch` só tratava o 403 de consentimento; qualquer outro erro era engolido
+    e a lista ficava vazia — e o histórico, que não sabe a diferença, anuncia
+    "Nenhum plano montado ainda". Quem lê isso monta um plano novo para alguém que
+    já tem um, e o ativo é arquivado na hora: o aluno abre o app no dia seguinte
+    com um treino que ninguém prescreveu para aquele dia.
+  */
+  const [falhouOsPlanos, setFalhouOsPlanos] = useState(false);
   /** Sobe a cada mudança em condição, para os alertas serem buscados de novo. */
   const [versaoClinica, setVersaoClinica] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
@@ -35,9 +45,13 @@ export default function FichaDoAluno() {
       try {
         setPlanos(await sdk.treinos.listar(alunoId));
         setSemConsentimento(false);
+        setFalhouOsPlanos(false);
       } catch (e) {
         if (e instanceof ErroApi && e.codigo === 'CONSENTIMENTO_AUSENTE') {
           setSemConsentimento(true);
+          setFalhouOsPlanos(false);
+        } else {
+          setFalhouOsPlanos(true);
         }
       }
     })();
@@ -210,6 +224,11 @@ export default function FichaDoAluno() {
               <strong>Treino</strong>. A decisão é dele e pode ser desfeita quando quiser.
             </p>
           </Cartao>
+        ) : falhouOsPlanos ? (
+          <Aviso tipo="erro">
+            Não foi possível carregar os planos de treino deste aluno. Eles continuam salvos —
+            recarregue a página antes de montar um novo, para não arquivar o que já está valendo.
+          </Aviso>
         ) : (
           <HistoricoDeTreinos alunoId={alunoId} planos={planos} aoMudar={recarregarPlanos} />
         )}

@@ -253,6 +253,27 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### A ficha do aluno e a importação de dieta — 30/09/2026
+**A ficha** só tratava o 403 de consentimento ao listar planos; qualquer outro erro
+era engolido, a lista ficava vazia, e o histórico — que não sabe a diferença —
+anunciava "Nenhum plano montado ainda". Quem lê isso monta um plano novo para quem
+já tem um, **e o ativo é arquivado na hora**: o aluno abre o aplicativo no dia
+seguinte com um treino que ninguém prescreveu para aquele dia. Agora falha tem
+aviso próprio, que pede para recarregar ANTES de montar outro.
+**A importação de dieta** é a única tela em que um modelo de linguagem lê algo e o
+resultado vira prescrição. A regra que a sustenta — "a leitura vira um rascunho que
+você confere antes de salvar" — passou a ter prova: item sem alimento do catálogo
+ou sem quantidade trava o salvamento, a escolha do profissional vence a sugestão
+automática, e a falta de autorização ensina o caminho no aplicativo do aluno em vez
+de dizer "erro". O texto acima dos botões passou a dizer o que cada um FAZ: ativar
+troca o que o aluno vê hoje, e a dieta atual vai para o histórico.
+**Prova:** 9 casos em `importar-dieta.test.tsx` e 2 em `ficha-do-aluno.test.tsx`,
+confirmados por mutação.
+**Nota de método:** a ficha é um hub que monta seis componentes, cada um buscando o
+seu. Um método faltando no dublê não some da tela — derruba o render inteiro. É a
+quarta vez que isso aparece, e é o melhor argumento a favor da barreira de erro que
+as duas interfaces ganharam esta semana.
+
 ### Recuperar acesso: as três telas que trancam a pessoa do lado de fora — 30/09/2026
 **Era:** pedir o link, escolher senha nova e confirmar o e-mail não tinham prova
 nenhuma. É a única parte do sistema em que o erro tranca alguém para fora — e quem
