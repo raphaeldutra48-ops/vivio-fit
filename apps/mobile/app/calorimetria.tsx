@@ -1,5 +1,6 @@
 import {
   FAIXA_TMB_MEDIDA,
+  LIMITES_DE_TEXTO,
   VALIDADE_CALORIMETRIA_MESES,
   numeroDoCampo,
   type CalorimetriaResumo,
@@ -255,7 +256,7 @@ export default function Calorimetria() {
               placeholderTextColor={tema.textoSecundario}
               value={equipamento}
               onChangeText={setEquipamento}
-              maxLength={120}
+              maxLength={LIMITES_DE_TEXTO.curto}
               style={campo}
             />
 

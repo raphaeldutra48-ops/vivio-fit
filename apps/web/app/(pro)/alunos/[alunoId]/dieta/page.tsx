@@ -4,7 +4,7 @@ import type { AlimentoResumo } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../../components/ui';
 import { GraficoDeBarras } from '../../../../../components/graficos/GraficoDeBarras';
 import { macrosComparaveis } from '../../../../../lib/graficos';
@@ -21,6 +21,7 @@ import {
   type MetasNaTela,
   type RefeicaoNaTela,
 } from '../../../../../lib/dieta';
+import { useListaBuscada } from '../../../../../lib/busca';
 import { sdk } from '../../../../../lib/sdk';
 
 
@@ -39,17 +40,19 @@ export default function MontarDieta() {
   ]);
   const [ativa, setAtiva] = useState(0);
 
-  const [alimentos, setAlimentos] = useState<AlimentoResumo[]>([]);
   const [busca, setBusca] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => {
-    sdk.alimentos
-      .listar({ q: busca || undefined, limit: 60 })
-      .then(setAlimentos)
-      .catch(() => setErro('Não foi possível carregar a tabela de alimentos.'));
-  }, [busca]);
+  /*
+    Aqui a corrida era clínica, e não cosmética: a lista é trocada no instante do
+    clique, e entra no plano o alimento que ninguém escolheu. O gancho aplica só a
+    resposta da última busca pedida.
+  */
+  const { itens: alimentos, falhou: falhouABusca } = useListaBuscada<AlimentoResumo>(
+    () => sdk.alimentos.listar({ q: busca || undefined, limit: 60 }),
+    [busca],
+  );
 
   const metas: MetasNaTela = useMemo(
     () => ({ kcal: kcalAlvo, proteina: proteinaAlvo, carbo: carboAlvo, gordura: gorduraAlvo }),
@@ -343,6 +346,18 @@ export default function MontarDieta() {
           </div>
         </aside>
       </div>
+
+      {/*
+        A falha da BUSCA tem aviso próprio: sem ele, a lista vazia se lê como
+        "não achei esse alimento" — e quem procura um que existe acaba
+        cadastrando um duplicado no catálogo.
+      */}
+      {falhouABusca && (
+        <Aviso tipo="erro">
+          Não foi possível carregar a tabela de alimentos. A lista acima pode estar vazia por isso,
+          e não por falta de resultado.
+        </Aviso>
+      )}
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
 

@@ -1,5 +1,5 @@
 import type { ExecucaoResumo } from '@vivio/contracts';
-import { espacamento, raio, tipografia } from '@vivio/ui-native';
+import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -10,7 +10,8 @@ import { useSincronizacao } from '../../src/sincronizacao';
 
 export default function Evolucao() {
   const { usuario, tema } = useSessao();
-  const { pendentes, sincronizando, sincronizar } = useSincronizacao();
+  const { pendentes, descartados, sincronizando, sincronizar, tentarDeNovo, esquecer } =
+    useSincronizacao();
   const router = useRouter();
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
   /*
@@ -59,6 +60,78 @@ export default function Evolucao() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
+      {/*
+        Treino que o servidor RECUSOU de vez.
+
+        Antes ele saía da fila em silêncio: o contador de pendentes voltava a
+        zero, que é a mesma tela de "tudo enviado", e a pessoa acreditava que uma
+        hora de academia tinha subido. Agora o treino continua no aparelho, com o
+        motivo, e com as duas saídas que fazem sentido — tentar de novo (a causa
+        mais comum é autorização retirada, que se resolve autorizando) ou
+        esquecer, que é a pessoa dizendo que não quer mais aquele registro.
+      */}
+      {descartados.map((d) => (
+        <View
+          key={d.clienteUuid}
+          style={{
+            backgroundColor: tema.superficie,
+            borderRadius: raio.md,
+            borderWidth: 2,
+            borderColor: tema.erro,
+            padding: espacamento.md,
+            gap: espacamento.xs,
+          }}
+        >
+          <Text style={{ color: tema.erro, fontWeight: '700' }}>
+            Um treino não foi aceito pelo servidor
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
+            De {new Date(d.execucao.iniciadoEm).toLocaleDateString('pt-BR')}, com{' '}
+            {d.execucao.series.length}{' '}
+            {d.execucao.series.length === 1 ? 'série' : 'séries'}. Ele continua salvo aqui no
+            aparelho — não foi perdido, mas também não chegou ao seu profissional.
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
+            {d.motivo === 'CONSENTIMENTO_AUSENTE'
+              ? 'O compartilhamento de treino estava desligado quando ele tentou subir. Ligue em Minha equipe e toque em tentar de novo.'
+              : `Motivo informado pelo servidor: ${d.motivo}.`}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: espacamento.sm, marginTop: espacamento.xs }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Tentar enviar este treino de novo"
+              onPress={() => void tentarDeNovo(d.clienteUuid)}
+              style={{
+                flex: 1,
+                minHeight: alvoToqueMin,
+                borderRadius: raio.md,
+                backgroundColor: tema.acaoFundo,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: tema.acaoTexto, fontWeight: '700' }}>Tentar de novo</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Esquecer este treino"
+              onPress={() => void esquecer(d.clienteUuid)}
+              style={{
+                minHeight: alvoToqueMin,
+                paddingHorizontal: espacamento.lg,
+                borderRadius: raio.md,
+                borderWidth: 1,
+                borderColor: tema.borda,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: tema.textoSecundario }}>Esquecer</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
+
       {pendentes.length > 0 && (
         <Pressable
           accessibilityRole="button"

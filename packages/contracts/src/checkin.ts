@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 
 /**
  * Check-in diário do aluno.
@@ -29,7 +30,7 @@ export const registrarCheckinSchema = z.object({
   energia: z.number().int().min(ENERGIA_MIN).max(ENERGIA_MAX),
   teveDor: z.boolean().default(false),
   localDor: z.string().max(120).optional(),
-  observacao: z.string().max(500).optional(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
 });
 export type RegistrarCheckinInput = z.infer<typeof registrarCheckinSchema>;
 

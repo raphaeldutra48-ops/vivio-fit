@@ -96,3 +96,10 @@ jobs:
         # Pega o que só aparece no empacotamento — foi assim que a falta do
         # `output: standalone` apareceu, e não em teste nenhum.
         run: pnpm --filter @vivio/web run build:cloudflare
+
+      - name: Empacotamento do aplicativo, como o EAS faz
+        # O Metro resolve módulos diferente do Vitest e do Next: import que só
+        # ele enxerga (ou que depende do layout plano do node_modules) passa por
+        # tudo acima e quebra no `eas build`, que é pago, roda na nuvem e demora
+        # 20 minutos para dizer isso. Aqui custa um minuto.
+        run: pnpm --filter @vivio/mobile run build:android

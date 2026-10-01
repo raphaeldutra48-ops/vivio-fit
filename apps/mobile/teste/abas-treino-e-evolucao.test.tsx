@@ -42,10 +42,23 @@ vi.mock('../src/cacheTreino', () => ({
   identidade não pode mudar a cada render — a aba de evolução recarrega quando
   a fila esvazia, e um objeto novo a cada chamada a poria em laço.
 */
-const sincronizacao: { pendentes: unknown[]; sincronizando: boolean; sincronizar: () => void } = {
+const tentarDeNovo = vi.fn();
+const esquecer = vi.fn();
+
+const sincronizacao: {
+  pendentes: unknown[];
+  descartados: unknown[];
+  sincronizando: boolean;
+  sincronizar: () => void;
+  tentarDeNovo: (uuid: string) => void;
+  esquecer: (uuid: string) => void;
+} = {
   pendentes: [],
+  descartados: [],
   sincronizando: false,
   sincronizar,
+  tentarDeNovo,
+  esquecer,
 };
 vi.mock('../src/sincronizacao', () => ({ useSincronizacao: () => sincronizacao }));
 
@@ -117,6 +130,7 @@ async function abrirEvolucao() {
 
 beforeEach(() => {
   sincronizacao.pendentes = [];
+  sincronizacao.descartados = [];
   sincronizacao.sincronizando = false;
   obterAtivo.mockResolvedValue(plano);
   salvarPlano.mockResolvedValue(undefined);
@@ -247,6 +261,79 @@ describe('aba de evolução', () => {
     fireEvent.click(screen.getByLabelText(/enviar treinos pendentes agora/i));
 
     expect(sincronizar).toHaveBeenCalled();
+  });
+
+  it('treino RECUSADO de vez aparece, com motivo e com saída', async () => {
+    /*
+      O defeito mais caro do aplicativo, e o mais silencioso: o treino recusado
+      saía da fila e o contador voltava a zero — a mesma tela de "tudo enviado".
+      A pessoa acreditava que uma hora de academia tinha subido.
+
+      A tela precisa dizer três coisas: que não chegou, por quê, e o que fazer. O
+      motivo mais comum (compartilhamento desligado) é reversível, e por isso o
+      primeiro botão é "tentar de novo", não "apagar".
+    */
+    sincronizacao.descartados = [
+      {
+        clienteUuid: 'uuid-1',
+        alunoId: 'aluna-1',
+        enfileiradoEm: '2026-09-28T10:00:00.000Z',
+        tentativas: 3,
+        descartadoEm: '2026-09-28T11:00:00.000Z',
+        motivo: 'CONSENTIMENTO_AUSENTE',
+        execucao: {
+          clienteUuid: 'uuid-1',
+          sessaoId: 'sessao-a',
+          iniciadoEm: '2026-09-28T10:00:00.000Z',
+          finalizadoEm: '2026-09-28T11:00:00.000Z',
+          series: [{ itemTreinoId: 'item-1', serieNum: 1, repsFeitas: 10, cargaKg: 40, tipo: 'NORMAL' }],
+          feedback: { dificuldade: 3, teveDor: false },
+        },
+      },
+    ];
+    await abrirEvolucao();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/um treino não foi aceito pelo servidor/i));
+    // Diz que não foi perdido E que não chegou — as duas coisas.
+    expect(textoDaTela()).toMatch(/continua salvo aqui no aparelho/i);
+    expect(textoDaTela()).toMatch(/não chegou ao seu profissional/i);
+    // E traduz o motivo em ação, em vez de mostrar o código cru.
+    expect(textoDaTela()).toMatch(/ligue em minha equipe/i);
+
+    fireEvent.click(screen.getByLabelText(/tentar enviar este treino de novo/i));
+    expect(tentarDeNovo).toHaveBeenCalledWith('uuid-1');
+  });
+
+  it('esquecer o recusado é uma escolha separada, e não o caminho fácil', async () => {
+    // "Esquecer" existe porque às vezes a pessoa não quer mais aquele registro —
+    // mas fica em segundo plano, depois de "tentar de novo".
+    sincronizacao.descartados = [
+      {
+        clienteUuid: 'uuid-2',
+        alunoId: 'aluna-1',
+        enfileiradoEm: '2026-09-28T10:00:00.000Z',
+        tentativas: 1,
+        descartadoEm: '2026-09-28T11:00:00.000Z',
+        motivo: 'DADOS_INVALIDOS',
+        execucao: {
+          clienteUuid: 'uuid-2',
+          sessaoId: 'sessao-a',
+          iniciadoEm: '2026-09-28T10:00:00.000Z',
+          finalizadoEm: null,
+          series: [],
+          feedback: { dificuldade: 3, teveDor: false },
+        },
+      },
+    ];
+    await abrirEvolucao();
+    await waitFor(() => expect(textoDaTela()).toMatch(/um treino não foi aceito/i));
+
+    // Motivo sem tradução conhecida aparece como o servidor mandou, e não como
+    // uma frase inventada sobre uma causa que ninguém conferiu.
+    expect(textoDaTela()).toMatch(/motivo informado pelo servidor: dados_invalidos/i);
+
+    fireEvent.click(screen.getByLabelText(/esquecer este treino/i));
+    expect(esquecer).toHaveBeenCalledWith('uuid-2');
   });
 
   it('o relato de dor acompanha o treino em que ela aconteceu', async () => {

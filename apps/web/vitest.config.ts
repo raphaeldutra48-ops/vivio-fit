@@ -9,7 +9,18 @@ export default defineConfig({
     // jsdom só onde há componente para renderizar: montá-lo para um teste de
     // lógica pura custa mais que o teste inteiro.
     environment: 'node',
-    environmentMatchGlobs: [['**/*.test.tsx', 'jsdom']],
+    /*
+      `.spec.tsx` também entra no jsdom.
+
+      A regra era só `*.test.tsx`, e o `.tsx` num `.spec` é justamente o sinal de
+      que há componente para montar — um arquivo nesse formato rodava em `node` e
+      morria com "document is not defined", que não diz nada sobre a causa.
+      Aconteceu ao escrever a prova do gancho de busca.
+    */
+    environmentMatchGlobs: [
+      ['**/*.test.tsx', 'jsdom'],
+      ['**/*.spec.tsx', 'jsdom'],
+    ],
     globals: false,
     // Irmão do `afterEach(cleanup)` do preparo: sem isto o histórico de
     // chamadas de um `vi.fn()` sobra para o teste seguinte, e um

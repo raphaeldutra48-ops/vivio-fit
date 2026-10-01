@@ -1,5 +1,6 @@
 import {
   FAIXA_DURACAO_CARDIO,
+  LIMITES_DE_TEXTO,
   Intensidade,
   NOME_DA_FORMULA,
   ROTULO_INTENSIDADE,
@@ -498,7 +499,7 @@ export default function Cardio() {
               placeholderTextColor={tema.textoSecundario}
               value={observacao}
               onChangeText={setObservacao}
-              maxLength={500}
+              maxLength={LIMITES_DE_TEXTO.observacao}
               multiline
               style={{
                 minHeight: 70,

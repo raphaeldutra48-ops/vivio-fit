@@ -260,6 +260,49 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 01/10 — passe 1: corrida de busca, treino recusado e o bundle no CI
+**Três defeitos, nenhum deles visível em teste de tela isolada.**
+
+**1. Corrida entre requisições em cinco telas de busca.** Cada tecla disparava uma
+consulta, e `.then(setLista)` aplicava a que chegasse por último — não a mais nova.
+Em catálogo isso é esquisito; em **montar treino** e **montar dieta** é clínico: a
+lista é trocada no instante do clique e entra no plano o exercício ou o alimento
+que ninguém escolheu. Virou `useListaBuscada` (`apps/web/lib/busca.ts`), que espera
+o dedo parar (250 ms, zero na primeira carga) e descarta resposta de pergunta
+antiga comparando um número de sequência. As duas telas que também recarregam
+depois de escrever ficaram com a sequência própria, porque ali o caminho
+imperativo não pode esperar. **6 provas**, incluindo as duas corridas invertidas
+(resposta velha chegando depois, e falha velha chegando depois).
+
+**2. Treino recusado de vez desaparecia em silêncio.** Quando o servidor recusava
+definitivamente (consentimento retirado, sessão inexistente, dado que o schema não
+aceita), a sincronização tirava o item da fila — correto, senão trava os outros —
+mas **apagava**. O aviso "1 treino aguardando envio" sumia, e contador em zero é a
+mesma tela de "tudo enviado": a pessoa acreditava que uma hora de academia tinha
+subido, e nem ela nem o profissional ficavam sabendo. Agora o treino vai para uma
+lista de descartados COM o motivo, aparece na aba de evolução dizendo que não
+chegou, e tem duas saídas — tentar de novo (a causa mais comum é reversível) ou
+esquecer. **9 provas**, e uma lição: a mutação só caiu depois de eu cobrir a
+COSTURA; testar `descartar()` sozinho e a tela com dublê passava por tudo.
+
+**3. O CI não empacotava o aplicativo.** O Metro resolve módulos diferente do
+Vitest e do Next: um import que só ele enxerga passava por tipos, lint e provas, e
+quebrava no `eas build` — que é pago, roda na nuvem e demora 20 minutos para dizer
+isso. Agora `expo export --platform android` roda no CI, e custa um minuto.
+
+**4. Deriva de limites.** O `36` de parcelas que eu havia escrito à mão na tela, e
+os `maxLength` das telas repetindo números dos schemas. Enquanto coincidem ninguém
+nota; no dia em que um muda, o campo deixa escrever 600 caracteres e o servidor
+recusa **depois** de a pessoa ter escrito. Viraram `LIMITES_DE_TEXTO` e
+`MAXIMO_DE_PARCELAS`, usados pelo schema E pela tela.
+
+**O que foi conferido e NÃO era defeito:** botões de escrita já travam durante o
+envio (nada de registro duplicado); nenhuma data só-data é lida sem âncora de
+meio-dia; os 13 efeitos do aplicativo "sem guarda de montagem" são inofensivos
+(escrever estado em componente desmontado é no-op no React 18, e as dependências
+são estáveis dentro da vida da tela); e os botões sem `aria-label` têm rótulo
+visível — a heurística que os acusou cortava o texto antes de achá-lo.
+
 ### Auditoria de 30/09: o que ela encontrou no que foi feito hoje
 Varredura do próprio trabalho do dia, com as suítes rodadas por CÓDIGO DE SAÍDA (e
 não pelo resumo na tela), diagnóstico ao vivo, auditoria de RLS e o CI de cada um

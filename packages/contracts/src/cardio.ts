@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 import type { GastoDiario } from './metabolismo';
 
 /**
@@ -133,7 +134,7 @@ export const registrarCardioSchema = z.object({
   distanciaKm: z.number().min(0).max(500).optional(),
   /** Quando foi. O cliente manda porque o fuso dele não é o do servidor. */
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
-  observacao: z.string().max(500).optional(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
   /** Preenchido quando o cardio foi feito junto de uma sessão de musculação. */
   execucaoId: z.string().cuid().optional(),
 });

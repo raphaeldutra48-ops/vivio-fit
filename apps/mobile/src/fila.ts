@@ -62,6 +62,76 @@ export async function remover(clienteUuid: string): Promise<ItemDaFila[]> {
   return fila;
 }
 
+/*
+  Treino recusado DE VEZ não pode sair em silêncio.
+
+  Quando o servidor devolve erro definitivo — consentimento retirado, sessão que
+  não existe mais, dado que o schema recusa — reenviar não resolve, e o item
+  precisa sair da fila para não travar os outros. Era o que a sincronização já
+  fazia; o problema é que ela só apagava.
+
+  O efeito disso em quem usa: o aviso "1 treino aguardando envio" simplesmente
+  desaparecia. Contador em zero é a mesma tela de "tudo enviado" — e a pessoa
+  acreditava que uma hora de academia tinha subido. Não subiu, e ninguém dos dois
+  lados ficou sabendo.
+
+  Agora o item vai para uma lista separada, com o motivo. Ele continua no
+  aparelho, aparece na aba de evolução e pode ser reenfileirado: um 403 por
+  autorização retirada se resolve autorizando de novo, e aí o reenvio funciona.
+*/
+const CHAVE_DESCARTADOS = 'vivio.fila.descartados';
+
+export interface ItemDescartado extends ItemDaFila {
+  descartadoEm: string;
+  /** O código do erro que o servidor devolveu — é o que explica o descarte. */
+  motivo: string;
+}
+
+export async function lerDescartados(): Promise<ItemDescartado[]> {
+  return (await ler<ItemDescartado[]>(CHAVE_DESCARTADOS)) ?? [];
+}
+
+/** Tira da fila e guarda em separado, com o motivo. */
+export async function descartar(clienteUuid: string, motivo: string): Promise<ItemDaFila[]> {
+  const fila = await lerFila();
+  const item = fila.find((i) => i.clienteUuid === clienteUuid);
+  if (item) {
+    const descartados = await lerDescartados();
+    const semDuplicata = descartados.filter((d) => d.clienteUuid !== clienteUuid);
+    await gravar(CHAVE_DESCARTADOS, [
+      ...semDuplicata,
+      { ...item, descartadoEm: new Date().toISOString(), motivo },
+    ]);
+  }
+  return remover(clienteUuid);
+}
+
+/**
+ * Devolve um descartado para a fila.
+ *
+ * Existe porque a causa mais comum de descarte é reversível: o aluno retirou a
+ * autorização de treino, o envio foi recusado, e depois ele autorizou de novo.
+ * Sem isto o treino ficaria guardado para sempre sem chance de subir.
+ */
+export async function reenfileirar(clienteUuid: string): Promise<ItemDaFila[]> {
+  const descartados = await lerDescartados();
+  const item = descartados.find((d) => d.clienteUuid === clienteUuid);
+  if (!item) return lerFila();
+
+  await gravar(
+    CHAVE_DESCARTADOS,
+    descartados.filter((d) => d.clienteUuid !== clienteUuid),
+  );
+  return enfileirar(item.alunoId, item.execucao);
+}
+
+/** Esquece um descartado — é a pessoa dizendo "esse eu não quero mais". */
+export async function esquecerDescartado(clienteUuid: string): Promise<ItemDescartado[]> {
+  const restantes = (await lerDescartados()).filter((d) => d.clienteUuid !== clienteUuid);
+  await gravar(CHAVE_DESCARTADOS, restantes);
+  return restantes;
+}
+
 export async function registrarFalha(clienteUuid: string, erro: string): Promise<void> {
   const fila = await lerFila();
   const atualizada = fila.map((i) =>

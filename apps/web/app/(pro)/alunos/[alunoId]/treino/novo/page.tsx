@@ -5,7 +5,7 @@ import { GRUPOS_MUSCULARES } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Anuncio } from '../../../../../../components/Anuncio';
 import {
   PunhoDeArraste,
@@ -15,6 +15,7 @@ import {
 import { Aviso, Botao, Campo, Cartao } from '../../../../../../components/ui';
 import { erroVisivel } from '../../../../../../lib/campos';
 import { anuncioDeMovimento, reordenar } from '../../../../../../lib/reordenar';
+import { useListaBuscada } from '../../../../../../lib/busca';
 import { sdk } from '../../../../../../lib/sdk';
 import {
   corpoDoTreino,
@@ -53,7 +54,6 @@ export default function MontarTreino() {
   ]);
   const [sessaoAtiva, setSessaoAtiva] = useState(0);
 
-  const [exercicios, setExercicios] = useState<ExercicioResumo[]>([]);
   const [busca, setBusca] = useState('');
   const [grupo, setGrupo] = useState<GrupoMuscular | ''>('');
   const [erro, setErro] = useState<string | null>(null);
@@ -62,12 +62,14 @@ export default function MontarTreino() {
   const [anuncio, setAnuncio] = useState('');
   const arraste = useArrasteParaReordenar(moverItem);
 
-  useEffect(() => {
-    sdk.exercicios
-      .listar({ q: busca || undefined, grupoMuscular: grupo || undefined })
-      .then(setExercicios)
-      .catch(() => setErro('Não foi possível carregar a biblioteca de exercícios.'));
-  }, [busca, grupo]);
+  /*
+    Mesma corrida da tela de dieta, e o mesmo custo: o exercício que entra na
+    sessão é o que estava na lista no momento do clique.
+  */
+  const { itens: exercicios, falhou: falhouABusca } = useListaBuscada<ExercicioResumo>(
+    () => sdk.exercicios.listar({ q: busca || undefined, grupoMuscular: grupo || undefined }),
+    [busca, grupo],
+  );
 
   const totalItens = useMemo(
     () => sessoes.reduce((soma, s) => soma + s.itens.length, 0),
@@ -413,6 +415,18 @@ export default function MontarTreino() {
           </div>
         </aside>
       </div>
+
+      {/*
+        A falha da BUSCA tem aviso próprio: sem ele, a lista vazia se lê como
+        "não achei nada com esse nome" — e quem procura um exercício que existe
+        conclui que precisa cadastrá-lo de novo.
+      */}
+      {falhouABusca && (
+        <Aviso tipo="erro">
+          Não foi possível carregar a biblioteca de exercícios. A lista acima pode estar vazia por
+          isso, e não por falta de resultado.
+        </Aviso>
+      )}
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
 

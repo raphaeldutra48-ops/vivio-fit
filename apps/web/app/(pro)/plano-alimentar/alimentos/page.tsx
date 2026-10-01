@@ -3,14 +3,18 @@
 import type { AlimentoResumo } from '@vivio/contracts';
 import { useEffect, useState } from 'react';
 import { Aviso, Campo, Cartao } from '../../../../components/ui';
+import { useListaBuscada } from '../../../../lib/busca';
 import { sdk } from '../../../../lib/sdk';
 
 export default function Alimentos() {
-  const [alimentos, setAlimentos] = useState<AlimentoResumo[]>([]);
   const [grupos, setGrupos] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [grupo, setGrupo] = useState('');
-  const [erro, setErro] = useState<string | null>(null);
+  /*
+    Não há mais `setErro` aqui: a única falha desta tela é a da busca, e quem a
+    reporta é o gancho. Manter um estado que ninguém escreve é convidar o próximo
+    a achar que existe tratamento de erro onde não existe.
+  */
   /*
     Falhar a lista de grupos deixava o filtro com "Todos" e nada mais.
 
@@ -30,12 +34,15 @@ export default function Alimentos() {
       .catch(() => setFalhouOsGrupos(true));
   }, []);
 
-  useEffect(() => {
-    sdk.alimentos
-      .listar({ q: busca || undefined, grupo: grupo || undefined, limit: 100 })
-      .then(setAlimentos)
-      .catch(() => setErro('Não foi possível carregar a tabela de alimentos.'));
-  }, [busca, grupo]);
+  /*
+    Pelo gancho: ele espera o dedo parar e descarta resposta de busca antiga.
+    Sem isso eram seis requisições por palavra digitada, e a lista podia acabar
+    mostrando o resultado de "fran" com o campo escrito "frango".
+  */
+  const { itens: alimentos, falhou: falhouABusca } = useListaBuscada<AlimentoResumo>(
+    () => sdk.alimentos.listar({ q: busca || undefined, grupo: grupo || undefined, limit: 100 }),
+    [busca, grupo],
+  );
 
   return (
     <div className="flex flex-col gap-xl">
@@ -84,7 +91,12 @@ export default function Alimentos() {
         </label>
       </div>
 
-      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+      {falhouABusca && (
+        <Aviso tipo="erro">
+          Não foi possível carregar a tabela de alimentos. A lista abaixo pode estar vazia por isso,
+          e não por falta de resultado.
+        </Aviso>
+      )}
 
       <Cartao className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth: 640 }}>

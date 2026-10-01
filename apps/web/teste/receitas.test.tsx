@@ -5,7 +5,7 @@ import {
   type ReceitaResumo,
   type SalvarReceitaInput,
 } from '@vivio/contracts';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within , waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Receitas from '../app/(pro)/plano-alimentar/receitas/page';
@@ -238,7 +238,15 @@ describe('Receitas', () => {
 
     await usuario.type(screen.getByLabelText('Buscar receita'), 'panq');
 
-    expect(listarReceitas).toHaveBeenLastCalledWith('panq');
+    /*
+      Com espera: a busca passou a aguardar 250 ms depois da última tecla, para
+      não disparar uma consulta por letra. O que se prova aqui não muda — o
+      servidor recebe o termo digitado — e ganha-se a garantia de que ele recebe
+      UMA vez, com a palavra inteira, e não quatro vezes com pedaços dela.
+    */
+    await waitFor(() => expect(listarReceitas).toHaveBeenLastCalledWith('panq'));
+    const consultasComTermo = listarReceitas.mock.calls.filter((c) => c[0] !== undefined);
+    expect(consultasComTermo).toHaveLength(1);
   });
 
   it('abrir "nova" depois de editar zera o formulário, com rendimento de volta em 1', async () => {

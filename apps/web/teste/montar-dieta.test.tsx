@@ -3,7 +3,7 @@ import {
   type AlimentoResumo,
   type CriarPlanoDietaInput,
 } from '@vivio/contracts';
-import { render, screen } from '@testing-library/react';
+import { render, screen , waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MontarDieta from '../app/(pro)/alunos/[alunoId]/dieta/page';
@@ -175,9 +175,16 @@ describe('Montar plano alimentar', () => {
     listar.mockRejectedValue(new Error('sem rede'));
     render(<MontarDieta />);
 
-    expect(
-      await screen.findByText('Não foi possível carregar a tabela de alimentos.'),
-    ).toBeInTheDocument();
+    /*
+      A frase ficou mais longa de propósito: ela agora explica que a lista pode
+      estar vazia POR CAUSA da falha, e não por não haver resultado — era essa a
+      leitura errada que levava alguém a cadastrar um alimento duplicado.
+    */
+    await waitFor(() =>
+      expect(document.body.textContent).toMatch(
+        /não foi possível carregar a tabela de alimentos.*não por falta de resultado/is,
+      ),
+    );
     expect(screen.getByLabelText('Nome do plano')).toBeInTheDocument();
   });
 });

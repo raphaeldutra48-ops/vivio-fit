@@ -1,7 +1,7 @@
 'use client';
 
 import type { AlimentoResumo, ReceitaResumo } from '@vivio/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BuscaDeAlimento } from '../../../../components/BuscaDeAlimento';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
 import { erroVisivel } from '../../../../lib/campos';
@@ -39,14 +39,38 @@ export default function Receitas() {
   const [tempoMinutos, setTempo] = useState('');
   const [ingredientes, setIngredientes] = useState<IngredienteDigitado[]>([]);
 
-  const carregar = () =>
-    sdk.receitas
+  /*
+    A sequência fica aqui, e não no gancho de busca, porque `carregar` tem dois
+    chamadores com necessidades opostas: o efeito que observa a busca digitada
+    (quer esperar o dedo parar) e o recarregamento depois de salvar ou remover
+    (quer acontecer agora). O que os dois precisam é do mesmo descarte: resposta
+    de pergunta antiga não entra na tela.
+  */
+  const sequencia = useRef(0);
+  const primeiraCarga = useRef(true);
+
+  const carregar = () => {
+    const minha = ++sequencia.current;
+    return sdk.receitas
       .listar(busca || undefined)
-      .then(setReceitas)
-      .catch(() => setErro('Não foi possível carregar as receitas.'));
+      .then((lista) => {
+        if (minha === sequencia.current) setReceitas(lista);
+      })
+      .catch(() => {
+        if (minha === sequencia.current) setErro('Não foi possível carregar as receitas.');
+      });
+  };
 
   useEffect(() => {
-    void carregar();
+    /*
+      250 ms para o que é digitado, zero na primeira carga: o atraso existe para
+      não disparar uma consulta por tecla, e aplicá-lo na abertura só deixaria a
+      tela vazia um quarto de segundo a mais.
+    */
+    const esperar = primeiraCarga.current ? 0 : 250;
+    primeiraCarga.current = false;
+    const relogio = setTimeout(() => void carregar(), esperar);
+    return () => clearTimeout(relogio);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 

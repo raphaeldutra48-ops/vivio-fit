@@ -1,7 +1,7 @@
 'use client';
 
 import type { CriarPrescritivelInput, PrescritivelResumo, TipoPrescritivel } from '@vivio/contracts';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { Aviso, Botao, Campo, Cartao, Etiqueta } from './ui';
 import { fraseDeErro } from '../lib/erros';
@@ -38,14 +38,38 @@ export function CatalogoPrescritivel({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const carregar = () =>
-    sdk.prescritiveis
+  /*
+    A sequência fica aqui, e não no gancho de busca, porque `carregar` tem dois
+    chamadores com necessidades opostas: o efeito que observa a busca digitada
+    (quer esperar o dedo parar) e o recarregamento depois de criar ou remover um
+    item do catálogo (quer acontecer agora). O que os dois precisam é do mesmo
+    descarte: resposta de pergunta antiga não entra na tela.
+  */
+  const sequencia = useRef(0);
+  const primeiraCarga = useRef(true);
+
+  const carregar = () => {
+    const minhaBusca = ++sequencia.current;
+    return sdk.prescritiveis
       .listar({ tipo, q: busca || undefined, limit: 100 })
-      .then(setItens)
-      .catch(() => setErro('Não foi possível carregar o catálogo.'));
+      .then((lista) => {
+        if (minhaBusca === sequencia.current) setItens(lista);
+      })
+      .catch(() => {
+        if (minhaBusca === sequencia.current) setErro('Não foi possível carregar o catálogo.');
+      });
+  };
 
   useEffect(() => {
-    void carregar();
+    /*
+      250 ms para o que é digitado, zero na primeira carga: o atraso existe para
+      não disparar uma consulta por tecla, e aplicá-lo na abertura só deixaria a
+      tela vazia um quarto de segundo a mais.
+    */
+    const esperar = primeiraCarga.current ? 0 : 250;
+    primeiraCarga.current = false;
+    const relogio = setTimeout(() => void carregar(), esperar);
+    return () => clearTimeout(relogio);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca, tipo]);
 

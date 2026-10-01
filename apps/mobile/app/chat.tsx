@@ -1,4 +1,5 @@
 import type { ConversaResumo, MensagemResumo } from '@vivio/contracts';
+import { LIMITES_DE_TEXTO } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -323,7 +324,7 @@ export default function Chat() {
           placeholderTextColor={tema.textoSecundario}
           value={texto}
           onChangeText={setTexto}
-          maxLength={4000}
+          maxLength={LIMITES_DE_TEXTO.longo}
           multiline
           style={{
             flex: 1,

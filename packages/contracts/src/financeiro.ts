@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO, MAXIMO_DE_PARCELAS } from './numeros';
 
 export const StatusCobranca = {
   PENDENTE: 'PENDENTE',
@@ -40,19 +41,19 @@ export const criarCobrancaSchema = z.object({
   /** Em centavos: dinheiro em ponto flutuante acumula erro de arredondamento. */
   valorCentavos: z.number().int().positive().max(100_000_000),
   vencimento: z.coerce.date(),
-  observacao: z.string().max(500).optional(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
   /**
    * Gera esta cobrança e as seguintes, no mesmo dia dos meses seguintes.
    * 1 = só esta. 12 = um ano de mensalidade.
    */
-  repetirMeses: z.number().int().min(1).max(36).default(1),
+  repetirMeses: z.number().int().min(1).max(MAXIMO_DE_PARCELAS).default(1),
 });
 export type CriarCobrancaInput = z.infer<typeof criarCobrancaSchema>;
 
 export const registrarPagamentoSchema = z.object({
   pagaEm: z.coerce.date().default(() => new Date()),
   formaPagamento: z.nativeEnum(FormaPagamento),
-  observacao: z.string().max(500).optional(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
 });
 export type RegistrarPagamentoInput = z.infer<typeof registrarPagamentoSchema>;
 

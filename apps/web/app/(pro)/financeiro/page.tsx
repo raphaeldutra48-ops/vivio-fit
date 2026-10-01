@@ -3,6 +3,7 @@
 import {
   ROTULO_FORMA_PAGAMENTO,
   ROTULO_SITUACAO,
+  MAXIMO_DE_PARCELAS,
   formatarDinheiro,
   paraCentavos,
   type CobrancaResumo,
@@ -245,16 +246,19 @@ O aluno deixa de dever este valor, e ele sai do total do mês.`,
               <input
                 type="number"
                 min={1}
-                max={36}
+                max={MAXIMO_DE_PARCELAS}
                 className="min-h-toque rounded-md border px-md"
                 style={entrada}
                 value={repetirMeses}
                 /*
-                  `Math.min(36, ...)`: o schema recusa acima de 36, e o atributo
-                  `max` do HTML não impede digitar 99 — o servidor devolveria erro
-                  depois de a pessoa preencher tudo.
+                  O limite vem do CONTRATO, e não escrito aqui: o schema recusa
+                  acima dele, e o atributo `max` do HTML não impede digitar 99 —
+                  o servidor devolveria erro depois de a pessoa preencher tudo.
+                  Com o número em um lugar só, mudá-lo não deixa a tela atrás.
                 */
-                onChange={(e) => setRepetir(Math.min(36, Math.max(1, Number(e.target.value))))}
+                onChange={(e) =>
+                  setRepetir(Math.min(MAXIMO_DE_PARCELAS, Math.max(1, Number(e.target.value))))
+                }
               />
               <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
                 {repetirMeses > 1

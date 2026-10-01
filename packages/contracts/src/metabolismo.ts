@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 /*
   O sexo biológico vem de `avaliacao.ts`, onde nasceu para a adipometria e para
   as faixas de gordura. Definir um segundo aqui criaria duas verdades sobre a
@@ -304,7 +305,7 @@ export const registrarCalorimetriaSchema = z.object({
   /** Peso do dia do exame — é a régua que diz quando o resultado envelheceu. */
   pesoNoExameKg: z.number().min(20).max(400).optional(),
   equipamento: z.string().max(120).optional(),
-  observacao: z.string().max(500).optional(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
 });
 export type RegistrarCalorimetriaInput = z.infer<typeof registrarCalorimetriaSchema>;
 

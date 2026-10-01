@@ -1,4 +1,5 @@
 import { ENERGIA_MAX, dataLocalDoCheckin, numeroDoCampo } from '@vivio/contracts';
+import { LIMITES_DE_TEXTO } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -329,7 +330,7 @@ export default function Checkin() {
                 placeholderTextColor={tema.textoSecundario}
                 value={localDor}
                 onChangeText={setLocalDor}
-                maxLength={120}
+                maxLength={LIMITES_DE_TEXTO.curto}
                 style={{
                   minHeight: alvoToqueMin,
                   borderWidth: 1,
@@ -401,7 +402,7 @@ export default function Checkin() {
             placeholderTextColor={tema.textoSecundario}
             value={observacao}
             onChangeText={setObservacao}
-            maxLength={500}
+            maxLength={LIMITES_DE_TEXTO.observacao}
             multiline
             style={{
               minHeight: 90,

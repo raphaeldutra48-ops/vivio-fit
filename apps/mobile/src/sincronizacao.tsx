@@ -1,12 +1,33 @@
 import type { ExecucaoResumo, RegistrarExecucaoInput } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { enfileirar, lerFila, paraEnvio, registrarFalha, remover, type ItemDaFila } from './fila';
+import {
+  descartar,
+  enfileirar,
+  esquecerDescartado,
+  lerDescartados,
+  lerFila,
+  paraEnvio,
+  registrarFalha,
+  reenfileirar,
+  remover,
+  type ItemDaFila,
+  type ItemDescartado,
+} from './fila';
 import { sdk } from './sdk';
 import { useSondagem } from './sondagem';
 
 interface Sincronizacao {
   pendentes: ItemDaFila[];
+  /*
+    Os treinos que o servidor recusou de vez.
+
+    Eles saíram da fila para não travar os outros, e continuam no aparelho: a
+    aba de evolução os mostra com o motivo, e dá para tentar de novo. Antes
+    desapareciam em silêncio, e o contador em zero dizia "tudo enviado" sobre
+    uma hora de academia que não subiu.
+  */
+  descartados: ItemDescartado[];
   sincronizando: boolean;
   /**
    * Grava na fila e tenta enviar.
@@ -23,6 +44,10 @@ interface Sincronizacao {
     execucao: RegistrarExecucaoInput,
   ) => Promise<ExecucaoResumo | null>;
   sincronizar: () => Promise<void>;
+  /** Devolve um recusado para a fila — serve quando a causa foi resolvida. */
+  tentarDeNovo: (clienteUuid: string) => Promise<void>;
+  /** A pessoa dizendo "esse treino eu não quero mais". */
+  esquecer: (clienteUuid: string) => Promise<void>;
 }
 
 const Contexto = createContext<Sincronizacao | null>(null);
@@ -32,6 +57,7 @@ const INTERVALO_MS = 30_000;
 
 export function SincronizacaoProvider({ children }: { children: ReactNode }) {
   const [pendentes, setPendentes] = useState<ItemDaFila[]>([]);
+  const [descartados, setDescartados] = useState<ItemDescartado[]>([]);
   const [sincronizando, setSincronizando] = useState(false);
   const emCurso = useRef(false);
 
@@ -63,7 +89,14 @@ export function SincronizacaoProvider({ children }: { children: ReactNode }) {
           // Erro definitivo (payload inválido, sessão apagada, sem permissão):
           // reenviar não vai resolver. Tira da fila para não travar as outras.
           if (api && !api.ehTemporario && !api.exigeNovoLogin) {
-            fila = await remover(item.clienteUuid);
+            /*
+              `descartar`, e não `remover`: o treino sai da fila (senão trava os
+              outros) mas fica guardado com o motivo, para a tela poder dizer o
+              que aconteceu. Apagar aqui era o que fazia uma hora de treino
+              desaparecer sem ninguém saber.
+            */
+            fila = await descartar(item.clienteUuid, api.codigo);
+            setDescartados(await lerDescartados());
             continue;
           }
 
@@ -97,8 +130,23 @@ export function SincronizacaoProvider({ children }: { children: ReactNode }) {
     [sincronizar],
   );
 
+  const tentarDeNovo = useCallback(
+    async (clienteUuid: string) => {
+      setPendentes(await reenfileirar(clienteUuid));
+      setDescartados(await lerDescartados());
+      // Tenta na hora: quem toca "tentar de novo" acabou de resolver a causa.
+      await sincronizar();
+    },
+    [sincronizar],
+  );
+
+  const esquecer = useCallback(async (clienteUuid: string) => {
+    setDescartados(await esquecerDescartado(clienteUuid));
+  }, []);
+
   useEffect(() => {
     void lerFila().then(setPendentes);
+    void lerDescartados().then(setDescartados);
     void sincronizar();
   }, [sincronizar]);
 
@@ -114,7 +162,17 @@ export function SincronizacaoProvider({ children }: { children: ReactNode }) {
   useSondagem(() => void sincronizar(), INTERVALO_MS);
 
   return (
-    <Contexto.Provider value={{ pendentes, sincronizando, registrarTreino, sincronizar }}>
+    <Contexto.Provider
+      value={{
+        pendentes,
+        descartados,
+        sincronizando,
+        registrarTreino,
+        sincronizar,
+        tentarDeNovo,
+        esquecer,
+      }}
+    >
       {children}
     </Contexto.Provider>
   );

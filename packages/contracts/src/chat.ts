@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 import type { Papel } from './enums';
 
 export const TipoConversa = {
@@ -23,7 +24,7 @@ export type AbrirConversaInput = z.infer<typeof abrirConversaSchema>;
 export const enviarMensagemSchema = z.object({
   /** Gerado no cliente — reenviar não duplica, como na fila de treino. */
   clienteUuid: z.string().uuid(),
-  corpo: z.string().min(1).max(4000),
+  corpo: z.string().min(1).max(LIMITES_DE_TEXTO.longo),
 });
 export type EnviarMensagemInput = z.infer<typeof enviarMensagemSchema>;
 

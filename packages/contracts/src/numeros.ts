@@ -28,3 +28,34 @@ export function numeroDoCampo(texto: string | undefined): number | null {
   const n = Number(limpo);
   return Number.isFinite(n) ? n : null;
 }
+
+/**
+ * Limites de tamanho que as TELAS precisam conhecer.
+ *
+ * Os schemas sempre tiveram esses números, e as telas os repetiam no
+ * `maxLength`. Enquanto os dois coincidem ninguém nota; no dia em que um muda, o
+ * campo deixa a pessoa escrever 600 caracteres e o servidor recusa depois de ela
+ * ter escrito — que é a pior ordem possível para descobrir um limite.
+ *
+ * Aqui o número tem um nome e um dono: o schema o usa, a tela o usa, e mudar
+ * passa a ser uma edição em um lugar só.
+ */
+export const LIMITES_DE_TEXTO = {
+  /** Nome, título, local de dor: uma linha. */
+  curto: 120,
+  /** Uma frase: motivo, ajuda de pergunta. */
+  frase: 300,
+  /** Observação de registro — o que cabe num parágrafo. */
+  observacao: 500,
+  /** Mensagem de conversa e resposta de anamnese: texto corrido. */
+  longo: 4000,
+} as const;
+
+/**
+ * Até quantos meses uma cobrança se repete.
+ *
+ * Exportado porque a TELA precisa limitar antes de enviar: o atributo `max` do
+ * HTML não impede digitar 99, e o servidor recusaria depois de o formulário
+ * estar preenchido.
+ */
+export const MAXIMO_DE_PARCELAS = 36;
