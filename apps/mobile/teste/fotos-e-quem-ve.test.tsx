@@ -215,6 +215,40 @@ describe('fotos de evolução: o que a tela diz quando recusam', () => {
 });
 
 describe('fotos de evolução: quem vê', () => {
+  it('falha ao carregar NÃO diz que a pessoa não tem foto nenhuma', async () => {
+    /*
+      As duas frases apareciam juntas: a falha e "Nenhuma foto ainda. A primeira
+      vira sua referência de 'antes'." São fotos do corpo da pessoa — ler isso
+      com a linha do tempo cheia é entender que se perderam.
+    */
+    listar.mockRejectedValue(new Error('Failed to fetch'));
+    await abrirTela();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível carregar suas fotos/i));
+    expect(textoDaTela()).not.toMatch(/nenhuma foto ainda/i);
+  });
+
+  it('sem foto de verdade, convida a tirar a primeira', async () => {
+    await abrirTela();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhuma foto ainda/i));
+  });
+
+  it('apagar que falha diz que a foto continua na linha do tempo', async () => {
+    // O `.then(recarregar)` estava sem par: a rejeição não era tratada e a tela
+    // não mudava nada. Quem confirmou "Apagar" vê a foto continuar ali.
+    listar.mockResolvedValue([foto()]);
+    remover.mockRejectedValue(new Error('Failed to fetch'));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByLabelText(/apagar esta foto/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText(/apagar esta foto/i));
+    await waitFor(() => expect(alertas).toHaveLength(1));
+    responderAlerta('apagar');
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/continua na sua linha do tempo/i));
+  });
+
   it('liberar soma o papel tocado aos que já veem', async () => {
     listar.mockResolvedValue([foto(['NUTRICIONISTA'])]);
     await abrirTela();

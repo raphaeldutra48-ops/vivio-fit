@@ -8,6 +8,7 @@ import {
   type HorarioLivre,
   type StatusCompromisso,
   type TipoCompromisso,
+  diaLocal,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,7 +16,14 @@ import { Aviso, Botao, Campo, Cartao, Etiqueta } from '../../../components/ui';
 import { avisoDoSeletorDeAlunos, useAlunosAtivos } from '../../../lib/alunos';
 import { sdk } from '../../../lib/sdk';
 
-const hojeISO = () => new Date().toISOString().slice(0, 10);
+/*
+  O "hoje" da agenda é o do relógio de quem abre a tela.
+
+  Era `toISOString()`, que às 21h no Brasil já está em amanhã: o profissional
+  abria a agenda à noite e via o dia seguinte, e um compromisso criado dali
+  nascia com a data errada.
+*/
+const hojeISO = () => diaLocal();
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -241,10 +249,16 @@ export default function Agenda() {
                 <span className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
                   Horários livres
                 </span>
+                {/*
+                  O cabeçalho da lista já distingue falha de dia vazio; aqui a
+                  frase antiga mandava "defina sua janela de atendimento" para
+                  quem só estava sem rede — e a janela dele já estava definida.
+                */}
                 {livres.length === 0 ? (
-                  <Aviso tipo="info">
-                    Nenhum horário livre neste dia. Defina sua janela de atendimento, ou escolha
-                    outro dia.
+                  <Aviso tipo={erro ? 'erro' : 'info'}>
+                    {erro
+                      ? 'Não deu para ler os horários deste dia. Recarregue antes de concluir que não há vaga.'
+                      : 'Nenhum horário livre neste dia. Defina sua janela de atendimento, ou escolha outro dia.'}
                   </Aviso>
                 ) : (
                   <div className="grid grid-cols-3 gap-xs">

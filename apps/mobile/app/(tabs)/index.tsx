@@ -1,5 +1,5 @@
 import type { CheckinResumo, ExecucaoResumo, PlanoTreinoCompleto } from '@vivio/contracts';
-import { cobrancaDaDieta, dataLocalDoCheckin, type CobrancaDaDieta } from '@vivio/contracts';
+import { cobrancaDaDieta, diaLocal, type CobrancaDaDieta } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -13,7 +13,7 @@ import { useSessao } from '../../src/sessao';
 export default function Inicio() {
   const { usuario, tema, sair } = useSessao();
   const router = useRouter();
-  const hoje = dataLocalDoCheckin();
+  const hoje = diaLocal();
   const [plano, setPlano] = useState<PlanoTreinoCompleto | null>(null);
   const [execucoes, setExecucoes] = useState<ExecucaoResumo[]>([]);
   /** true quando a lista de treinos não pôde ser buscada — ver o vazio abaixo. */

@@ -138,10 +138,26 @@ describe('minhas metas', () => {
     listarMetas.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'sem rede', 0));
     await abrirMetas();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar suas metas.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível carregar/i));
     expect(textoDaTela()).not.toMatch(/nenhuma meta ainda/i);
+    // E diz o que a pessoa precisa saber: as metas não se perderam.
+    expect(textoDaTela()).toMatch(/continuam salvas/i);
+  });
+
+  it('a falha tem saída: um toque tenta de novo', async () => {
+    /*
+      A tela trocava todo o conteúdo por uma linha de erro, e a única saída
+      visível era voltar e entrar de novo. A causa quase sempre é rede
+      intermitente na academia — um toque resolve.
+    */
+    listarMetas.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'sem rede', 0));
+    await abrirMetas();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    listarMetas.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhuma meta ainda/i));
   });
 
   it('o vazio de verdade diz quem define as metas', async () => {

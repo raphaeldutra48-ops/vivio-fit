@@ -45,7 +45,25 @@ O perfil `preview` já está no `eas.json`, gera **APK** (não AAB) e usa canal
 `preview` — é o que se instala direto no aparelho, sem loja. O build roda na
 nuvem da Expo e leva de 10 a 25 minutos; o link do APK sai no fim.
 
-### 1.3. Documentos legais preenchidos
+### 1.3. Aplicar o RLS — IMPEDITIVO para o formulário da página pública
+
+A proteção do formulário público (validação de tamanho, repetição desprezada e
+teto de 20 pedidos por hora por página) está no repositório e **não está no
+banco**. Função em arquivo não é função em banco.
+
+```bash
+pnpm --filter @vivio/banco rls:aplicar
+```
+
+**Como conferir que funcionou:** envie o formulário de uma página publicada duas
+vezes com o MESMO e-mail. O segundo não deve criar um pedido novo em
+`/site-profissional`. Depois:
+
+```bash
+pnpm --filter @vivio/banco exec tsx prisma/auditar-rls.ts
+```
+
+### 1.4. Documentos legais preenchidos
 
 `app/termos` e `app/privacidade` têm `[PREENCHER]` no lugar de razão social, CNPJ
 e endereço. Enquanto estiverem assim, **ninguém de fora deveria criar conta**: o
@@ -53,7 +71,7 @@ cadastro pede aceite de um documento incompleto, e o formulário da página púb
 coleta nome e telefone apontando para uma política que não diz quem é o
 controlador dos dados.
 
-### 1.4. Revisão clínica das faixas
+### 1.5. Revisão clínica das faixas
 
 As 20 faixas de marcadores de exame e as 8 regras de alerta não passaram por
 revisão profissional. Enquanto não passarem, **não lance exame de pessoa real** —
@@ -141,6 +159,11 @@ A pergunta é sempre a mesma: **a tela está afirmando algo que ela não sabe?**
   acontecer, anote a tela e o que estava preenchido.
 - Mensagem técnica ("Failed to fetch", "undefined") nunca deveria aparecer. Se
   aparecer, é caminho que escapou da varredura.
+- **Teste de propósito DEPOIS DAS 21h.** Era onde o dia virava: a água e as
+  refeições iam para o dia seguinte, o contador zerava e o painel dizia "1 dia
+  sem check-in" para quem acabara de registrar. Foi corrigido em 02/10, e é o
+  horário em que vale conferir — registre um copo de água às 22h e confirme que
+  ele conta para hoje, não para amanhã.
 
 ---
 

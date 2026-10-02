@@ -149,10 +149,21 @@ describe('meus recordes', () => {
     meusRecordes.mockRejectedValue(new Error('rede'));
     await abrirRecordes();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar seus recordes.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível carregar/i));
     expect(textoDaTela()).not.toMatch(/seus recordes aparecem aqui/i);
+    // E diz de onde as marcas vêm, para ninguém achar que precisa refazê-las.
+    expect(textoDaTela()).toMatch(/nenhuma se perdeu/i);
+  });
+
+  it('a falha tem saída: um toque tenta de novo', async () => {
+    meusRecordes.mockRejectedValue(new Error('rede'));
+    await abrirRecordes();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    meusRecordes.mockResolvedValue({ total: 0, marcas: [] });
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).not.toMatch(/não foi possível carregar/i));
   });
 
   it('o vazio de verdade explica o que falta fazer', async () => {

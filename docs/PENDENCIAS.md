@@ -13,6 +13,38 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
+### 29. A proteção nova do formulário público precisa ser APLICADA no banco
+**Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
+**Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
+repositório — a função `enviar_pedido_de_contato` passou a validar tamanho,
+desprezar repetição do mesmo e-mail ainda não atendido e parar em 20 pedidos por
+hora por página. **Mas função no arquivo não é função no banco.** Até alguém
+aplicar, o banco continua com a versão sem limite nenhum.
+**Por que importa:** é a única escrita do sistema feita por quem NÃO tem conta.
+Sem o teto, um script inunda a caixa de pedidos de um profissional e os contatos
+de verdade somem no meio — e `mensagem` sem limite grava o que quiserem.
+**Como aplicar:**
+```bash
+pnpm --filter @vivio/banco rls:aplicar
+```
+**Por que não faço:** aplicar RLS escreve no banco de produção, e a permissão
+desta sessão barrou a operação. Vale conferir depois com
+`pnpm --filter @vivio/banco exec tsx prisma/auditar-rls.ts`.
+
+### 30. Onze telas do aplicativo mostram a falha sem oferecer "tentar de novo"
+**Assumida em:** 2026-10-02 · **Depende de:** uma tarde de trabalho, sem risco.
+**Estado:** o componente certo existe e é usado nas abas e em mais telas
+(`apps/mobile/src/componentes/Estado.tsx`, `FalhouAoCarregar`). Nestas a falha de
+carregamento aparece como uma linha de texto: `(tabs)/agenda`, `calorimetria`,
+`cardio`, `composicao`, `execucao/[sessaoId]`, `fotos`, `lembretes`,
+`materiais`, `perfil`. Em `metas` e `recordes` já foi corrigido em 02/10, porque
+nelas o erro ocupava a tela inteira e não sobrava saída nenhuma.
+**Por que importa:** a causa quase sempre é rede intermitente na academia, e um
+toque resolve. Sem o botão, a pessoa sai da tela e volta — ou fecha o app.
+**Por que não foi feito agora:** cada tela precisa do contador de tentativa na
+dependência do efeito, e mexer em onze de uma vez numa auditoria que já trocou
+muita coisa troca um incômodo por risco de defeito novo.
+
 ### 28. O Railway continua conectado ao repositório (só o dono da conta desliga)
 **Assumida em:** 2026-09-30 · **Depende de:** você, no painel do Railway.
 **Estado:** o código não tem mais nada de Railway — isso foi removido em 24/09 e
@@ -259,6 +291,81 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Auditoria de 01–02/10 — passe 2: a dose dez vezes maior, as seções clínicas que sumiam e o dia que virava às 21h
+
+**O achado mais grave tem consequência clínica.** O campo **Dose** do editor de
+prescrição era `type="number"` convertido com `Number(e.target.value)`. O teclado
+brasileiro oferece vírgula, campo numérico não a aceita, e foi **medido**: digitar
+"2,5" produzia `dose: 25`. Dez vezes a dose, sem erro e sem aviso, num documento
+que leva o registro no conselho de quem assinou. Virou campo de texto com estado
+próprio (`CampoDeDose`) e `numeroDoCampo`, no mesmo desenho do `CampoDeHorarios`
+que já existia ao lado — e a vírgula não desaparece enquanto se digita.
+
+**Duas seções clínicas da ficha do aluno desapareciam por falta de rede.**
+`AlertasClinicos` e `CondicoesDeSaude` mandavam QUALQUER erro para o estado de
+"não pode ver" e devolviam `null`. A intenção era certa (403 por falta de
+consentimento não é falha e não deve acusar erro), mas a condição não existia.
+São justamente as seções que servem para o personal não prescrever
+desenvolvimento militar a quem tem lesão no ombro — e a ausência se lê como "não
+há nada". Agora só o 403 esconde. Os botões das mesmas seções ("Marcar como
+visto", "Dar alta") engoliam a falha e não mudavam nada na tela: quem clicava
+saía achando que havia resolvido.
+
+**A porta aberta do site.** `enviar_pedido_de_contato` — a única escrita feita por
+quem não tem conta — não tinha validação de tamanho nem vazão. Passou a validar,
+a desprezar repetição silenciosamente e a parar em 20 por hora por página; o SDK
+passou a traduzir `22023` e `53400`, que caíam em "erro inesperado"; e o
+formulário ganhou os `maxLength` do schema, com a recusa dizendo o que corrigir
+em vez de mandar tentar de novo. **Falta aplicar no banco — pendência 29.**
+
+**O dia do aluno virava às 21h.** `new Date().toISOString().slice(0, 10)` dá o dia
+em UTC, e no Brasil isso é amanhã a partir das 21h. A conta estava errada em
+cinco lugares, e o efeito era diário: a partir das 21h a água e as refeições
+registradas iam para o dia seguinte, o contador do dia zerava e a aba de nutrição
+voltava a cobrar refeições já marcadas; o painel dizia "1 dia sem check-in" sobre
+quem havia registrado naquela noite; um recebimento registrado às 22h saía datado
+do dia seguinte; a agenda, o exame e a prescrição vinham pré-preenchidos com
+amanhã. A regra virou `packages/contracts/src/datas.ts` (`diaLocal`,
+`inicioDoDiaUtc`, `diasEntre`, `diaLocalMenos`), com prova lado a lado do caso em
+que o UTC é o CERTO — `soData`, para dia escolhido em `<input type="date">`, onde
+usar o relógio local devolveria o dia anterior. É essa simetria que fazia o erro
+ser fácil.
+
+**O resto do passe, na mesma varredura:**
+
+- **Check-in do aluno:** falhar ao LER o de hoje abria o formulário em branco em
+  silêncio — e salvar SUBSTITUI o registro do dia. Quem voltava para corrigir a
+  dor apagava a energia da manhã, que é exatamente o estrago que a leitura
+  existia para evitar.
+- **Equipe e autorizações (aplicativo):** com a leitura falhando, a tela dizia
+  "Ninguém ainda" a quem tem profissional **e mostrava todas as chaves de
+  autorização desligadas** a quem autorizou tudo. A segunda é a pior: a pessoa
+  reautoriza o que já estava autorizado, e o registro de consentimento — que é
+  documento de LGPD — ganha uma linha que não corresponde a decisão nenhuma.
+- **Redefinir senha:** `.then(setTemSessao)` sem par deixava a tela presa em
+  "Conferindo o link…" para sempre, sem erro e sem saída, no único caminho de
+  quem está trancado fora da conta.
+- **Fotos de evolução:** a frase de vazio aparecia junto da falha, dizendo a quem
+  tem a linha do tempo cheia que não há foto nenhuma; e apagar tinha `.then` sem
+  `.catch`, então a falha era rejeição não tratada e a foto continuava na tela.
+- **Recusar convite** passou a perguntar antes: os dois botões têm o mesmo
+  tamanho, lado a lado, e o da direita apagava o convite sem volta.
+- **Agenda do profissional** ganhou suíte (não tinha nenhuma) e parou de mandar
+  "defina sua janela de atendimento" para quem só estava sem rede.
+- **Catálogos que falhavam calados** (prescritíveis, exercícios, receitas, água):
+  o vazio dizia "está vazio" — e no catálogo de prescrição mandava recadastrar o
+  que já existe.
+- **Três telas de escrita sem trava de segundo clique:** pagamento (que
+  respondia "já está paga" logo depois de registrar com sucesso), convite de
+  aluno e cardápio.
+- **Acessibilidade:** o botão de modo discreto ficava sem nome nenhum no celular
+  (a palavra ao lado do ícone é `hidden sm:inline`), e os links legais do
+  aplicativo não se anunciavam como links.
+
+**Método:** cada correção foi mutada antes de entrar — desfeita à mão para
+confirmar que a prova fica vermelha. A cadeia foi conferida por **código de
+saída**, não pelo resumo na tela.
 
 ### Auditoria de 01/10 — passe 1: corrida de busca, treino recusado e o bundle no CI
 **Três defeitos, nenhum deles visível em teste de tela isolada.**

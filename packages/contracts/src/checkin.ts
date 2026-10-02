@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { diaLocal, diasEntre } from './datas';
 import { LIMITES_DE_TEXTO } from './numeros';
 
 /**
@@ -33,24 +34,6 @@ export const registrarCheckinSchema = z.object({
   observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
 });
 export type RegistrarCheckinInput = z.infer<typeof registrarCheckinSchema>;
-
-/**
- * O "hoje" do aluno, em `AAAA-MM-DD`.
- *
- * Existe porque `new Date().toISOString().slice(0, 10)` é a forma errada e
- * óbvia de fazer isto: `toISOString` converte para UTC, e no Brasil (UTC-3)
- * qualquer registro feito depois das 21h sairia com a data de **amanhã**. O
- * aluno que faz o check-in antes de dormir teria o dia de hoje marcado como
- * não registrado e o de amanhã já respondido — e o alerta de adesão do
- * personal leria isso como um dia perdido.
- *
- * Os componentes locais dão a data do relógio de quem está registrando, que é
- * exatamente o que o check-in significa.
- */
-export function dataLocalDoCheckin(agora: Date = new Date()): string {
-  const doisDigitos = (n: number) => String(n).padStart(2, '0');
-  return `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`;
-}
 
 export const consultaCheckinsSchema = z.object({
   /** Janela em dias, contada para trás a partir de hoje. */
@@ -93,13 +76,6 @@ export interface ResumoDeCheckins {
 /** Quantos dias para trás dá para registrar. */
 export const DIAS_RETROATIVOS = 3;
 
-const DIA_EM_MS = 24 * 60 * 60 * 1000;
-
-/** Meia-noite UTC de hoje — é assim que a coluna `@db.Date` guarda o dia. */
-export function hojeUtc(agora: Date = new Date()): Date {
-  return new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()));
-}
-
 /**
  * Os números que o painel do profissional mostra.
  *
@@ -137,12 +113,16 @@ export function resumoDeCheckins(
     aderencia: comCheckin === 0 ? null : Math.round((treinou / comCheckin) * 100),
     energiaMedia: comCheckin === 0 ? null : Number((somaEnergia / comCheckin).toFixed(1)),
     diasComDor,
-    diasSemCheckin: ultimo
-      ? Math.floor(
-          (hojeUtc(agora).getTime() - new Date(`${ultimo.data}T00:00:00.000Z`).getTime()) /
-            DIA_EM_MS,
-        )
-      : null,
+    /*
+      Dia local contra dia local.
+
+      Era `hojeUtc(agora)` contra o dia gravado — e o dia gravado vem do relógio
+      do aluno (`diaLocal`). Às 22h no Brasil os dois lados discordavam em um
+      dia, e o painel do profissional dizia "1 dia sem check-in" para quem havia
+      registrado naquela mesma noite. A conta agora compara dois dias do
+      calendário, que é o que ela sempre quis dizer.
+    */
+    diasSemCheckin: ultimo ? diasEntre(ultimo.data, diaLocal(agora)) : null,
     ultimoEm: ultimo?.data ?? null,
   };
 }

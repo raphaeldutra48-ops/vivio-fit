@@ -7,7 +7,7 @@ import {
   numeroDoCampo,
   ROTULO_TIPO_CARDIO,
   TipoCardio,
-  dataLocalDoCheckin,
+  diaLocal,
   type CardioResumo,
   type ResumoDeCalorias,
 } from '@vivio/contracts';
@@ -138,7 +138,7 @@ export default function Cardio() {
           inteiro por causa de um campo opcional.
         */
         distanciaKm: numeroDoCampo(distancia) ?? undefined,
-        data: dataLocalDoCheckin(),
+        data: diaLocal(),
         observacao: observacao.trim() || undefined,
       });
       setAberto(false);

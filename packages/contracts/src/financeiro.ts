@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { diaLocal, inicioDoDiaUtc } from './datas';
 import { LIMITES_DE_TEXTO, MAXIMO_DE_PARCELAS } from './numeros';
 
 export const StatusCobranca = {
@@ -110,14 +111,29 @@ export function paraCentavos(texto: string): number | null {
 
 const DIA_EM_MS = 24 * 60 * 60 * 1000;
 
-/** Só a data, sem hora: vencimento é DATE e não tem hora nenhuma. */
+/**
+ * Só a data, sem hora: vencimento é DATE e não tem hora nenhuma.
+ *
+ * Componentes UTC de propósito, e aqui isso é o certo: o vencimento vem de um
+ * `<input type="date">`, e `new Date('2026-10-10')` é 10/10 às 00:00Z. Ler esse
+ * `Date` com componentes locais devolveria dia 9 no Brasil. O oposto vale para
+ * instantes ("agora"), e para eles existe `diaLocal` em `datas.ts` — as duas não
+ * se substituem.
+ */
 export function soData(d: Date | string): string {
   return (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 }
 
-/** Hoje à meia-noite UTC — a régua de "atrasada". */
+/**
+ * Hoje à meia-noite UTC — a régua de "atrasada".
+ *
+ * O dia vem do relógio LOCAL, e não de `toISOString()`: com o segundo, uma
+ * cobrança que vence hoje passava a ser exibida como atrasada a partir das 21h
+ * do próprio dia do vencimento. Três horas de diferença, mas é a tela em que o
+ * profissional decide cobrar alguém.
+ */
 export function hojeSemHora(agora: Date = new Date()): Date {
-  return new Date(`${agora.toISOString().slice(0, 10)}T00:00:00.000Z`);
+  return inicioDoDiaUtc(diaLocal(agora));
 }
 
 /**

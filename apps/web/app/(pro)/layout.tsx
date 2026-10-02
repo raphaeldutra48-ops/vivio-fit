@@ -30,6 +30,17 @@ function BotaoDiscreto() {
       type="button"
       onClick={alternar}
       aria-pressed={discreto}
+      /*
+        `aria-label` além do `title`: a palavra ao lado do ícone é
+        `hidden sm:inline`, então no celular o botão ficava com um emoji
+        `aria-hidden` e mais nada — sem nome nenhum para quem usa leitor de tela,
+        justamente no aparelho em que a tela é pequena e o vizinho está perto.
+      */
+      aria-label={
+        discreto
+          ? 'Mostrar os dados dos alunos novamente'
+          : 'Ocultar peso, medidas e dados clínicos da tela'
+      }
       title={
         discreto
           ? 'Mostrar os dados dos alunos novamente'

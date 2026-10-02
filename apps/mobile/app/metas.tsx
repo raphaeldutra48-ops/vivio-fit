@@ -7,6 +7,7 @@ import { ErroApi } from '@vivio/sdk';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -37,6 +38,15 @@ export default function Metas() {
   const [metas, setMetas] = useState<MetaResumo[] | null>(null);
   const [semAutorizacao, setSemAutorizacao] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Um contador de tentativa, para a falha ter saída.
+
+    A tela trocava TODO o conteúdo por uma linha de erro: a única saída visível
+    era voltar e entrar de novo — e a causa quase sempre é rede intermitente na
+    academia, que um toque resolve. O componente de falha já existia e era usado
+    nas abas; faltava aqui, onde o erro ocupa a tela inteira.
+  */
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     if (!usuario) return;
@@ -61,7 +71,7 @@ export default function Metas() {
     return () => {
       ativo = false;
     };
-  }, [usuario]);
+  }, [usuario, tentativa]);
 
   const Cartao = ({ children }: { children: React.ReactNode }) => (
     <View
@@ -81,7 +91,13 @@ export default function Metas() {
   if (erro) {
     return (
       <View style={{ flex: 1, backgroundColor: tema.fundo, padding: espacamento.lg }}>
-        <Text style={{ color: tema.erro }}>{erro}</Text>
+        <FalhouAoCarregar
+          mensagem="Suas metas continuam salvas; foi a conexão que falhou."
+          aoTentarDeNovo={() => {
+            setErro(null);
+            setTentativa((n) => n + 1);
+          }}
+        />
       </View>
     );
   }

@@ -5,6 +5,7 @@ import {
   descreverPosologia,
   type ModeloPrescricaoResumo,
   type PrescricaoResumo,
+  diaLocal,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
@@ -18,7 +19,12 @@ import { Aviso, Botao, Cartao, Etiqueta } from '../../../../../components/ui';
 import { sdk } from '../../../../../lib/sdk';
 import { fraseDeErro } from '../../../../../lib/erros';
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+/*
+  A data da prescrição é a do relógio de quem prescreve. Com `toISOString()`,
+  uma prescrição emitida às 21h30 saía datada do dia seguinte — num documento
+  que leva o registro no conselho de quem assinou.
+*/
+const hoje = () => diaLocal();
 
 const corDoStatus: Record<string, string> = {
   ATIVA: 'var(--vv-sucesso)',

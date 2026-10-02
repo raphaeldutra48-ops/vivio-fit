@@ -250,7 +250,13 @@ export default function Fotos() {
       {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
       {carregando && <ActivityIndicator color={tema.primariaFundo} />}
 
-      {!carregando && fotos.length === 0 && (
+      {/*
+        `!erro`: a frase de vazio aparecia JUNTO da falha de carregamento, e
+        dizia a quem tem a linha do tempo cheia que não há foto nenhuma. São
+        fotos do corpo da pessoa — ler "nenhuma foto ainda" é entender que se
+        perderam.
+      */}
+      {!carregando && !erro && fotos.length === 0 && (
         <Text style={{ color: tema.textoSecundario }}>
           Nenhuma foto ainda. A primeira vira sua referência de "antes".
         </Text>

@@ -8,6 +8,7 @@ import {
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -58,6 +59,19 @@ export default function Equipe() {
   const [consentimentos, setConsentimentos] = useState<ConsentimentoResumo[]>([]);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Separado do `erro` porque as consequências são opostas.
+
+    `erro` também cobre a falha de um TOQUE (aceitar, autorizar), e aí a lista
+    tem de continuar na tela. Falhar ao CARREGAR é outra coisa: com `vinculos`
+    em `[]` e `consentimentos` em `[]`, a tela afirmava duas mentiras ao mesmo
+    tempo — "Ninguém ainda", para quem tem profissional, e todas as chaves de
+    autorização desligadas, para quem autorizou tudo. A segunda é a pior: a
+    pessoa reautoriza o que já estava autorizado, e o registro de consentimento
+    — que é documento de LGPD — ganha uma linha que não corresponde a decisão
+    nenhuma.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -68,8 +82,9 @@ export default function Equipe() {
       setVinculos(v);
       setConsentimentos(c);
       setErro(null);
+      setFalhouAoCarregar(false);
     } catch {
-      setErro('Não foi possível carregar sua equipe.');
+      setFalhouAoCarregar(true);
       setVinculos([]);
     }
   }, []);
@@ -177,6 +192,20 @@ export default function Equipe() {
       <View style={{ flex: 1, backgroundColor: tema.fundo, justifyContent: 'center' }}>
         <ActivityIndicator color={tema.acaoFundo} />
       </View>
+    );
+  }
+
+  if (falhouAoCarregar) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: tema.fundo }}
+        contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
+      >
+        <FalhouAoCarregar
+          mensagem="Não deu para carregar sua equipe e suas autorizações. Nada mudou: o que você já autorizou continua valendo."
+          aoTentarDeNovo={() => void carregar()}
+        />
+      </ScrollView>
     );
   }
 
@@ -385,7 +414,12 @@ export default function Equipe() {
       */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: espacamento.lg, paddingVertical: espacamento.lg }}>
         {(['termos', 'privacidade'] as const).map((qual) => (
-          <Pressable key={qual} onPress={() => void Linking.openURL(DOCUMENTOS_LEGAIS[qual])}>
+          <Pressable
+            key={qual}
+            accessibilityRole="link"
+            accessibilityLabel={qual === 'termos' ? 'Termos de uso' : 'Política de privacidade'}
+            onPress={() => void Linking.openURL(DOCUMENTOS_LEGAIS[qual])}
+          >
             <Text
               style={{
                 color: tema.textoSecundario,

@@ -1,4 +1,4 @@
-import { ENERGIA_MAX, dataLocalDoCheckin, numeroDoCampo } from '@vivio/contracts';
+import { ENERGIA_MAX, diaLocal, numeroDoCampo } from '@vivio/contracts';
 import { LIMITES_DE_TEXTO } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
@@ -39,7 +39,7 @@ export default function Checkin() {
   const { usuario, tema } = useSessao();
   const router = useRouter();
 
-  const hoje = dataLocalDoCheckin();
+  const hoje = diaLocal();
 
   const [treinou, setTreinou] = useState<boolean | null>(null);
   const [energia, setEnergia] = useState<number | null>(null);

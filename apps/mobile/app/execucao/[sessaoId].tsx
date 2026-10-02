@@ -2,7 +2,7 @@ import {
   ROTULO_INTENSIDADE,
   ROTULO_RECORDE,
   ROTULO_TIPO_CARDIO,
-  dataLocalDoCheckin,
+  diaLocal,
   SIGLA_TIPO_SERIE,
   TipoSerie,
   formatarSerieAnterior,
@@ -446,7 +446,7 @@ export default function Execucao() {
               tipo: cardioTipo,
               intensidade: cardioIntensidade,
               duracaoMin: minutosDeCardio,
-              data: dataLocalDoCheckin(),
+              data: diaLocal(),
               execucaoId: resumo.id,
             });
           } catch {

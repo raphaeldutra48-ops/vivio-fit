@@ -45,6 +45,8 @@ vi.mock('../src/sdk', () => ({
   o efeito da tela recarrega. O provedor real o mantém estável, porque ele é
   estado; um dublê descuidado põe a tela em laço e o teste fica lento sem motivo.
 */
+const textoDaTela = () => document.body.textContent ?? '';
+
 const sessao = {
   tema: obterTema('claro'),
   usuario: { id: 'aluna-1', nome: 'Ana Souza', email: 'ana@exemplo.com', papel: 'ALUNO' },
@@ -200,6 +202,28 @@ describe('o que eu compartilho', () => {
     expect(alertas).toHaveLength(0);
   });
 
+  it('falha ao carregar NÃO mostra as chaves de autorização desligadas', async () => {
+    /*
+      A mentira mais caríssima desta tela. Com a leitura falhando, `vinculos` e
+      `consentimentos` ficavam em `[]`: a tela dizia "Ninguém ainda" a quem tem
+      profissional e mostrava TODAS as autorizações desligadas a quem autorizou
+      tudo. A pessoa reautoriza o que já estava autorizado, e o registro de
+      consentimento — que é documento de LGPD — ganha uma linha que não
+      corresponde a decisão nenhuma dela.
+    */
+    meusProfissionais.mockRejectedValue(new Error('Failed to fetch'));
+    listarConsentimentos.mockResolvedValue([]);
+    const { default: Equipe } = await import('../app/equipe');
+    render(<Equipe />);
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para carregar sua equipe/i));
+    expect(textoDaTela()).toMatch(/o que você já autorizou continua valendo/i);
+    // Nenhuma afirmação sobre vínculo nem sobre escopo.
+    expect(textoDaTela()).not.toMatch(/ninguém ainda/i);
+    expect(screen.queryByText('Treino')).not.toBeInTheDocument();
+    expect(conceder).not.toHaveBeenCalled();
+  });
+
   it('o texto que a pessoa lê é o mesmo que fica gravado no consentimento', async () => {
     /*
       A finalidade vem do contrato, e é ela que é registrada. Se a tela escrevesse
@@ -224,8 +248,13 @@ describe('o que eu compartilho', () => {
     const { default: Equipe } = await import('../app/equipe');
     render(<Equipe />);
 
-    await waitFor(() =>
-      expect(screen.getByText(/não foi possível carregar sua equipe/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para carregar sua equipe/i));
+    /*
+      E tem saída: a causa quase sempre é rede intermitente, e um toque resolve.
+      Sem o botão, a única saída visível seria fechar o app — numa tela de onde
+      depende tudo o que o aluno consegue fazer.
+    */
+    fireEvent.click(screen.getByText('Tentar de novo'));
+    await waitFor(() => expect(meusProfissionais).toHaveBeenCalledTimes(2));
   });
 });

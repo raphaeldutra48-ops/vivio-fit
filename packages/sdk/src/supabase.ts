@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   FINALIDADE_POR_ESCOPO,
   VERSAO_TERMO_ATUAL,
-  hojeUtc,
+  diaLocal,
+  diaLocalMenos,
   montarEvolucaoCorporal,
   contarClassificacoes,
   enriquecerMarcador,
@@ -1348,9 +1349,9 @@ export class MotorSupabase {
 
   async listarCheckins(alunoId: string, dias = 30): Promise<CheckinResumo[]> {
     this.auditarLeitura(alunoId, 'CHECKIN', 'EVOLUCAO');
-    const de = new Date(hojeUtc().getTime() - (dias - 1) * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    // A janela começa em dia local: os registros foram gravados com o dia do
+    // relógio do aluno, e uma borda em UTC corta o primeiro deles à noite.
+    const de = diaLocalMenos(dias - 1);
     const linhas = this.ou(
       await this.db
         .from('CheckinDiario')
@@ -1417,7 +1418,15 @@ export class MotorSupabase {
    * PostgREST repetir a meta em cada gole.
    */
   async resumoDeAgua(alunoId: string, data?: string): Promise<ResumoDeAgua> {
-    const dia = data ?? new Date().toISOString().slice(0, 10);
+    /*
+      `diaLocal`, e não `toISOString()`: o dia da água é o do relógio do aluno.
+
+      Com o UTC, a partir das 21h no Brasil esta consulta pedia o dia SEGUINTE —
+      a barra do copo zerava no fim da noite, e quem havia bebido dois litros
+      abria o app às 22h e lia zero. O registro continuava lá, gravado no dia que
+      ninguém estava vivendo.
+    */
+    const dia = data ?? diaLocal();
 
     const [meta, registros] = await Promise.all([
       this.db.from('MetaAgua').select('metaMlDia').eq('alunoId', alunoId).maybeSingle(),
@@ -1443,10 +1452,9 @@ export class MotorSupabase {
   }
 
   async registrarAgua(alunoId: string, dados: RegistrarAguaInput): Promise<ResumoDeAgua> {
-    const dia =
-      dados.data instanceof Date
-        ? dados.data.toISOString().slice(0, 10)
-        : String(dados.data).slice(0, 10);
+    // O copo conta para o dia de quem bebeu, não para o dia em UTC: depois das
+    // 21h o gole ia para amanhã, e a meta de hoje nunca fechava.
+    const dia = dados.data instanceof Date ? diaLocal(dados.data) : String(dados.data).slice(0, 10);
     this.ou(
       await this.db.from('RegistroAgua').insert({
         id: `${alunoId}-${Date.now()}`,
@@ -2906,7 +2914,14 @@ export class MotorSupabase {
     alunoId: string,
     dados: RegistrarRefeicaoInput,
   ): Promise<RegistroDeRefeicao> {
-    const dia = soData(dados.data);
+    /*
+      `soData` lê componentes UTC, e serve para dia escolhido em campo de data.
+      Aqui chega `new Date()` — um instante —, e com o UTC a refeição marcada às
+      21h30 era gravada em AMANHÃ: a cobrança da aba de nutrição voltava a pedir
+      o jantar que a pessoa acabara de marcar.
+    */
+    const dia =
+      dados.data instanceof Date ? diaLocal(dados.data) : String(dados.data).slice(0, 10);
     this.ou(
       await this.db.from('RegistroRefeicao').upsert(
         {
@@ -2929,7 +2944,7 @@ export class MotorSupabase {
 
   async registrosDoDia(alunoId: string, data?: string): Promise<RegistroDeRefeicao[]> {
     this.auditarLeitura(alunoId, 'PLANO_DIETA', 'NUTRICAO');
-    const dia = data ?? hojeUtc().toISOString().slice(0, 10);
+    const dia = data ?? diaLocal();
     const linhas = this.ou(
       await this.db
         .from('RegistroRefeicao')
@@ -3868,7 +3883,9 @@ export class MotorSupabase {
         .from('Cobranca')
         .update({
           status: 'PAGA',
-          pagaEm: `${soData(dados.pagaEm)}T00:00:00.000Z`,
+          // Instante, não campo de data: um recebimento registrado às 22h saía
+          // datado do dia seguinte, no único lugar do app que fala de dinheiro.
+          pagaEm: `${diaLocal(dados.pagaEm)}T00:00:00.000Z`,
           formaPagamento: dados.formaPagamento,
           ...(dados.observacao ? { observacao: dados.observacao } : {}),
         })

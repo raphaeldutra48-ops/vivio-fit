@@ -9,6 +9,7 @@ import {
   referenciaDe,
   type Marcador,
   type SexoBiologico,
+  diaLocal,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
@@ -38,7 +39,12 @@ export default function NovoExame() {
   const { usuario } = useSessao();
 
   const [laboratorio, setLaboratorio] = useState('');
-  const [dataColeta, setDataColeta] = useState(() => new Date().toISOString().slice(0, 10));
+  /*
+    A data da coleta começa em HOJE, pelo relógio local. Com `toISOString()`, um
+    exame lançado depois das 21h vinha pré-preenchido com o dia seguinte — e
+    ninguém confere um campo que já veio preenchido com algo plausível.
+  */
+  const [dataColeta, setDataColeta] = useState(() => diaLocal());
   const [sexo, setSexo] = useState<SexoBiologico>('F');
   const [observacao, setObservacao] = useState('');
   const [valores, setValores] = useState<ValoresDigitados>({});

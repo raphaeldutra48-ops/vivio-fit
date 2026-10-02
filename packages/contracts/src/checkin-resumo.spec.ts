@@ -89,6 +89,19 @@ describe('resumoDeCheckins', () => {
     expect(r.diasSemCheckin).toBe(0);
   });
 
+  it('quem registrou hoje À NOITE também está a zero dias — e não a um', () => {
+    /*
+      O defeito que esta prova fixa. O dia do check-in é gravado com o relógio do
+      ALUNO (`diaLocal`), e o "hoje" desta conta era calculado em UTC: às 22h em
+      Brasília os dois lados discordavam em um dia, e o painel do profissional
+      dizia "1 dia sem check-in" sobre alguém que havia respondido naquela mesma
+      noite. É o número que a tela usa para decidir quem sumiu.
+    */
+    const noiteDeDez = new Date(2026, 2, 10, 22, 30);
+    const r = resumoDeCheckins([dia('2026-03-10', true)], 30, noiteDeDez);
+    expect(r.diasSemCheckin).toBe(0);
+  });
+
   it('adesão de 100% e de 0% são as duas possíveis', () => {
     expect(resumoDeCheckins([dia('2026-03-10', true)], 7, AGORA).aderencia).toBe(100);
     expect(resumoDeCheckins([dia('2026-03-10', false)], 7, AGORA).aderencia).toBe(0);
