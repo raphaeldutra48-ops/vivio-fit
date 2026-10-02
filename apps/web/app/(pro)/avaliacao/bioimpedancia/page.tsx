@@ -1,6 +1,6 @@
 'use client';
 
-import type { AvaliacaoResumo, SexoBiologico } from '@vivio/contracts';
+import { textoDoNumero, type AvaliacaoResumo, type SexoBiologico } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Botao, Campo, Cartao } from '../../../../components/ui';
@@ -176,13 +176,13 @@ export default function Bioimpedancia() {
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa gorda</dt>
                 <dd className="tabular-nums">
-                  {previa ? `${previa.massaGordaKg.toFixed(1)} kg` : '—'}
+                  {previa ? `${textoDoNumero(previa.massaGordaKg, 1)} kg` : '—'}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa magra</dt>
                 <dd className="tabular-nums">
-                  {previa ? `${previa.massaMagraKg.toFixed(1)} kg` : '—'}
+                  {previa ? `${textoDoNumero(previa.massaMagraKg, 1)} kg` : '—'}
                 </dd>
               </div>
             </dl>

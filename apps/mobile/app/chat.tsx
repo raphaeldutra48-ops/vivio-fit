@@ -1,5 +1,7 @@
 import type { ConversaResumo, MensagemResumo } from '@vivio/contracts';
-import { LIMITES_DE_TEXTO } from '@vivio/contracts';
+import { LIMITES_DE_TEXTO,
+  ROTULO_PAPEL_INCLUSIVO,
+} from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,12 +19,6 @@ import { sdk } from '../src/sdk';
 import { useSondagem } from '../src/sondagem';
 import { useSessao } from '../src/sessao';
 import { gerarUuid } from '../src/uuid';
-
-const NOME_DO_PAPEL: Record<string, string> = {
-  PERSONAL: 'Personal trainer',
-  NUTRICIONISTA: 'Nutricionista',
-  MEDICO: 'Médico(a)',
-};
 
 function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -235,7 +231,7 @@ export default function Chat() {
               )}
             </View>
             <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
-              {conversa.contraparte ? (NOME_DO_PAPEL[conversa.contraparte.papel] ?? conversa.contraparte.papel) : ''}
+              {conversa.contraparte ? (ROTULO_PAPEL_INCLUSIVO[conversa.contraparte.papel] ?? conversa.contraparte.papel) : ''}
             </Text>
             <Text numberOfLines={1} style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
               {conversa.ultimaMensagem?.corpo ?? 'sem mensagens'}

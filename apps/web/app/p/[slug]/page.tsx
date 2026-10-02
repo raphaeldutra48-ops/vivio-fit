@@ -5,6 +5,7 @@ import {
   LIMITES_DE_TEXTO,
   linkDoWhatsapp,
   type PaginaPublica,
+  ROTULO_PAPEL,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useParams } from 'next/navigation';
@@ -17,12 +18,6 @@ const entrada = {
   background: 'var(--vv-superficie)',
   borderColor: 'var(--vv-borda)',
   color: 'var(--vv-texto-primario)',
-};
-
-const NOME_DO_PAPEL: Record<string, string> = {
-  PERSONAL: 'Personal trainer',
-  NUTRICIONISTA: 'Nutricionista',
-  MEDICO: 'Médico',
 };
 
 export default function PaginaDoProfissional() {
@@ -130,7 +125,7 @@ export default function PaginaDoProfissional() {
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-xl p-lg">
       <header className="pt-xl">
         <p className="text-sm uppercase" style={{ color: 'var(--vv-texto-secundario)' }}>
-          {NOME_DO_PAPEL[pagina.profissional.papel] ?? pagina.profissional.papel}
+          {ROTULO_PAPEL[pagina.profissional.papel] ?? pagina.profissional.papel}
         </p>
         <h1 className="mt-xs text-3xl font-bold">{pagina.titulo}</h1>
         <p className="mt-md text-lg">{pagina.profissional.nome}</p>

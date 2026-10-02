@@ -59,3 +59,30 @@ export const LIMITES_DE_TEXTO = {
  * estar preenchido.
  */
 export const MAXIMO_DE_PARCELAS = 36;
+
+/**
+ * Número decimal como se escreve em português: `22,5`, `1.500,75`.
+ *
+ * O par de `numeroDoCampo`, e existe pelo mesmo motivo. A regra já estava
+ * escrita seis vezes no projeto — duas com `toLocaleString('pt-BR')`, quatro
+ * com `toFixed(n).replace('.', ',')` — e **faltava em cinco lugares**, todos de
+ * exibição: a coluna ANTERIOR da execução de treino devolvia "22.5kg x 10", e as
+ * prévias de massa gorda e massa magra da adipometria e da bioimpedância
+ * mostravam "12.3 kg".
+ *
+ * O ponto não é estética. Na tela de treino o app PEDE vírgula — o teclado
+ * decimal brasileiro oferece vírgula, e `numeroDoCampo` existe para lê-la — e
+ * respondia com ponto, no mesmo campo, na mesma linha. E "12.3" é lido por
+ * muita gente como doze mil e trezentos.
+ *
+ * Feito à mão, e não com `toLocaleString`: o motor do aplicativo (Hermes) pode
+ * vir sem a tabela de locales completa, e nesse caso `toLocaleString('pt-BR')`
+ * cai calado no formato americano — devolvendo exatamente o defeito que esta
+ * função conserta, só que mais difícil de achar.
+ */
+export function textoDoNumero(valor: number, casas = 1): string {
+  const [inteiro, decimal] = valor.toFixed(casas).split('.');
+  // Ponto de milhar a cada três dígitos, da direita para a esquerda.
+  const comMilhar = (inteiro ?? '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return decimal ? `${comMilhar},${decimal}` : comMilhar;
+}

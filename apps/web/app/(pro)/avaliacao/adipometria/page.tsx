@@ -7,6 +7,7 @@ import {
   ROTULO_PROTOCOLO,
   type AvaliacaoResumo,
   type SexoBiologico,
+  textoDoNumero,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useEffect, useMemo, useState } from 'react';
@@ -265,7 +266,7 @@ export default function Adipometria() {
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa gorda</dt>
                 <dd className="tabular-nums">
                   {previa?.massaGordaKg !== null && previa?.massaGordaKg !== undefined
-                    ? `${previa.massaGordaKg.toFixed(1)} kg`
+                    ? `${textoDoNumero(previa.massaGordaKg, 1)} kg`
                     : '—'}
                 </dd>
               </div>
@@ -273,7 +274,7 @@ export default function Adipometria() {
                 <dt style={{ color: 'var(--vv-texto-secundario)' }}>Massa magra</dt>
                 <dd className="tabular-nums">
                   {previa?.massaMagraKg !== null && previa?.massaMagraKg !== undefined
-                    ? `${previa.massaMagraKg.toFixed(1)} kg`
+                    ? `${textoDoNumero(previa.massaMagraKg, 1)} kg`
                     : '—'}
                 </dd>
               </div>

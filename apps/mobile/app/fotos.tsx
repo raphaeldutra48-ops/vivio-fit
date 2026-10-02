@@ -3,6 +3,9 @@ import {
   LIMITES_MIDIA,
   TipoMidia,
   type FotoEvolucaoResumo,
+  ROTULO_ANGULO_FOTO,
+  ROTULO_PAPEL,
+  type Papel,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
@@ -25,12 +28,16 @@ import { useSessao } from '../src/sessao';
  * `LADO` continua existindo no banco para as fotos antigas, mas não é
  * oferecido aqui: quem tirou antes não tem como dizer de que lado era.
  */
-const ANGULOS: { valor: AnguloFoto; rotulo: string }[] = [
-  { valor: 'FRENTE', rotulo: 'Frente' },
-  { valor: 'LADO_DIREITO', rotulo: 'Lado direito' },
-  { valor: 'LADO_ESQUERDO', rotulo: 'Lado esquerdo' },
-  { valor: 'COSTAS', rotulo: 'Costas' },
-];
+/*
+  Os quatro que a tela oferece, com o nome vindo de `ROTULO_ANGULO_FOTO`.
+
+  A lista é curta de propósito — `LADO` existe só para fotos antigas e `LIVRE`
+  não se escolhe aqui —, mas o NOME de cada um não é mais daqui: era, e o cartão
+  de foto logo abaixo não usava, mostrando "LADO_DIREITO" cru.
+*/
+const ANGULOS: { valor: AnguloFoto; rotulo: string }[] = (
+  ['FRENTE', 'LADO_DIREITO', 'LADO_ESQUERDO', 'COSTAS'] as const
+).map((valor) => ({ valor, rotulo: ROTULO_ANGULO_FOTO[valor] }));
 
 const PROFISSIONAIS = [
   { papel: 'PERSONAL', rotulo: 'Personal' },
@@ -302,14 +309,14 @@ export default function Fotos() {
                 {new Date(`${foto.data}T12:00:00`).toLocaleDateString('pt-BR')}
               </Text>
               <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
-                {foto.angulo}
+                {ROTULO_ANGULO_FOTO[foto.angulo] ?? foto.angulo}
               </Text>
             </View>
 
             <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.xs }}>
               {foto.visivelPara.length === 0
                 ? 'Só você vê esta foto'
-                : `Visível para: ${foto.visivelPara.join(', ').toLowerCase()}`}
+                : `Visível para: ${foto.visivelPara.map((papel) => ROTULO_PAPEL[papel as Papel] ?? papel).join(', ')}`}
             </Text>
 
             <View style={{ flexDirection: 'row', gap: espacamento.xs }}>

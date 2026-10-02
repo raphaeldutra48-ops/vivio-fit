@@ -1,6 +1,8 @@
 'use client';
 
-import { Papel, type PlanoTreinoResumo, type ResumoAluno } from '@vivio/contracts';
+import { Papel, type PlanoTreinoResumo, type ResumoAluno,
+  ROTULO_PAPEL,
+} from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -162,8 +164,13 @@ export default function FichaDoAluno() {
         <div className="flex flex-wrap gap-md">
           {aluno.equipe.map((membro) => (
             <Cartao key={membro.profissional.id} className="flex-1 min-w-[200px]">
+              {/*
+                O `uppercase` é do estilo; a palavra tem de ser a nossa. Sem o
+                rótulo, a etiqueta escrevia "MEDICO" — sem acento — sobre o nome
+                de quem atende.
+              */}
               <p className="text-xs uppercase" style={{ color: 'var(--vv-texto-secundario)' }}>
-                {membro.tipo}
+                {ROTULO_PAPEL[membro.tipo] ?? membro.tipo}
               </p>
               <p className="font-semibold">{membro.profissional.nome}</p>
             </Cartao>

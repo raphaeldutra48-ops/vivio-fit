@@ -72,8 +72,13 @@ describe('Bioimpedância', () => {
     await transcrever(usuario);
 
     expect(composicao()).toMatch(/^25%/);
-    expect(linha('Massa gorda')).toBe('17.5 kg');
-    expect(linha('Massa magra')).toBe('52.5 kg');
+    /*
+      Vírgula, não ponto. A prévia dizia "17.5 kg" — formato americano numa tela
+      em que a balança é transcrita COM vírgula, no campo ao lado. Pior: "17.5"
+      é lido por muita gente como dezessete mil e quinhentos.
+    */
+    expect(linha('Massa gorda')).toBe('17,5 kg');
+    expect(linha('Massa magra')).toBe('52,5 kg');
     expect(screen.getByRole('button', { name: 'Salvar avaliação' })).toBeEnabled();
   });
 
@@ -86,7 +91,8 @@ describe('Bioimpedância', () => {
 
     await usuario.type(screen.getByLabelText('Massa magra (kg) — opcional'), '51,2');
 
-    expect(linha('Massa magra')).toBe('51.2 kg');
+    // O "51,2" digitado volta como "51,2" — ida e volta no mesmo formato.
+    expect(linha('Massa magra')).toBe('51,2 kg');
     expect(
       screen.getByText(/Massa magra informada pela balança/),
     ).toBeInTheDocument();

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { textoDoNumero } from './numeros';
 
 /**
  * Seções de mercado. O aluno percorre o supermercado por corredor, não por
@@ -59,7 +60,7 @@ export interface ListaDeCompras {
 /** Acima de 1 kg o número em gramas deixa de ser legível na gôndola. */
 export function formatarQuantidade(gramas: number): string {
   if (gramas >= 1000) {
-    return `${(gramas / 1000).toFixed(2).replace('.', ',')} kg`;
+    return `${textoDoNumero(gramas / 1000, 2)} kg`;
   }
   return `${Math.round(gramas)} g`;
 }

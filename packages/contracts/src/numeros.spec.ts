@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { numeroDoCampo } from './numeros';
+import { numeroDoCampo, textoDoNumero } from './numeros';
 
 /**
  * A conversão que decide se o treino salva.
@@ -50,5 +50,48 @@ describe('numeroDoCampo', () => {
   it('infinito não passa: é número, mas não é peso nem repetição', () => {
     expect(numeroDoCampo('Infinity')).toBeNull();
     expect(numeroDoCampo('1e999')).toBeNull();
+  });
+});
+
+describe('textoDoNumero', () => {
+  it('decimal sai com vírgula, como se escreve em português', () => {
+    expect(textoDoNumero(22.5)).toBe('22,5');
+    expect(textoDoNumero(12.34, 2)).toBe('12,34');
+  });
+
+  it('milhar sai com ponto, e não se confunde com o decimal', () => {
+    // "1.500,75" é a leitura certa; "1,500.75" é a americana, e aqui ela
+    // significaria mil e quinhentos vezes menos.
+    expect(textoDoNumero(1500.75, 2)).toBe('1.500,75');
+    expect(textoDoNumero(1234567.8)).toBe('1.234.567,8');
+  });
+
+  it('zero casa não deixa vírgula sobrando', () => {
+    expect(textoDoNumero(1500, 0)).toBe('1.500');
+    expect(textoDoNumero(7, 0)).toBe('7');
+  });
+
+  it('negativo mantém o sinal e o milhar no lugar', () => {
+    expect(textoDoNumero(-1234.5)).toBe('-1.234,5');
+  });
+
+  it('arredonda em vez de truncar', () => {
+    expect(textoDoNumero(22.46, 1)).toBe('22,5');
+    expect(textoDoNumero(0.04, 1)).toBe('0,0');
+  });
+
+  /*
+    A razão de não usar `toLocaleString('pt-BR')`: o motor do aplicativo pode vir
+    sem a tabela de locales, e aí ele cai calado no formato americano. Esta prova
+    não depende de `Intl` nenhum.
+  */
+  it('não depende do Intl de quem roda', () => {
+    expect(textoDoNumero(1000.5)).toBe('1.000,5');
+  });
+
+  it('o que sai volta por numeroDoCampo — ida e volta sem perda', () => {
+    for (const valor of [22.5, 0.5, 1500.75, -3.25]) {
+      expect(numeroDoCampo(textoDoNumero(valor, 2).replace(/\./g, ''))).toBe(valor);
+    }
   });
 });

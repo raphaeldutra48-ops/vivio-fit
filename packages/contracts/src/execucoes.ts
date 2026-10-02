@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { textoDoNumero } from './numeros';
 
 /**
  * Tipo da série. Segue a convenção que o pessoal de academia já conhece:
@@ -228,8 +229,16 @@ export interface HistoricoCarga {
   pontos: PontoHistoricoCarga[];
 }
 
-/** Formata a coluna ANTERIOR: "80kg x 10". */
+/**
+ * Formata a coluna ANTERIOR: "80kg x 10", "22,5kg x 8".
+ *
+ * A vírgula não é detalhe nesta coluna. Ela fica ao lado do campo em que a
+ * pessoa DIGITA a carga, onde o teclado brasileiro oferece vírgula e
+ * `numeroDoCampo` existe para lê-la — e a coluna respondia "22.5kg", com ponto,
+ * na mesma linha. Pior: muita gente lê "22.5" como vinte e dois mil e
+ * quinhentos.
+ */
 export function formatarSerieAnterior(serie: SerieAnterior): string {
-  const carga = Number.isInteger(serie.cargaKg) ? serie.cargaKg : serie.cargaKg.toFixed(1);
+  const carga = Number.isInteger(serie.cargaKg) ? serie.cargaKg : textoDoNumero(serie.cargaKg, 1);
   return `${carga}kg x ${serie.repsFeitas}`;
 }

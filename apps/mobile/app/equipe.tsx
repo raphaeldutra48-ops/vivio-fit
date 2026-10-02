@@ -4,6 +4,7 @@ import {
   FINALIDADE_POR_ESCOPO,
   type ConsentimentoResumo,
   type VinculoResumo,
+  ROTULO_PAPEL_INCLUSIVO,
 } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -11,12 +12,6 @@ import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } 
 import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
-
-const NOME_DO_PAPEL: Record<string, string> = {
-  PERSONAL: 'Personal trainer',
-  NUTRICIONISTA: 'Nutricionista',
-  MEDICO: 'Médico(a)',
-};
 
 const ROTULO_ESCOPO: Record<EscopoDado, string> = {
   TREINO: 'Treino',
@@ -243,7 +238,7 @@ export default function Equipe() {
                   {v.contraparte.nome}
                 </Text>
                 <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
-                  {NOME_DO_PAPEL[v.tipo] ?? v.tipo} quer te acompanhar
+                  {ROTULO_PAPEL_INCLUSIVO[v.tipo] ?? v.tipo} quer te acompanhar
                 </Text>
               </View>
 
@@ -342,7 +337,7 @@ export default function Equipe() {
                 {v.contraparte.nome}
               </Text>
               <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
-                {NOME_DO_PAPEL[v.tipo] ?? v.tipo}
+                {ROTULO_PAPEL_INCLUSIVO[v.tipo] ?? v.tipo}
               </Text>
             </View>
           ))

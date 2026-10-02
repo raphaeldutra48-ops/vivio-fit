@@ -3,6 +3,7 @@ import {
   cobrancaDaDieta,
   type PlanoDietaCompleto,
   type ResumoDeAgua,
+  textoDoNumero,
 } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { alvoToqueMin, espacamento, obterAreaTema, raio, tipografia } from '@vivio/ui-native';
@@ -230,10 +231,10 @@ export default function Nutricao() {
                   fontVariant: ['tabular-nums'],
                 }}
               >
-                {(agua.consumidoMl / 1000).toFixed(1).replace('.', ',')} L
+                {textoDoNumero(agua.consumidoMl / 1000, 1)} L
                 <Text style={{ fontSize: tipografia.tamanho.sm, color: tema.textoSecundario }}>
                   {' '}
-                  / {(agua.metaMlDia / 1000).toFixed(1).replace('.', ',')} L
+                  / {textoDoNumero(agua.metaMlDia / 1000, 1)} L
                 </Text>
               </Text>
             </View>

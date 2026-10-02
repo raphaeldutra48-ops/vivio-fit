@@ -278,6 +278,69 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 02/10 — passe 5: o app pedia vírgula e respondia ponto, e dois enums vazaram para a tela
+
+Este passe foi à família que ninguém tinha varrido: **o que a tela escreve**.
+Não o que ela afirma — isso os passes anteriores cobriram —, mas a forma das
+palavras e dos números.
+
+**1. Decimal com ponto, em cinco lugares.** A regra de escrever decimal em
+português já estava no projeto seis vezes: duas com `toLocaleString('pt-BR')`,
+quatro com `toFixed(n).replace('.', ',')`. E faltava em cinco — todos de
+exibição:
+
+- a **coluna ANTERIOR** da execução de treino devolvia `22.5kg x 10`;
+- as prévias de **massa gorda** e **massa magra** da adipometria e da
+  bioimpedância mostravam `17.5 kg`.
+
+A coluna ANTERIOR é o caso que dói. Ela fica ao lado do campo em que a pessoa
+digita a carga de hoje — o campo que PEDE vírgula, porque o teclado decimal
+brasileiro oferece vírgula e `numeroDoCampo` existe para lê-la. O app pedia
+vírgula e respondia ponto, na mesma linha. E "22.5" é lido por muita gente como
+vinte e dois mil e quinhentos; numa anilha, isso é a diferença entre um treino e
+um acidente.
+
+Virou `textoDoNumero` em `numeros.ts`, par de `numeroDoCampo`, e as quatro
+cópias à mão passaram a derivar dela. Feita **sem** `toLocaleString`: o motor do
+aplicativo (Hermes) pode vir sem a tabela de locales completa, e aí
+`toLocaleString('pt-BR')` cai calado no formato americano — devolvendo o próprio
+defeito que a função conserta, só que mais difícil de achar. A prova não depende
+de `Intl` nenhum, e inclui a ida e volta: o que a coluna mostra, o campo relê.
+
+**2. Dois enums crus na tela, e a razão deles.** A tabela de rótulos de papel
+estava copiada em **cinco** telas e a de ângulo de foto em **duas** — e as
+cópias já divergiam ("Médico" na página pública, "Médico(a)" no painel). O preço
+apareceu nos dois lugares que ficaram sem nenhuma delas:
+
+- a **equipe de cuidado** na ficha do aluno escrevia `MEDICO`, sem acento, sobre
+  o nome de quem atende;
+- a **tela de fotos** do app escrevia `LADO_DIREITO`, em caixa alta e com
+  sublinhado, no cartão de uma foto do corpo da pessoa — com a tabela de rótulos
+  no mesmo arquivo, usada só pelos botões de escolha. A lista de quem vê a foto
+  também saía do enum, em minúsculas: "medico", sem acento.
+
+Agora são duas tabelas em `@vivio/contracts`, e são duas porque são duas coisas
+ditas: `ROTULO_PAPEL` nomeia a **profissão** (página pública, escolha no
+cadastro) e `ROTULO_PAPEL_INCLUSIVO` fala de uma **pessoa** (equipe de cuidado,
+conversas, cabeçalho de quem está logado). As cinco cópias já faziam essa
+distinção sem nome nenhum, e por isso ela parecia divergência. Mais
+`ROTULO_ANGULO_FOTO`. Nenhum texto visível mudou além das duas correções.
+
+O tipo é que fecha a porta: `Record<Papel, string>` em vez de `Partial` obriga a
+dar nome a todo papel que existir. Papel novo sem rótulo **não compila** — que é
+melhor do que aparecer em caixa alta na tela de alguém.
+
+**O que veio limpo:** nenhum `toLocale*` sem `pt-BR` em código de produção
+(a única ocorrência é um comentário), e os 19 `toFixed` restantes estão todos
+dentro de `Number(...)` — arredondam, não exibem.
+
+**A suíte fez o trabalho dela:** dois testes de bioimpedância reprovaram porque
+prendiam `'17.5 kg'`. Era o esperado — teste que não prende o texto visível não
+protege o texto visível. As asserções passaram a exigir a vírgula.
+
+1.279 provas, cadeia verde por código de saída. A correção da coluna ANTERIOR
+foi mutada: devolvido o `toFixed(1)`, duas provas ficam vermelhas.
+
 ### Pendência 31 paga — 35 avisos de segurança em dependência viraram 4 — 02/10/2026
 
 **O que saiu:** 31 dos 35. `pnpm audit --prod` fechou em 2 moderados e 2 altos, e

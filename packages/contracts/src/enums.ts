@@ -10,6 +10,47 @@ export const Papel = {
   ACADEMIA: 'ACADEMIA',
 } as const;
 export type Papel = (typeof Papel)[keyof typeof Papel];
+
+/**
+ * O nome da profissão como se escreve para gente.
+ *
+ * Existe porque a mesma tabela estava copiada em cinco telas — duas do
+ * aplicativo, três da web — e as cópias já divergiam: o mesmo profissional era
+ * "Médico" na página pública e "Médico(a)" no cabeçalho do painel. O preço da
+ * cópia apareceu em dois lugares que ficaram SEM nenhuma delas e mostravam o
+ * enum cru: a equipe de cuidado na ficha do aluno escrevia "MEDICO", sem acento,
+ * e a tela de fotos do app escrevia "LADO_DIREITO", com sublinhado.
+ *
+ * `Record<Papel, string>` e não `Partial`: o tipo obriga a dar nome a todo papel
+ * que existir, hoje e amanhã. Papel novo sem rótulo não compila — que é melhor
+ * do que aparecer em caixa alta na tela de alguém.
+ */
+export const ROTULO_PAPEL: Record<Papel, string> = {
+  ALUNO: 'Aluno',
+  PERSONAL: 'Personal trainer',
+  NUTRICIONISTA: 'Nutricionista',
+  MEDICO: 'Médico',
+  ADMIN: 'Administrador',
+  ACADEMIA: 'Academia',
+};
+
+/**
+ * O mesmo papel, quando a frase fala de uma PESSOA e não de uma profissão.
+ *
+ * São duas tabelas porque são duas coisas ditas. "Nutricionista" nomeia o ofício
+ * — é o que a página pública e a escolha no cadastro precisam. "Médico(a)"
+ * aparece onde há alguém do outro lado: a equipe de cuidado do aluno, a lista de
+ * conversas, o cabeçalho de quem está logado. As cinco cópias espalhadas já
+ * faziam essa distinção sem nome nenhum, e por isso ela parecia divergência.
+ */
+export const ROTULO_PAPEL_INCLUSIVO: Record<Papel, string> = {
+  ALUNO: 'Aluno(a)',
+  PERSONAL: 'Personal trainer',
+  NUTRICIONISTA: 'Nutricionista',
+  MEDICO: 'Médico(a)',
+  ADMIN: 'Administrador(a)',
+  ACADEMIA: 'Academia',
+};
 export const papelSchema = z.nativeEnum(Papel);
 
 /** Papéis que atendem alunos — os que podem ter Vinculo. */

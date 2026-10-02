@@ -1,6 +1,8 @@
 'use client';
 
-import { Papel } from '@vivio/contracts';
+import { Papel,
+  ROTULO_PAPEL_INCLUSIVO,
+} from '@vivio/contracts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -9,13 +11,6 @@ import { MenuLateral } from '../../components/MenuLateral';
 import { Botao } from '../../components/ui';
 import { ProvedorDeModoDiscreto, useModoDiscreto } from '../../lib/modo-discreto';
 import { useSessao } from '../../lib/sessao';
-
-const NOME_DO_PAPEL: Partial<Record<Papel, string>> = {
-  PERSONAL: 'Personal trainer',
-  NUTRICIONISTA: 'Nutricionista',
-  MEDICO: 'Médico(a)',
-  ADMIN: 'Administrador',
-};
 
 /**
  * O interruptor do modo discreto, no cabeçalho.
@@ -121,7 +116,7 @@ function PainelProfissional({ children }: { children: React.ReactNode }) {
           <div className="hidden text-right sm:block">
             <p className="text-sm font-semibold">{usuario.nome}</p>
             <p className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
-              {NOME_DO_PAPEL[usuario.papel] ?? usuario.papel}
+              {ROTULO_PAPEL_INCLUSIVO[usuario.papel] ?? usuario.papel}
             </p>
           </div>
           <Botao variante="neutra" onClick={() => void sair()}>

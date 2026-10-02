@@ -91,6 +91,24 @@ export const AnguloFoto = {
 } as const;
 export type AnguloFoto = (typeof AnguloFoto)[keyof typeof AnguloFoto];
 
+/**
+ * O ângulo como se lê, não como se guarda.
+ *
+ * A tela de fotos do aplicativo mostrava `{foto.angulo}` direto: "LADO_DIREITO",
+ * em caixa alta e com sublinhado, no cartão de uma foto do corpo da pessoa. A
+ * tabela de rótulos estava no MESMO arquivo, usada só pelos botões de escolha.
+ *
+ * `Record<AnguloFoto, string>` fecha a porta: ângulo novo sem nome não compila.
+ */
+export const ROTULO_ANGULO_FOTO: Record<AnguloFoto, string> = {
+  FRENTE: 'Frente',
+  LADO_DIREITO: 'Lado direito',
+  LADO_ESQUERDO: 'Lado esquerdo',
+  LADO: 'Lado',
+  COSTAS: 'Costas',
+  LIVRE: 'Livre',
+};
+
 export const registrarFotoSchema = z.object({
   chave: z.string().min(10),
   mimeType: z.string().min(3).max(100),
