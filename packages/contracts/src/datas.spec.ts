@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { diaLocal, diaLocalMenos, diasEntre, inicioDoDiaUtc } from './datas';
+import { describe, expect, it, vi } from 'vitest';
+import { diaLocal, diaLocalMenos, diasEntre, inicioDoDiaUtc, novoId } from './datas';
 import { registrarCheckinSchema } from './checkin';
 import { soData } from './financeiro';
 
@@ -112,5 +112,28 @@ describe('diaLocalMenos', () => {
     // dentro, que é o que "últimos 30 dias" quer dizer para quem lê.
     const hoje = new Date(2026, 9, 9, 22, 0);
     expect(diasEntre(diaLocalMenos(29, hoje), diaLocal(hoje))).toBe(29);
+  });
+});
+
+describe('novoId', () => {
+  it('guarda o prefixo, para o id ser legível no banco', () => {
+    expect(novoId('aluna-1')).toMatch(/^aluna-1-\d+-[a-z0-9]+$/);
+  });
+
+  /*
+    O defeito que esta prova fixa. O id era `${alunoId}-${Date.now()}`, e dois
+    registros no mesmo milissegundo colidiam na chave primária — o segundo gole
+    de água voltava como "Esse registro já existe". Com o relógio CONGELADO, que
+    é o pior caso possível, os ids continuam diferentes.
+  */
+  it('dois ids no MESMO milissegundo não colidem', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-02T12:00:00.000Z'));
+    try {
+      const ids = new Set(Array.from({ length: 200 }, () => novoId('aluna-1')));
+      expect(ids.size).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

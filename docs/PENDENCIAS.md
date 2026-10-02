@@ -13,6 +13,28 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
+### 31. Dependências com aviso de segurança — 34 no ferramental do Expo, 1 no do Prisma
+**Assumida em:** 2026-10-02 · **Depende de:** uma decisão sua sobre quando mexer.
+**Estado:** `pnpm audit --prod` acusa 35 avisos (7 moderados, 28 altos). A
+distribuição é o que importa:
+- **`apps/web` — zero.** É a superfície publicada, e ela está limpa.
+- **34 vêm da árvore do Expo**, todos em pacotes de FERRAMENTAL
+  (`@expo/cli`, `@expo/config-plugins`, `glob`, `minimatch`, `@xmldom/xmldom`,
+  `node-forge`, `image-size`, `js-yaml`): código que roda no build, não no
+  aplicativo. O Metro empacota o que é importado, e nada disso é.
+  O `package.json` já pede `~57.0.8`, e o 57.0.26 está publicado — a maioria
+  deve cair só atualizando dentro da faixa.
+- **1 em `packages/banco`:** `deepmerge-ts@7.1.5`, que vem de
+  `@prisma/config@6.19.3`. Só sai com Prisma 8, que hoje é release candidate.
+**Por que não fiz agora:** atualizar a árvore do Expo é mexer no `nodeLinker:
+hoisted` e no Metro (pendência 7) às vésperas do primeiro teste real, e o ganho
+é em código que não embarca. A hora certa é junto do próximo `eas build`, com
+`pnpm --filter @vivio/mobile run build:android` para confirmar antes de publicar.
+**Como conferir hoje:**
+```bash
+pnpm audit --prod
+```
+
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
 **Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
@@ -277,6 +299,80 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Auditoria de 02/10 — passe 4: a auditoria que mentia, o cache que crescia e o id que podia colidir
+
+Este passe foi às famílias que as varreduras anteriores não tocaram: a borda de
+conversão do SDK, a proteção por coluna no banco, o trabalhador de fundo e as
+dependências. **Três das quatro vieram limpas**, e isso vale registrar com o
+mesmo cuidado de um defeito — saber onde NÃO há problema é o que permite parar
+de procurar ali.
+
+**O que estava certo, medido e não suposto:**
+
+- **Borda numérica:** 35 colunas `Decimal` no schema, e todas as 60 leituras do
+  SDK passam por `n()`. Nenhuma chega à tela como texto. Era o risco de
+  `"100" < "82.50"` ser verdadeiro em JavaScript.
+- **Borda de instante:** 37 colunas `timestamp` sem fuso, todas por `instante()`
+  ou `instanteOuNulo()`. Os 13 casos que a varredura levantou eram escrita,
+  filtro de consulta ou `@db.Date` — este último fica cru de propósito.
+- **Exposição por coluna:** nenhum `select('*')` nas 164 consultas do SDK, e o
+  auditor de RLS passa limpo: 68 tabelas com RLS, nenhuma política órfã, nenhuma
+  permissão sem regra, nada ao alcance do anônimo além das duas funções do site.
+- **Privacidade dos alertas e faixas de exame:** as provas já são exaustivas
+  sobre TODAS as regras, não sobre amostra — nenhum texto de personal cita
+  marcador, toda faixa funcional cabe na laboratorial, os dois escopos somados
+  dão a tabela inteira.
+
+**O que estava errado:**
+
+**1. A auditoria de RLS tinha um achado que ninguém podia usar.** A seção
+"COLUNA OBRIGATÓRIA SEM QUEM PREENCHA" listava 22 colunas como informativo, com
+o texto "ou um gatilho a preenche (e está tudo certo), ou a primeira gravação de
+verdade falha" — e deixava a conclusão para quem lesse. Lista que não distingue
+as duas coisas é lista que ninguém age sobre: as 22 conviveram meses, todas
+cobertas, e a vigésima terceira entraria nela sem chamar atenção. Agora a
+pergunta é respondida: lê-se a fonte E a declaração de cada gatilho de
+`before insert`, e o que não tiver quem preencha REPROVA.
+
+A regra virou função pura com prova (`prisma/regras-da-auditoria.ts`), e no
+caminho ela pegou dois erros meus de uma vez. O primeiro: a conferência nasceu
+como expressão regular dentro de um template literal, onde `\.` vira `.` e
+`\s` vira `s` — não casava com nada, e a auditoria reprovou as 22 afirmando que
+nenhum gatilho as preenchia. Foi o próprio número que me entregou: 22 de 22
+falhando é teste quebrado, não banco quebrado. O segundo: corrigido o escape,
+sobraram 8 reprovando, porque `governar_conteudo` é genérico e serve quatro
+tabelas — a coluna de dono que cada uma governa (`autorId`, `profissionalId`,
+`prescritorId`) só aparece como ARGUMENTO do gatilho, não na fonte da função.
+
+**2. O cache de estáticos do trabalhador de fundo crescia para sempre.** A
+limpeza mora no `activate`, e `activate` só roda quando o próprio trabalhador
+muda — `VERSAO` é constante num arquivo que não muda a cada publicação. Cada
+publicação acrescentava os pedaços novos no armazenamento do celular de quem
+usa, e nada nunca saía. Ganhou teto de 150 entradas, com o mais velho saindo
+primeiro; apagar um pedaço em uso não quebra nada, porque o navegador o busca de
+novo.
+
+O dublê de teste também estava errado, e de um jeito instrutivo: devolvia o
+MESMO cache para qualquer nome, então a poda dos estáticos levava a página de
+sem conexão junto. Cache compartilhado num teste de cache simula o contrário do
+que se quer provar. Agora é um cache por nome, e a prova confirma que a casca
+fica.
+
+**3. O id de linha criada pelo cliente podia colidir.** Era
+`` `${alunoId}-${Date.now()}` `` em quatro lugares: condição de saúde, registro
+de água, bloqueio de agenda e exercício novo. Dois registros no mesmo
+milissegundo batem na chave primária, e registrar água tem botões de volume
+rápido lado a lado — o segundo gole voltaria como "Esse registro já existe",
+sobre um copo de água. Virou `novoId()` em `datas.ts`, com sufixo aleatório, e a
+prova congela o relógio e pede 200 ids de uma vez.
+
+**Uma lição de método, não de código:** rodei `pnpm audit` e consultas ao npm em
+paralelo com a cadeia, e sete provas do aplicativo estouraram o limite de 20 s
+por falta de CPU — "Found multiple elements" e timeouts que pareciam regressão.
+Sozinha, a suíte passa 226/226. Cadeia roda sozinha; o resto espera.
+
+1.268 provas, cadeia verde por código de saída.
 
 ### Pendência 30 paga — as onze telas do aplicativo que mostravam a falha sem saída — 02/10/2026
 

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { urlDoBanco } from '../conexao';
+import { colunaTemQuemPreencha } from './regras-da-auditoria';
 
 /**
  * Auditoria das políticas, contra o banco de verdade.
@@ -299,21 +300,81 @@ async function principal(): Promise<void> {
         and is_identity = 'NO'
       order by 1, 2`,
   );
+  /*
+    Quem preenche, na prática, é um GATILHO — e até 02/10 esta seção não sabia
+    disso.
+
+    Ela listava 22 colunas como "informativo: ou um gatilho preenche, ou a
+    primeira gravação falha", e deixava a conclusão para quem lesse. Uma lista
+    que não distingue as duas coisas é uma lista que ninguém age sobre: as 22
+    conviveram meses, todas cobertas, e a vigésima terceira — a que fosse de
+    verdade — entraria na mesma lista sem chamar atenção.
+
+    Agora a pergunta é respondida aqui: lê-se a fonte de cada gatilho de
+    `before insert` da tabela E a declaração dele, e a decisão fica em
+    `colunaTemQuemPreencha`, que tem prova. O que tem gatilho sai do caminho; o
+    que não tem REPROVA, porque é a primeira gravação de verdade que vai
+    descobrir.
+
+    A DECLARAÇÃO é buscada junto da fonte porque ela carrega informação que a
+    fonte não tem: `governar_conteudo` é genérico e serve quatro tabelas, e a
+    coluna de dono que cada uma governa — `autorId`, `profissionalId`,
+    `prescritorId` — só aparece como argumento do gatilho. Lendo apenas a função,
+    a auditoria reprovou oito colunas corretas.
+  */
+  const gatilhos = await prisma.$queryRawUnsafe<
+    { tabela: string; fonte: string; declaracao: string }[]
+  >(
+    `select c.relname tabela,
+            pg_get_functiondef(p.oid) fonte,
+            pg_get_triggerdef(t.oid) declaracao
+       from pg_trigger t
+       join pg_class c on c.oid = t.tgrelid
+       join pg_namespace ns on ns.oid = c.relnamespace
+       join pg_proc p on p.oid = t.tgfoid
+      where ns.nspname = 'public'
+        and not t.tgisinternal
+        -- 2 = BEFORE e 4 = INSERT, no mapa de bits da coluna tgtype
+        and (t.tgtype & 2) <> 0
+        and (t.tgtype & 4) <> 0`,
+  );
+  /** Uma tabela pode ter mais de um gatilho de `before insert`; vale a soma. */
+  const evidenciasPorTabela = new Map<string, string[]>();
+  for (const { tabela, fonte, declaracao } of gatilhos) {
+    const atuais = evidenciasPorTabela.get(tabela) ?? [];
+    evidenciasPorTabela.set(tabela, [...atuais, fonte, declaracao]);
+  }
+
+  const gatilhoPreenche = (tabela: string, coluna: string): boolean =>
+    colunaTemQuemPreencha(coluna, evidenciasPorTabela.get(tabela) ?? []);
+
   const preenchidas = colunasQueOSdkPreenche();
   const semQuemPreencha: string[] = [];
+  const porGatilho: string[] = [];
   for (const { tabela, coluna } of obrigatorias) {
     const campos = preenchidas.get(tabela);
     // Só interessa tabela em que o SDK realmente insere.
     if (!campos || campos.has(coluna)) continue;
+    if (gatilhoPreenche(tabela, coluna)) {
+      porGatilho.push(`${tabela}.${coluna}`);
+      continue;
+    }
     semQuemPreencha.push(`${tabela}.${coluna}`);
   }
   achados.push({
     titulo: 'COLUNA OBRIGATÓRIA SEM QUEM PREENCHA',
     explicacao:
-      'NOT NULL, sem default no banco, e o INSERT do SDK não a nomeia. Ou um gatilho a ' +
-      'preenche (e está tudo certo), ou a primeira gravação de verdade falha.',
-    informativo: true,
+      'NOT NULL, sem default no banco, o INSERT do SDK não a nomeia e nenhum gatilho de ' +
+      'before insert a atribui. A primeira gravação de verdade falha por violação de nulo.',
     itens: semQuemPreencha,
+  });
+  achados.push({
+    titulo: 'COLUNA OBRIGATÓRIA PREENCHIDA POR GATILHO',
+    explicacao:
+      'NOT NULL sem default, mas um gatilho de before insert a atribui. Está certo — fica ' +
+      'listado para quem apagar o gatilho saber o que cai com ele.',
+    informativo: true,
+    itens: porGatilho,
   });
 
   /*

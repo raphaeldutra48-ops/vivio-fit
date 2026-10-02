@@ -66,3 +66,26 @@ export function diaLocalMenos(dias: number, agora: Date = new Date()): string {
   antes.setDate(antes.getDate() - dias);
   return diaLocal(antes);
 }
+
+/**
+ * Um identificador novo para linha criada pelo cliente, com prefixo legível.
+ *
+ * As tabelas têm `id` de texto sem `default` no banco — era o `@default(cuid())`
+ * do Prisma, que sorteava o valor em JavaScript e o mandava dentro do INSERT.
+ * Sem o Prisma, quem sorteia é o SDK, e ele vinha usando
+ * `` `${alunoId}-${Date.now()}` ``: dois registros no MESMO milissegundo colidem
+ * na chave primária.
+ *
+ * É improvável e não é impossível — registrar água tem botões de volume rápido
+ * lado a lado, e dois toques seguidos são um gesto comum. O preço do improvável
+ * aqui é uma frase sem sentido: o segundo gole volta como "Esse registro já
+ * existe", sobre um copo de água.
+ *
+ * O sufixo aleatório resolve sem depender de `crypto.randomUUID`, que não existe
+ * no motor do aplicativo. O carimbo de tempo fica porque ordena, e o prefixo
+ * porque um id legível ajuda a investigar no banco.
+ */
+export function novoId(prefixo: string): string {
+  const aleatorio = Math.random().toString(36).slice(2, 10);
+  return `${prefixo}-${Date.now()}-${aleatorio}`;
+}

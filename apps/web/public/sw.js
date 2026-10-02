@@ -45,6 +45,33 @@ const SEM_CONEXAO = '/sem-conexao';
   isso — a página de sem conexão é uma cortesia, e o app funciona sem ela. O
   `catch` vazio é a decisão, não um descuido.
 */
+/*
+  Teto no cache de estáticos.
+
+  Arquivo com hash no nome nunca serve errado, então a estratégia de "cache
+  primeiro" está certa — mas nada apagava o que saiu de uso. A limpeza mora no
+  `activate`, e `activate` só roda quando o PRÓPRIO trabalhador muda: `VERSAO` é
+  constante neste arquivo, que não muda a cada publicação. Resultado: cada
+  publicação acrescenta os pedaços novos e os antigos ficam para sempre, no
+  armazenamento do celular de quem usa.
+
+  O teto resolve sem depender de versão injetada no build. `cache.keys()` devolve
+  na ordem de inserção, então os primeiros são os mais velhos — e apagar um
+  pedaço ainda em uso não quebra nada: o `fetch` do navegador o busca de novo e
+  ele volta para o cache.
+*/
+const MAXIMO_ESTATICOS = 150;
+
+async function guardarEstatico(pedido, resposta) {
+  const cache = await caches.open(ESTATICOS);
+  await cache.put(pedido, resposta);
+  const chaves = await cache.keys();
+  const sobrando = chaves.length - MAXIMO_ESTATICOS;
+  for (const velha of sobrando > 0 ? chaves.slice(0, sobrando) : []) {
+    await cache.delete(velha);
+  }
+}
+
 async function guardarCasca() {
   const cache = await caches.open(CASCA);
   await Promise.all(
@@ -98,7 +125,8 @@ self.addEventListener('fetch', (evento) => {
           fetch(pedido).then((resposta) => {
             if (resposta.ok) {
               const copia = resposta.clone();
-              caches.open(ESTATICOS).then((cache) => cache.put(pedido, copia));
+              // Sem `await`: guardar é efeito colateral, e a resposta é da pessoa.
+              guardarEstatico(pedido, copia).catch(() => undefined);
             }
             return resposta;
           }),

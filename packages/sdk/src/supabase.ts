@@ -4,6 +4,7 @@ import {
   VERSAO_TERMO_ATUAL,
   diaLocal,
   diaLocalMenos,
+  novoId,
   montarEvolucaoCorporal,
   contarClassificacoes,
   enriquecerMarcador,
@@ -992,7 +993,7 @@ export class MotorSupabase {
       await this.db
         .from('CondicaoSaude')
         .insert({
-          id: `${alunoId}-${Date.now()}`,
+          id: novoId(alunoId),
           alunoId,
           registradoPorId: eu,
           tipo: dados.tipo,
@@ -1457,7 +1458,7 @@ export class MotorSupabase {
     const dia = dados.data instanceof Date ? diaLocal(dados.data) : String(dados.data).slice(0, 10);
     this.ou(
       await this.db.from('RegistroAgua').insert({
-        id: `${alunoId}-${Date.now()}`,
+        id: novoId(alunoId),
         alunoId,
         data: dia,
         volumeMl: dados.volumeMl,
@@ -4007,7 +4008,7 @@ export class MotorSupabase {
     const eu = await this.meuId();
     this.ou(
       await this.db.from('BloqueioAgenda').insert({
-        id: `${eu}-bloqueio-${Date.now()}`,
+        id: novoId(`${eu}-bloqueio`),
         profissionalId: eu,
         inicioEm: paraIso(dados.inicioEm),
         fimEm: paraIso(dados.fimEm),
@@ -4332,7 +4333,7 @@ export class MotorSupabase {
       await this.db
         .from('Exercicio')
         .insert({
-          id: `${eu}-ex-${Date.now()}`,
+          id: novoId(`${eu}-ex`),
           nome: dados.nome.trim(),
           grupoMuscular: dados.grupoMuscular,
           equipamento: dados.equipamento ?? null,
