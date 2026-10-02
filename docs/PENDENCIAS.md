@@ -13,28 +13,6 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
-### 31. Dependências com aviso de segurança — 34 no ferramental do Expo, 1 no do Prisma
-**Assumida em:** 2026-10-02 · **Depende de:** uma decisão sua sobre quando mexer.
-**Estado:** `pnpm audit --prod` acusa 35 avisos (7 moderados, 28 altos). A
-distribuição é o que importa:
-- **`apps/web` — zero.** É a superfície publicada, e ela está limpa.
-- **34 vêm da árvore do Expo**, todos em pacotes de FERRAMENTAL
-  (`@expo/cli`, `@expo/config-plugins`, `glob`, `minimatch`, `@xmldom/xmldom`,
-  `node-forge`, `image-size`, `js-yaml`): código que roda no build, não no
-  aplicativo. O Metro empacota o que é importado, e nada disso é.
-  O `package.json` já pede `~57.0.8`, e o 57.0.26 está publicado — a maioria
-  deve cair só atualizando dentro da faixa.
-- **1 em `packages/banco`:** `deepmerge-ts@7.1.5`, que vem de
-  `@prisma/config@6.19.3`. Só sai com Prisma 8, que hoje é release candidate.
-**Por que não fiz agora:** atualizar a árvore do Expo é mexer no `nodeLinker:
-hoisted` e no Metro (pendência 7) às vésperas do primeiro teste real, e o ganho
-é em código que não embarca. A hora certa é junto do próximo `eas build`, com
-`pnpm --filter @vivio/mobile run build:android` para confirmar antes de publicar.
-**Como conferir hoje:**
-```bash
-pnpm audit --prod
-```
-
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
 **Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
@@ -299,6 +277,55 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Pendência 31 paga — 35 avisos de segurança em dependência viraram 4 — 02/10/2026
+
+**O que saiu:** 31 dos 35. `pnpm audit --prod` fechou em 2 moderados e 2 altos, e
+`apps/web` — a superfície publicada — segue zerada.
+
+**O grosso saiu sem forçar nada.** As faixas do `apps/mobile` já pediam
+`~57.0.x`; o que estava velho era o lockfile. Um `pnpm update` dentro das faixas
+levou `expo` de 57.0.8 a 57.0.26, `expo-router` a 57.0.24, `expo-updates` a
+57.0.24, e com eles 25 avisos. O `package.json` passou a declarar o que está
+instalado, que é o certo: faixa que diz 57.0.8 e resolve 57.0.26 esconde a
+distância.
+
+**Dois overrides novos, e um que não existe.** Os avisos restantes vinham de
+transitivas que os pacotes de cima ainda pedem antigas, então subir o de cima não
+resolveria. Entraram em `pnpm-workspace.yaml`, onde o projeto já guardava três:
+`brace-expansion@^5.0.0 → ^5.0.12` e `js-yaml → ^4.3.2`. O terceiro candidato,
+`node-forge`, **não tem correção publicada**: o aviso pede 1.4.1 e a última
+versão que existe é a 1.4.0 — forçar quebrou a instalação na hora, com "The
+latest release of node-forge is 1.4.0". Aviso sem versão corrigida não se resolve
+do nosso lado.
+
+**O erro que o override global cometeu, e que vale guardar.** Escrito como
+`brace-expansion: ^5.0.12`, sem faixa, ele alcançou as versões 1.1.16 e 2.1.4 que
+existem no projeto para os `minimatch` antigos. A linha 5 mudou o formato de
+exportação, e o `eslint .` morreu inteiro com `TypeError: expand is not a
+function` — longe de onde o override foi escrito, e em cima de uma dependência
+que ninguém estava olhando. Com a condição no nome
+(`brace-expansion@^5.0.0: ^5.0.12`), só a linha vulnerável sobe: hoje convivem
+1.1.21, 2.1.7 e 5.0.12.
+
+**Os 4 que ficaram, e por quê.** Todos exigem salto de major em ferramental que
+NÃO embarca no aplicativo — o Metro empacota o que é importado, e nada disso é:
+
+| pacote | de → para | onde vive |
+| --- | --- | --- |
+| `image-size` | 1.2.1 → 2.0.3 | `@expo/image-utils` |
+| `uuid` | 7.0.3 → 11.1.1 | árvore do Expo |
+| `decode-uri-component` | 0.2.2 → 0.4.3 | árvore do Expo (0.x: minor é quebra) |
+| `deepmerge-ts` | 7.1.5 → 8.0.0 | `@prisma/config`; só sai com Prisma 8, hoje release candidate |
+
+Forçar major em transitiva troca um aviso por uma quebra que aparece no build —
+e acabou de acontecer com o `brace-expansion`, de graça. A hora de mexer nestes é
+junto do próximo `eas build`, com `build:android` conferindo antes.
+
+**Verificação:** `build:android` OK (é o Metro, o mais sensível a mexida em
+dependência), `build:cloudflare` OK, cadeia verde com 1.268 provas por código de
+saída. O `minimumReleaseAgeExclude` apontava `expo-updates@57.0.13`, que não
+existe mais aqui; passou a apontar a versão instalada.
 
 ### Auditoria de 02/10 — passe 4: a auditoria que mentia, o cache que crescia e o id que podia colidir
 

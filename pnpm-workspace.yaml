@@ -22,18 +22,54 @@ allowBuilds:
   workerd: true # runtime do Cloudflare Workers; baixa o binario nativo
 
 minimumReleaseAgeExclude:
-  - expo-updates@57.0.13
+  - expo-updates@57.0.24
 
 # Versões forçadas por causa de aviso de segurança em dependência de terceiro.
 #
-# As três chegam por dentro do Next e do Expo, que ainda pedem versões antigas;
+# Todas chegam por dentro do Next e do Expo, que ainda pedem versões antigas;
 # nenhuma é dependência declarada nossa, então subir o pacote de cima não
 # resolveria. O que cada uma corrige:
-#   postcss  — leitura de arquivo fora do previsto pelo mapa de origem
-#   nanoid   — geração podia entrar em laço com tamanho inválido
-#   sharp    — falhas herdadas do libvips e do libheif (imagem e HEIC)
+#   postcss         — leitura de arquivo fora do previsto pelo mapa de origem
+#   nanoid          — geração podia entrar em laço com tamanho inválido
+#   sharp           — falhas herdadas do libvips e do libheif (imagem e HEIC)
+#   brace-expansion — expressão com muitas chaves travava o processo
+#   js-yaml         — entrada preparada podia escapar da leitura segura
 # Reavaliar quando Next e Expo subirem: override é dívida, não solução.
+#
+# ## O critério para forçar, e o que ficou de fora
+#
+# Só entra aqui o que fica no MESMO MAJOR do que já está instalado — as duas
+# novas são 5.0.8→5.0.12 e 4.3.0→4.3.2. Forçar major em dependência de terceiro
+# troca um aviso por uma quebra que aparece no build, e o build do aplicativo é
+# o `eas build`: pago, na nuvem, vinte minutos para dizer que falhou.
+#
+# ## Por que `brace-expansion` leva faixa no nome
+#
+# Escrito como `brace-expansion: ^5.0.12`, o override é GLOBAL: as versões 1.1.16
+# e 2.1.4 — que existem no projeto para os `minimatch` antigos — viravam 5.x
+# também. A 5 mudou o formato de exportação, e o `eslint .` morria inteiro com
+# `TypeError: expand is not a function`. Só a linha 5 é vulnerável e só ela é
+# forçada; `brace-expansion@^5.0.0` é a condição, não o alvo.
+#
+# A lição vale para o próximo: override sem faixa alcança consumidor que ninguém
+# estava olhando, e o erro aparece longe de onde foi escrito.
+#
+# Ficaram de fora, de propósito, por exigirem salto de major:
+#   image-size            1.2.1 → 2.0.3  (dentro de @expo/image-utils)
+#   uuid                  7.0.3 → 11.1.1
+#   decode-uri-component  0.2.2 → 0.4.3  (0.x: minor é quebra)
+#   deepmerge-ts          7.1.5 → 8.0.0  (vem de @prisma/config; só sai com
+#                                         Prisma 8, hoje release candidate)
+#
+# E um que não tem correção NENHUMA publicada: o aviso de `node-forge` pede
+# 1.4.1, e a última versão que existe é a 1.4.0 — forçar quebrou a instalação
+# com "The latest release of node-forge is 1.4.0". Aviso sem versão corrigida
+# não se resolve do nosso lado; espera o upstream.
+# Nenhuma delas embarca no aplicativo: são ferramental de build. A hora de
+# mexer é junto do próximo `eas build`, com `build:android` conferindo antes.
 overrides:
   postcss: ^8.5.23
   nanoid: ^3.3.18
   sharp: ^0.35.4
+  brace-expansion@^5.0.0: ^5.0.12
+  js-yaml: ^4.3.2
