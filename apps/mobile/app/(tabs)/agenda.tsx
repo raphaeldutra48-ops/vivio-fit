@@ -7,6 +7,7 @@ import {
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../../src/componentes/Estado';
 import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 
@@ -27,6 +28,15 @@ export default function Agenda() {
   const [compromissos, setCompromissos] = useState<CompromissoResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Separado do `erro` porque as duas falhas pedem coisas diferentes.
+
+    `erro` cobre a falha de um TOQUE (confirmar presença, avisar que não vai), e
+    ali repetir a leitura não ajuda. Falhar ao CARREGAR é o caso que tem saída:
+    a causa quase sempre é rede intermitente, e um toque resolve — sem o botão, a
+    única saída visível era sair da aba e voltar.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
 
   const recarregar = useCallback(async () => {
     if (!usuario) return;
@@ -35,8 +45,9 @@ export default function Agenda() {
     try {
       setCompromissos(await sdk.agenda.meus(agora.toISOString(), fim.toISOString()));
       setErro(null);
+      setFalhouAoCarregar(false);
     } catch {
-      setErro('Não foi possível carregar sua agenda.');
+      setFalhouAoCarregar(true);
     } finally {
       setCarregando(false);
     }
@@ -88,6 +99,14 @@ export default function Agenda() {
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
       {carregando && <ActivityIndicator color={tema.primariaFundo} />}
+
+      {falhouAoCarregar && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar sua agenda agora. Seus atendimentos continuam marcados."
+          aoTentarDeNovo={() => void recarregar()}
+        />
+      )}
+
       {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
       {/*
@@ -96,7 +115,7 @@ export default function Agenda() {
         está dentro de um cartão. Quem tem consulta marcada para amanhã lia que
         não tem.
       */}
-      {!carregando && !erro && compromissos.length === 0 && (
+      {!carregando && !falhouAoCarregar && compromissos.length === 0 && (
         <View
           style={{
             backgroundColor: tema.superficie,

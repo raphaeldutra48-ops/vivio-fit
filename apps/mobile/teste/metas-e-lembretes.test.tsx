@@ -269,6 +269,30 @@ describe('lembrete de treino', () => {
     listarLembretes.mockRejectedValue(new Error('rede'));
     await abrirLembretes();
 
-    await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível carregar seus lembretes/i));
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar seu lembrete/i));
+    // E diz as duas coisas que a pessoa precisa saber antes de tocar em salvar.
+    expect(textoDaTela()).toMatch(/estão com o padrão/i);
+    expect(textoDaTela()).toMatch(/substitui o que havia/i);
+  });
+
+  it('a falha tem saída: um toque relê a configuração de verdade', async () => {
+    listarLembretes.mockRejectedValue(new Error('rede'));
+    await abrirLembretes();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    listarLembretes.mockResolvedValue([
+      {
+        id: 'l1',
+        tipo: 'TREINO',
+        horarios: ['19:30'],
+        diasDaSemana: [1, 3, 5],
+        ativo: true,
+      },
+    ]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    // O horário de verdade aparece, e o aviso sobre o padrão sai da tela.
+    await waitFor(() => expect(screen.getByLabelText(/horário do lembrete/i)).toHaveValue('19:30'));
+    expect(textoDaTela()).not.toMatch(/estão com o padrão/i);
   });
 });

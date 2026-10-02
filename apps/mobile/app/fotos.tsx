@@ -9,6 +9,7 @@ import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -47,13 +48,21 @@ export default function Fotos() {
   /** Id da foto cuja visibilidade está sendo gravada — um pedido por vez. */
   const [salvandoQuemVe, setSalvandoQuemVe] = useState<string | null>(null);
 
+  /*
+    Separado do `erro`, que nesta tela cobre envio recusado, falha ao liberar
+    quem vê e falha ao apagar. A falha de LEITURA é a que pede um botão: a
+    pessoa abre a tela, não vê foto nenhuma, e sem saída visível conclui que a
+    linha do tempo dela se perdeu.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
+
   const recarregar = useCallback(async () => {
     if (!usuario) return;
     try {
       setFotos(await sdk.fotos.listar(usuario.id));
-      setErro(null);
+      setFalhouAoCarregar(false);
     } catch {
-      setErro('Não foi possível carregar suas fotos.');
+      setFalhouAoCarregar(true);
     } finally {
       setCarregando(false);
     }
@@ -247,6 +256,13 @@ export default function Fotos() {
         </Text>
       </Pressable>
 
+      {falhouAoCarregar && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar suas fotos agora. Elas continuam guardadas, e privadas."
+          aoTentarDeNovo={() => void recarregar()}
+        />
+      )}
+
       {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
       {carregando && <ActivityIndicator color={tema.primariaFundo} />}
 
@@ -256,7 +272,7 @@ export default function Fotos() {
         fotos do corpo da pessoa — ler "nenhuma foto ainda" é entender que se
         perderam.
       */}
-      {!carregando && !erro && fotos.length === 0 && (
+      {!carregando && !falhouAoCarregar && fotos.length === 0 && (
         <Text style={{ color: tema.textoSecundario }}>
           Nenhuma foto ainda. A primeira vira sua referência de "antes".
         </Text>

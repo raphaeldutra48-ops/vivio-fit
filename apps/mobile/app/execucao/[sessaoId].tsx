@@ -29,6 +29,7 @@ import { sdk } from '../../src/sdk';
 import { useSessao } from '../../src/sessao';
 import { useSincronizacao } from '../../src/sincronizacao';
 import { Demonstracao, DemonstracaoAmpliada } from '../../src/componentes/Demonstracao';
+import { FalhouAoCarregar } from '../../src/componentes/Estado';
 import { DOR_VAZIA, QuestionarioDeDor, type RespostaDeDor } from '../../src/componentes/QuestionarioDeDor';
 import { gerarUuid } from '../../src/uuid';
 
@@ -87,6 +88,17 @@ export default function Execucao() {
   const [series, setSeries] = useState<SerieNaTela[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Duas coisas para a falha de ABERTURA ter saída.
+
+    Nem toda falha aqui é retentável: "esta sessão não pertence ao seu plano
+    ativo" não melhora com um toque, e oferecer o botão ali seria convidar a
+    pessoa a insistir num caminho que não vai abrir. Só a falta de rede sem
+    cópia no aparelho ganha o botão — e essa é justamente a que um toque resolve,
+    na academia, com o sinal indo e voltando.
+  */
+  const [podeTentarDeNovo, setPodeTentarDeNovo] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
   const [mostrandoFeedback, setMostrandoFeedback] = useState(false);
   const [dificuldade, setDificuldade] = useState(3);
   const [teveDor, setTeveDor] = useState(false);
@@ -134,6 +146,8 @@ export default function Execucao() {
   useEffect(() => {
     if (!usuario || !sessaoId) return;
 
+    setPodeTentarDeNovo(false);
+
     void (async () => {
       // Rede primeiro; sem rede, o cache assume. A tela de treino é a única que
       // NÃO pode depender de conexão — é usada no subsolo da academia.
@@ -151,6 +165,7 @@ export default function Execucao() {
 
       if (!plano) {
         setErro('Não foi possível carregar o treino e não há cópia salva no aparelho.');
+        setPodeTentarDeNovo(true);
         return;
       }
 
@@ -222,7 +237,7 @@ export default function Execucao() {
         }
       }
     })();
-  }, [usuario, sessaoId]);
+  }, [usuario, sessaoId, tentativa]);
 
   /*
     Guarda o treino em andamento no aparelho.
@@ -574,7 +589,17 @@ export default function Execucao() {
   if (erro && !sessao) {
     return (
       <View style={{ flex: 1, backgroundColor: tema.fundo, padding: espacamento.lg }}>
-        <Text style={{ color: tema.erro }}>{erro}</Text>
+        {podeTentarDeNovo ? (
+          <FalhouAoCarregar
+            mensagem="Não foi possível carregar o treino e não há cópia salva no aparelho. Com sinal ele abre — e, depois da primeira vez, fica guardado aqui para treinar sem internet."
+            aoTentarDeNovo={() => {
+              setErro(null);
+              setTentativa((n) => n + 1);
+            }}
+          />
+        ) : (
+          <Text style={{ color: tema.erro }}>{erro}</Text>
+        )}
       </View>
     );
   }

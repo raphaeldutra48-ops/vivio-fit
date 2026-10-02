@@ -17,6 +17,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -71,7 +72,6 @@ export default function Calorimetria() {
         mais do que sabe: que o app está ESTIMANDO o metabolismo porque não há
         laudo. Quem tem laudo lia que ele não existe.
       */
-      setErro('Não foi possível carregar seus exames.');
       setFalhou(true);
       setExames([]);
     }
@@ -156,6 +156,17 @@ export default function Calorimetria() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
     >
       <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.md }}>
+        {/*
+          A falha de LEITURA tem botão; o `erro` abaixo é o do salvamento, e
+          repetir a leitura não ajudaria quem acabou de digitar um valor.
+        */}
+        {falhou && (
+          <FalhouAoCarregar
+            mensagem="Não deu para buscar seus exames agora. Os que você já registrou continuam salvos."
+            aoTentarDeNovo={() => void carregar()}
+          />
+        )}
+
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
         <View style={cartao}>

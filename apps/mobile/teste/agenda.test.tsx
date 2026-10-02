@@ -86,10 +86,26 @@ describe('agenda: o que ela mostra', () => {
     meusCompromissos.mockRejectedValue(new Error('rede'));
     await abrirTela();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar sua agenda.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar sua agenda/i));
     expect(textoDaTela()).not.toMatch(/nenhum atendimento marcado/i);
+    // E diz o que importa para quem tem consulta amanhã: ela não foi desmarcada.
+    expect(textoDaTela()).toMatch(/continuam marcados/i);
+  });
+
+  it('a falha tem saída: um toque relê a agenda', async () => {
+    /*
+      A causa quase sempre é rede intermitente, e um toque resolve. Sem o botão,
+      a única saída visível era sair da aba e voltar — e quem está checando o
+      horário de hoje não sabe que é isso que falta fazer.
+    */
+    meusCompromissos.mockRejectedValue(new Error('rede'));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    meusCompromissos.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhum atendimento marcado/i));
   });
 
   it('o vazio de verdade diz de onde vem o primeiro atendimento', async () => {

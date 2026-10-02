@@ -1,7 +1,8 @@
 import { PREVIA_LEMBRETE, TipoLembrete, type LembreteResumo } from '@vivio/contracts';
 import { alvoToqueMin, espacamento, raio, tipografia } from '@vivio/ui-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -26,23 +27,34 @@ export default function Lembretes() {
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Separado do `erro`, que aqui cobre formato de horário inválido e falha ao
+    salvar. A falha de LEITURA é outra coisa, e é a mais perigosa desta tela: os
+    campos ficam com o padrão (07:00, nenhum dia, ativo), que se parece com
+    configuração de alguém. Quem salvar dali SUBSTITUI o lembrete que tinha — e
+    é o mesmo estrago que o check-in evita abrindo preenchido.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
+
+  const carregar = useCallback(async () => {
+    try {
+      const todos = await sdk.lembretes.listar();
+      const treino = todos.find((l) => l.tipo === TipoLembrete.TREINO);
+      if (treino) {
+        setConfig(treino);
+        setHorario(treino.horarios[0] ?? '07:00');
+        setDias(treino.diasDaSemana);
+        setAtivo(treino.ativo);
+      }
+      setFalhouAoCarregar(false);
+    } catch {
+      setFalhouAoCarregar(true);
+    }
+  }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const todos = await sdk.lembretes.listar();
-        const treino = todos.find((l) => l.tipo === TipoLembrete.TREINO);
-        if (treino) {
-          setConfig(treino);
-          setHorario(treino.horarios[0] ?? '07:00');
-          setDias(treino.diasDaSemana);
-          setAtivo(treino.ativo);
-        }
-      } catch {
-        setErro('Não foi possível carregar seus lembretes.');
-      }
-    })();
-  }, []);
+    void carregar();
+  }, [carregar]);
 
   function alternarDia(numero: number) {
     setDias((atual) =>
@@ -82,6 +94,13 @@ export default function Lembretes() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
+      {falhouAoCarregar && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar seu lembrete. Os campos abaixo estão com o padrão, não com o que você configurou — salvar daqui substitui o que havia."
+          aoTentarDeNovo={() => void carregar()}
+        />
+      )}
+
       <View
         style={{
           backgroundColor: tema.superficie,

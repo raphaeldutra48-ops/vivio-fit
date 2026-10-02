@@ -31,20 +31,6 @@ pnpm --filter @vivio/banco rls:aplicar
 desta sessão barrou a operação. Vale conferir depois com
 `pnpm --filter @vivio/banco exec tsx prisma/auditar-rls.ts`.
 
-### 30. Onze telas do aplicativo mostram a falha sem oferecer "tentar de novo"
-**Assumida em:** 2026-10-02 · **Depende de:** uma tarde de trabalho, sem risco.
-**Estado:** o componente certo existe e é usado nas abas e em mais telas
-(`apps/mobile/src/componentes/Estado.tsx`, `FalhouAoCarregar`). Nestas a falha de
-carregamento aparece como uma linha de texto: `(tabs)/agenda`, `calorimetria`,
-`cardio`, `composicao`, `execucao/[sessaoId]`, `fotos`, `lembretes`,
-`materiais`, `perfil`. Em `metas` e `recordes` já foi corrigido em 02/10, porque
-nelas o erro ocupava a tela inteira e não sobrava saída nenhuma.
-**Por que importa:** a causa quase sempre é rede intermitente na academia, e um
-toque resolve. Sem o botão, a pessoa sai da tela e volta — ou fecha o app.
-**Por que não foi feito agora:** cada tela precisa do contador de tentativa na
-dependência do efeito, e mexer em onze de uma vez numa auditoria que já trocou
-muita coisa troca um incômodo por risco de defeito novo.
-
 ### 28. O Railway continua conectado ao repositório (só o dono da conta desliga)
 **Assumida em:** 2026-09-30 · **Depende de:** você, no painel do Railway.
 **Estado:** o código não tem mais nada de Railway — isso foi removido em 24/09 e
@@ -291,6 +277,43 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Pendência 30 paga — as onze telas do aplicativo que mostravam a falha sem saída — 02/10/2026
+
+O componente certo já existia (`apps/mobile/src/componentes/Estado.tsx`,
+`FalhouAoCarregar`) e era usado nas abas. Nestas onze a falha de carregamento era
+uma linha de texto solta, e em várias ela trocava a tela inteira — a única saída
+visível era sair e voltar, numa causa que quase sempre é sinal indo e voltando na
+academia, que um toque resolve.
+
+Feitas em 02/10: `metas`, `recordes`, `(tabs)/agenda`, `calorimetria`, `cardio`,
+`materiais`, `lembretes`, `perfil`, `composicao`, `fotos` e
+`execucao/[sessaoId]`.
+
+**O padrão que saiu daqui, e que vale para a próxima tela:** o estado de falha de
+LEITURA é separado do `erro`. Não é preciosismo — as duas falhas pedem coisas
+diferentes. `erro` cobre o toque que não funcionou (salvar a calorimetria, abrir
+um material, confirmar presença, liberar quem vê a foto), e ali repetir a leitura
+não ajuda ninguém; "tentar de novo" sob uma dessas frases seria oferecer a ação
+errada. Antes disso, as duas dividiam a mesma variável, e por isso o `!erro` que
+escondia a frase de vazio também a escondia depois de uma ação falhar — quando o
+vazio era verdade e devia aparecer.
+
+**Dois casos não seguiram o padrão, e é por isso que valeu olhar uma a uma:**
+
+- **Lembretes.** A falha deixava os campos com o PADRÃO — 07:00, nenhum dia,
+  ativo —, que se parece com configuração de alguém. Quem salvasse dali
+  substituiria o lembrete que tinha. A mensagem diz as duas coisas: que o que
+  está na tela é o padrão, e que salvar substitui o que havia. É o mesmo estrago
+  que o check-in evita abrindo preenchido.
+- **Execução de treino.** Aqui o botão é CONDICIONAL. "Esta sessão não pertence
+  ao seu plano ativo" não melhora com um toque, e oferecer o botão convidaria a
+  insistir num caminho que não abre. Só a falta de rede sem cópia no aparelho
+  ganha o botão — e a mensagem explica por que vale abrir uma vez: a partir da
+  segunda, o treino fica guardado e funciona sem internet.
+
+Prova por mutação das nove de uma vez: removido o `aoTentarDeNovo` de todas,
+10 provas ficaram vermelhas em 8 arquivos; devolvido, 226 verdes.
 
 ### Auditoria de 01–02/10 — passe 2: a dose dez vezes maior, as seções clínicas que sumiam e o dia que virava às 21h
 

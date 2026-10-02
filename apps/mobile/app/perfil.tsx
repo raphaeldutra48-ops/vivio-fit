@@ -1,6 +1,6 @@
 import { FAIXA_ALTURA_CM, SexoBiologico, numeroDoCampo, type MeuPerfil } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -39,17 +40,29 @@ export default function Perfil() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
+  /*
+    Separado do `erro`, que aqui cobre altura fora de faixa e falha ao salvar.
+    Falhar ao CARREGAR trocava a tela inteira por uma linha de texto, e a única
+    saída visível era voltar — num ecrã onde a pessoa entrou para corrigir a
+    altura, que alimenta todo cálculo de composição.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
+
+  const carregar = useCallback(async () => {
+    try {
+      const p = await sdk.me.perfil();
+      setPerfil(p);
+      setAltura(p.aluno?.alturaCm ? String(p.aluno.alturaCm) : '');
+      setSexo(p.aluno?.sexoBiologico ?? null);
+      setFalhouAoCarregar(false);
+    } catch {
+      setFalhouAoCarregar(true);
+    }
+  }, []);
 
   useEffect(() => {
-    sdk.me
-      .perfil()
-      .then((p) => {
-        setPerfil(p);
-        setAltura(p.aluno?.alturaCm ? String(p.aluno.alturaCm) : '');
-        setSexo(p.aluno?.sexoBiologico ?? null);
-      })
-      .catch(() => setErro('Não foi possível carregar seus dados.'));
-  }, [usuario]);
+    void carregar();
+  }, [carregar, usuario]);
 
   async function salvar() {
     if (!perfil) return;
@@ -93,9 +106,19 @@ export default function Perfil() {
 
   if (!perfil) {
     return (
-      <View style={{ flex: 1, backgroundColor: tema.fundo, justifyContent: 'center' }}>
-        {erro ? (
-          <Text style={{ color: tema.erro, textAlign: 'center' }}>{erro}</Text>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: tema.fundo,
+          justifyContent: 'center',
+          padding: espacamento.lg,
+        }}
+      >
+        {falhouAoCarregar ? (
+          <FalhouAoCarregar
+            mensagem="Não deu para buscar seus dados agora. Nada foi alterado."
+            aoTentarDeNovo={() => void carregar()}
+          />
         ) : (
           <ActivityIndicator color={tema.acaoFundo} />
         )}

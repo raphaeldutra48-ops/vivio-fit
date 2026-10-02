@@ -361,7 +361,7 @@ describe('execução do treino: sem rede', () => {
     expect(textoDaTela()).toMatch(/sem conexão — treinando com a cópia salva/i);
   });
 
-  it('sem plano e SEM cópia, diz exatamente isso', async () => {
+  it('sem plano e SEM cópia, diz exatamente isso — e oferece tentar de novo', async () => {
     obterAtivo.mockRejectedValue(new Error('sem rede'));
     lerPlano.mockResolvedValue(null);
     await abrirTela();
@@ -369,6 +369,24 @@ describe('execução do treino: sem rede', () => {
     await waitFor(() =>
       expect(textoDaTela()).toMatch(/não foi possível carregar o treino e não há cópia salva/i),
     );
+    // A causa é sinal indo e voltando na academia: um toque resolve, e sem o
+    // botão a única saída era fechar o app antes de treinar.
+    expect(screen.getByText('Tentar de novo')).toBeInTheDocument();
+    // E explica por que valeu a pena abrir: da segunda vez funciona sem rede.
+    expect(textoDaTela()).toMatch(/fica guardado aqui para treinar sem internet/i);
+  });
+
+  it('o toque de tentar de novo abre o treino quando o sinal volta', async () => {
+    obterAtivo.mockRejectedValue(new Error('sem rede'));
+    lerPlano.mockResolvedValue(null);
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    obterAtivo.mockResolvedValue(plano);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await telaPronta();
+    expect(textoDaTela()).not.toMatch(/não foi possível carregar o treino/i);
   });
 
   it('o treino que ficou na fila não mostra medalha — vai para a evolução', async () => {

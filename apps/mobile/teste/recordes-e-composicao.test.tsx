@@ -230,10 +230,11 @@ describe('composição corporal', () => {
     evolucaoCorporal.mockRejectedValue(new Error('rede'));
     await abrirComposicao();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar sua evolução.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar sua evolução/i));
     expect(textoDaTela()).not.toMatch(/sem medições ainda/i);
+    expect(textoDaTela()).toMatch(/continuam salvas/i);
+    // E tem saída: a tela virava uma linha de texto e só.
+    expect(screen.getByText('Tentar de novo')).toBeInTheDocument();
   });
 
   it('as circunferências ficam em bloco próprio, e não entre os destaques', async () => {

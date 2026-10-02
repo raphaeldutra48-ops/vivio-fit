@@ -188,10 +188,20 @@ describe('cardio', () => {
     listarCardio.mockRejectedValue(new Error('rede'));
     await abrirCardio();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar suas atividades.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar suas atividades/i));
     expect(textoDaTela()).not.toMatch(/nenhuma atividade ainda/i);
+    expect(textoDaTela()).toMatch(/continuam salvas/i);
+  });
+
+  it('a falha tem saída: um toque relê as atividades', async () => {
+    listarCardio.mockRejectedValue(new Error('rede'));
+    await abrirCardio();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    listarCardio.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhuma atividade ainda/i));
   });
 
   it('a lista mostra duração, intensidade e a caloria como ESTIMATIVA', async () => {
@@ -269,10 +279,21 @@ describe('calorimetria', () => {
     listarCalorimetrias.mockRejectedValue(new Error('rede'));
     await abrirCalorimetria();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar seus exames.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar seus exames/i));
     expect(textoDaTela()).not.toMatch(/nenhum exame registrado/i);
+    // E diz o que importa para quem registrou um laudo: ele não se perdeu.
+    expect(textoDaTela()).toMatch(/continuam salvos/i);
+  });
+
+  it('a falha tem saída: um toque relê os exames', async () => {
+    listarCalorimetrias.mockRejectedValue(new Error('rede'));
+    await abrirCalorimetria();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    listarCalorimetrias.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhum exame registrado/i));
   });
 
   it('mostra o exame com data por extenso e onde foi feito', async () => {

@@ -215,10 +215,20 @@ describe('materiais', () => {
     meusMateriais.mockRejectedValue(new Error('rede'));
     await abrirMateriais();
 
-    await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar seus materiais.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar seus materiais/i));
     expect(textoDaTela()).not.toMatch(/nada por aqui ainda/i);
+    expect(textoDaTela()).toMatch(/continua lá/i);
+  });
+
+  it('a falha tem saída: um toque relê os materiais', async () => {
+    meusMateriais.mockRejectedValue(new Error('rede'));
+    await abrirMateriais();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    meusMateriais.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nada por aqui ainda/i));
   });
 
   it('material não aberto vem marcado como NOVO', async () => {

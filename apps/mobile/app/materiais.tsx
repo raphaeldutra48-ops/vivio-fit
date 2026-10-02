@@ -3,6 +3,7 @@ import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -11,12 +12,22 @@ export default function Materiais() {
   const [materiais, setMateriais] = useState<MaterialDoAluno[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+    Separado do `erro` porque as duas falhas pedem coisas diferentes: `erro`
+    cobre não conseguir ABRIR um material, e reler a lista não resolveria isso.
+    Falhar ao carregar é o caso que um toque resolve — e sem o botão a única
+    saída visível era sair da tela e voltar.
+  */
+  const [falhouAoCarregar, setFalhouAoCarregar] = useState(false);
 
   const carregar = () =>
     sdk.materiais
       .meus()
-      .then(setMateriais)
-      .catch(() => setErro('Não foi possível carregar seus materiais.'))
+      .then((lista) => {
+        setMateriais(lista);
+        setFalhouAoCarregar(false);
+      })
+      .catch(() => setFalhouAoCarregar(true))
       .finally(() => setCarregando(false));
 
   useEffect(() => {
@@ -55,11 +66,18 @@ export default function Materiais() {
         contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.md }}
       >
         {carregando && <Text style={{ color: tema.textoSecundario }}>Carregando…</Text>}
+        {falhouAoCarregar && (
+          <FalhouAoCarregar
+            mensagem="Não deu para buscar seus materiais agora. O que seu profissional compartilhou continua lá."
+            aoTentarDeNovo={() => void carregar()}
+          />
+        )}
+
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
         {/* O `!erro` importa: sem ele, "Nenhum material" aparecia ao lado da
             mensagem de falha, e é a frase do cartão que fica. */}
-        {!carregando && !erro && materiais.length === 0 && (
+        {!carregando && !falhouAoCarregar && materiais.length === 0 && (
           <View style={cartao}>
             <Text style={{ color: tema.textoPrimario, fontWeight: '600' }}>
               Nada por aqui ainda

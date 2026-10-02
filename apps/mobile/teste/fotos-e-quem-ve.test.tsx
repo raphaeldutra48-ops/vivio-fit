@@ -224,8 +224,21 @@ describe('fotos de evolução: quem vê', () => {
     listar.mockRejectedValue(new Error('Failed to fetch'));
     await abrirTela();
 
-    await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível carregar suas fotos/i));
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar suas fotos/i));
     expect(textoDaTela()).not.toMatch(/nenhuma foto ainda/i);
+    // E diz as duas coisas que importam: não se perderam, e continuam privadas.
+    expect(textoDaTela()).toMatch(/continuam guardadas, e privadas/i);
+  });
+
+  it('a falha tem saída: um toque relê a linha do tempo', async () => {
+    listar.mockRejectedValue(new Error('Failed to fetch'));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    listar.mockResolvedValue([]);
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/nenhuma foto ainda/i));
   });
 
   it('sem foto de verdade, convida a tirar a primeira', async () => {

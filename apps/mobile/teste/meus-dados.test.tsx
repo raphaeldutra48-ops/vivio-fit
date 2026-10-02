@@ -153,8 +153,25 @@ describe('meus dados', () => {
     meuPerfil.mockRejectedValue(new Error('rede'));
     await abrirTela();
 
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar seus dados/i));
+    expect(textoDaTela()).toMatch(/nada foi alterado/i);
+  });
+
+  it('a falha tem saída: um toque relê o perfil', async () => {
+    /*
+      A tela inteira virava uma linha de texto, e a única saída era voltar — num
+      lugar onde a pessoa entrou para corrigir a altura, que alimenta todo
+      cálculo de composição corporal.
+    */
+    meuPerfil.mockRejectedValue(new Error('rede'));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Tentar de novo')).toBeInTheDocument());
+
+    meuPerfil.mockResolvedValue(perfil());
+    fireEvent.click(screen.getByText('Tentar de novo'));
+
     await waitFor(() =>
-      expect(screen.getByText('Não foi possível carregar seus dados.')).toBeInTheDocument(),
+      expect(screen.getByLabelText(/altura em centímetros/i)).toBeInTheDocument(),
     );
   });
 

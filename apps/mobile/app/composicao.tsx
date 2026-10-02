@@ -5,8 +5,9 @@ import {
 } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { GraficoDeLinha } from '../src/componentes/GraficoDeLinha';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
@@ -36,16 +37,29 @@ export default function Composicao() {
   const router = useRouter();
   const [evolucao, setEvolucao] = useState<EvolucaoCorporal | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
+  /*
+    `falhou`, e não uma frase solta: a falha ocupava a tela e não oferecia saída.
+    É o único `erro` desta tela — ela só lê, não escreve nada —, então o estado
+    booleano diz tudo o que há para dizer.
+  */
+  const [falhou, setFalhou] = useState(false);
+
+  const carregar = useCallback(async () => {
+    if (!usuario) return;
+    setCarregando(true);
+    try {
+      setEvolucao(await sdk.medidas.evolucao(usuario.id));
+      setFalhou(false);
+    } catch {
+      setFalhou(true);
+    } finally {
+      setCarregando(false);
+    }
+  }, [usuario]);
 
   useEffect(() => {
-    if (!usuario) return;
-    sdk.medidas
-      .evolucao(usuario.id)
-      .then(setEvolucao)
-      .catch(() => setErro('Não foi possível carregar sua evolução.'))
-      .finally(() => setCarregando(false));
-  }, [usuario]);
+    void carregar();
+  }, [carregar]);
 
   function Variacao({ serie }: { serie: SerieCorporal }) {
     if (serie.variacao === null) {
@@ -75,7 +89,13 @@ export default function Composicao() {
       contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}
     >
       {carregando && <ActivityIndicator color={tema.primariaFundo} />}
-      {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
+
+      {falhou && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar sua evolução agora. Suas medições continuam salvas."
+          aoTentarDeNovo={() => void carregar()}
+        />
+      )}
 
       {evolucao && evolucao.totalMedicoes === 0 && (
         <View

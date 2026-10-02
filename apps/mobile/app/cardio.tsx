@@ -24,6 +24,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
 
@@ -96,7 +97,6 @@ export default function Cardio() {
         tem nenhuma. A lista continua vazia para a tela poder ser desenhada, mas
         quem decide o que dizer é o `falhou`.
       */
-      setErro('Não foi possível carregar suas atividades.');
       setFalhou(true);
       setLista([]);
     }
@@ -232,6 +232,17 @@ export default function Cardio() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
     >
       <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.md }}>
+        {/*
+          A falha de LEITURA tem botão; o `erro` abaixo é o do registro de uma
+          atividade nova, e reler a lista não ajuda quem acabou de digitar.
+        */}
+        {falhou && (
+          <FalhouAoCarregar
+            mensagem="Não deu para buscar suas atividades agora. As que você já registrou continuam salvas."
+            aoTentarDeNovo={() => void carregar()}
+          />
+        )}
+
         {erro && <Text style={{ color: tema.erro }}>{erro}</Text>}
 
         {resumo && (
