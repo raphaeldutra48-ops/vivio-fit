@@ -127,6 +127,41 @@ describe('EditorDeItensPrescritos', () => {
     expect(saida()[0]!.dose).toBe(2.5);
   });
 
+  it('dose com VÍRGULA é 2,5 — e não 25', async () => {
+    /*
+      O defeito mais caro que este arquivo cobre, e o único com consequência
+      clínica. O campo era `type="number"` com `Number(e.target.value)`: o
+      teclado brasileiro oferece vírgula, o campo numérico não a aceita, e o
+      navegador entregava "25". A prescrição saía com DEZ VEZES a dose, sem
+      erro e sem aviso. Foi medido antes da correção: `dose: 25`.
+    */
+    const usuario = userEvent.setup();
+    render(<Palco iniciais={[creatina]} />);
+
+    await usuario.type(screen.getByLabelText('Dose'), '2,5');
+
+    expect(saida()[0]!.dose).toBe(2.5);
+    expect(screen.getByLabelText('Dose')).toHaveValue('2,5');
+    expect(validar(saida()[0]!).success).toBe(true);
+  });
+
+  it('a vírgula não desaparece no instante em que é digitada', async () => {
+    // Se o campo mostrasse o número normalizado, "2," voltaria como "2" e não
+    // haveria como escrever a casa decimal — o mesmo defeito dos horários.
+    const usuario = userEvent.setup();
+    render(<Palco iniciais={[creatina]} />);
+
+    await usuario.type(screen.getByLabelText('Dose'), '2,');
+
+    expect(screen.getByLabelText('Dose')).toHaveValue('2,');
+  });
+
+  it('dose salva volta ao campo com vírgula, como se escreve em português', async () => {
+    render(<Palco iniciais={[{ ...creatina, dose: 2.5, unidade: 'g' }]} />);
+
+    expect(screen.getByLabelText('Dose')).toHaveValue('2,5');
+  });
+
   it('a seleção "—" de unidade e via volta para ausência', async () => {
     const usuario = userEvent.setup();
     render(<Palco iniciais={[{ ...creatina, unidade: 'g', via: 'Oral' }]} />);
@@ -207,5 +242,21 @@ describe('EditorDeItensPrescritos', () => {
 
     await waitFor(() => expect(listar).toHaveBeenCalled());
     expect(screen.getByText('Creatina monoidratada')).toBeInTheDocument();
+  });
+
+  it('catálogo que falhou NÃO é dito vazio — senão manda cadastrar o que já existe', async () => {
+    /*
+      As duas situações produziam a mesma lista de zero itens, e a tela
+      escolhia a frase errada: "Seu catálogo está vazio. Cadastre itens em
+      Prescrições." Quem tem o catálogo cheio recadastra, e o catálogo clínico
+      fica com item duplicado.
+    */
+    listar.mockRejectedValue(new Error('sem rede'));
+    render(<Palco />);
+
+    expect(await screen.findByText(/não deu para carregar seu catálogo/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/seu catálogo está vazio/i);
+    // E diz o que importa: os itens dela não se perderam.
+    expect(document.body.textContent).toMatch(/continuam lá/i);
   });
 });

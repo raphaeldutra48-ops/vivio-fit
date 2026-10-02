@@ -210,6 +210,56 @@ describe('página pública: receber contato', () => {
     expect((document.querySelectorAll('input')[0] as HTMLInputElement).value).toBe('Ana Souza');
   });
 
+  it('conteúdo recusado diz O QUE corrigir, em vez de mandar tentar de novo', async () => {
+    /*
+      O `catch` cego tratava tudo como tropeço passageiro. Para quem digitou o
+      próprio e-mail errado, "tente de novo em instantes" é uma armadilha: ela
+      tenta de novo, com o mesmo erro, e desiste achando que o profissional não
+      recebe contato. A frase da recusa vem do banco escrita para a tela.
+    */
+    enviarPedido.mockRejectedValue(new ErroApi('DADOS_INVALIDOS', 'E-mail inválido.', 422));
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Enviar contato')).toBeInTheDocument());
+
+    preencher('Ana Souza', 'ana@exemplo.com');
+    fireEvent.click(screen.getByText('Enviar contato'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/e-mail inválido/i));
+    expect(textoDaTela()).not.toMatch(/tente de novo em instantes/i);
+  });
+
+  it('página inundada pede para esperar, e não repete o convite a tentar já', async () => {
+    // O teto por hora existe para que os pedidos de verdade não sumam no meio.
+    // Quem bateu nele precisa saber que é tempo, não conteúdo.
+    enviarPedido.mockRejectedValue(
+      new ErroApi('LIMITE_EXCEDIDO', 'Muitos pedidos para esta página agora.', 429),
+    );
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Enviar contato')).toBeInTheDocument());
+
+    preencher('Ana Souza', 'ana@exemplo.com');
+    fireEvent.click(screen.getByText('Enviar contato'));
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/muitos pedidos agora/i));
+    expect(textoDaTela()).toMatch(/alguns minutos/i);
+  });
+
+  it('os campos param no limite que o banco aceita, antes do envio', async () => {
+    /*
+      Sem `maxLength`, a pessoa escreve uma mensagem de 3.000 caracteres e
+      descobre o limite DEPOIS de apertar enviar — e o texto dela não volta
+      cortado, volta recusado.
+    */
+    await abrirTela();
+    await waitFor(() => expect(screen.getByText('Enviar contato')).toBeInTheDocument());
+
+    const campos = [...document.querySelectorAll('input')] as HTMLInputElement[];
+    expect(campos[0].maxLength).toBe(120);
+    expect(campos[1].maxLength).toBe(160);
+    expect(campos[2].maxLength).toBe(20);
+    expect((document.querySelector('textarea') as HTMLTextAreaElement).maxLength).toBe(1000);
+  });
+
   it('sem WhatsApp cadastrado, a página não oferece um botão que não leva a lugar nenhum', async () => {
     // O contato por formulário continua; o que some é o atalho que abriria uma
     // conversa com número vazio.

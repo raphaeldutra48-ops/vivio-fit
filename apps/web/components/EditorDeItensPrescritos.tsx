@@ -4,6 +4,7 @@ import {
   ROTULO_TIPO_PRESCRITIVEL,
   UNIDADES_DOSE,
   VIAS,
+  numeroDoCampo,
   type PosologiaInput,
   type PrescritivelResumo,
 } from '@vivio/contracts';
@@ -89,6 +90,47 @@ const entrada = {
   color: 'var(--vv-texto-primario)',
 };
 
+/**
+ * Dose com o texto digitado em estado próprio — e a VÍRGULA lida como decimal.
+ *
+ * O campo era `type="number"` convertido com `Number(e.target.value)`. Com o
+ * teclado brasileiro, "2,5" não é um número válido para um campo numérico: o
+ * navegador entrega "25" (ou nada, no Safari), e a prescrição saía com **dez
+ * vezes a dose** — sem erro, sem aviso, num documento clínico assinado por um
+ * profissional. Foi medido: digitar "2,5" produzia `dose: 25`.
+ *
+ * Mesmo desenho do `CampoDeHorarios` acima, pela mesma razão: o valor
+ * normalizado não pode ser o `value` do campo, senão "2," volta como "2" e a
+ * vírgula desaparece no instante em que é digitada.
+ */
+function CampoDeDose({
+  dose,
+  aoMudar,
+}: {
+  dose: number | undefined;
+  aoMudar: (dose: number | undefined) => void;
+}) {
+  // Vírgula na exibição: é como se escreve decimal em português, e é o que a
+  // pessoa espera reler quando abre a prescrição de novo.
+  const [texto, setTexto] = useState(() =>
+    dose === undefined ? '' : String(dose).replace('.', ','),
+  );
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="min-h-toque rounded-md border px-md"
+      style={entrada}
+      value={texto}
+      onChange={(e) => {
+        setTexto(e.target.value);
+        aoMudar(numeroDoCampo(e.target.value) ?? undefined);
+      }}
+    />
+  );
+}
+
 export interface ItemEmEdicao extends PosologiaInput {
   /** Só para exibir enquanto o profissional monta — o servidor congela o dele. */
   nome: string;
@@ -108,12 +150,24 @@ export function EditorDeItensPrescritos({
 }) {
   const [catalogo, setCatalogo] = useState<PrescritivelResumo[]>([]);
   const [busca, setBusca] = useState('');
+  /*
+    Falhar ao buscar o catálogo NÃO é catálogo vazio.
+
+    Com o erro engolido, a lista ficava em zero e a frase de vazio dizia "Seu
+    catálogo está vazio. Cadastre itens em Prescrições." a quem tem o catálogo
+    cheio — e manda cadastrar de novo o que já existe. Numa tela de prescrição,
+    a consequência é um item duplicado no catálogo clínico de alguém.
+  */
+  const [falhouOCatalogo, setFalhouOCatalogo] = useState(false);
 
   useEffect(() => {
     sdk.prescritiveis
       .listar({ limit: 100 })
-      .then(setCatalogo)
-      .catch(() => undefined);
+      .then((lista) => {
+        setCatalogo(lista);
+        setFalhouOCatalogo(false);
+      })
+      .catch(() => setFalhouOCatalogo(true));
   }, []);
 
   const disponiveis = useMemo(() => {
@@ -155,17 +209,10 @@ export function EditorDeItensPrescritos({
               <span className="text-xs" style={{ color: 'var(--vv-texto-secundario)' }}>
                 Dose
               </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                className="min-h-toque rounded-md border px-md"
-                style={entrada}
-                value={item.dose ?? ''}
-                onChange={(e) =>
-                  alterar(indice, { dose: e.target.value ? Number(e.target.value) : undefined })
-                }
+              <CampoDeDose
+                key={`dose-${item.prescritivelId}`}
+                dose={item.dose}
+                aoMudar={(dose) => alterar(indice, { dose })}
               />
             </label>
 
@@ -283,9 +330,11 @@ export function EditorDeItensPrescritos({
 
         {disponiveis.length === 0 && (
           <p className="mt-md text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-            {catalogo.length === 0
-              ? 'Seu catálogo está vazio. Cadastre itens em Prescrições.'
-              : 'Nenhum item corresponde à busca.'}
+            {falhouOCatalogo
+              ? 'Não deu para carregar seu catálogo agora. Recarregue a página antes de cadastrar de novo — os itens que você já tem continuam lá.'
+              : catalogo.length === 0
+                ? 'Seu catálogo está vazio. Cadastre itens em Prescrições.'
+                : 'Nenhum item corresponde à busca.'}
           </p>
         )}
       </Cartao>

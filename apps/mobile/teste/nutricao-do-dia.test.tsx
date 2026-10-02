@@ -220,6 +220,20 @@ describe('nutrição do dia', () => {
     expect(textoDaTela()).not.toMatch(/refeições registradas hoje/i);
   });
 
+  it('falha na água não faz o cartão dela desaparecer sem explicação', async () => {
+    /*
+      O `.catch(() => undefined)` deixava `agua` em `null`, e o cartão todo é
+      condicionado a ela: desaparecia — junto com o único jeito de registrar um
+      copo. Sem uma palavra na tela, a leitura é que o recurso saiu do app.
+    */
+    resumoDeAgua.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
+    await abrirTela();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para buscar sua água de hoje/i));
+    // E diz o que importa para quem já bebeu: o registro não se perdeu.
+    expect(textoDaTela()).toMatch(/continua salvo/i);
+  });
+
   it('desmarcar devolve a refeição à cobrança', async () => {
     /*
       O outro lado do toque que desmarca, e onde estava o defeito: a tela

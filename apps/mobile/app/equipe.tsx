@@ -131,6 +131,31 @@ export default function Equipe() {
     }
   }
 
+  /**
+   * Recusar pergunta antes; aceitar não.
+   *
+   * Os dois botões do convite têm o mesmo tamanho e ficam lado a lado — e o da
+   * direita apaga o convite sem volta. Quem errou o toque precisa pedir ao
+   * profissional que convide de novo, e quem acabou de instalar o app não sabe
+   * que é isso que falta: fica com a tela inicial dizendo que não há
+   * profissional nenhum. É o mesmo raciocínio de `pedirParaRevogar` — a direção
+   * que desfaz é a que confirma.
+   */
+  function pedirParaRecusar(vinculo: VinculoResumo) {
+    Alert.alert(
+      `Recusar ${vinculo.contraparte.nome}?`,
+      'O convite é apagado. Para voltar atrás, essa pessoa precisa te convidar de novo.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Recusar',
+          style: 'destructive',
+          onPress: () => void responder(vinculo, false),
+        },
+      ],
+    );
+  }
+
   function pedirParaRevogar(escopo: EscopoDado) {
     /*
       Conceder é um toque; retirar passa por confirmação. Não é para dificultar
@@ -228,7 +253,7 @@ export default function Equipe() {
                   accessibilityRole="button"
                   accessibilityLabel={`Recusar ${v.contraparte.nome}`}
                   disabled={ocupado === v.id}
-                  onPress={() => void responder(v, false)}
+                  onPress={() => pedirParaRecusar(v)}
                   style={{
                     flex: 1,
                     minHeight: 52,

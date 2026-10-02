@@ -1,6 +1,11 @@
 'use client';
 
-import { DOCUMENTOS_LEGAIS, linkDoWhatsapp, type PaginaPublica } from '@vivio/contracts';
+import {
+  DOCUMENTOS_LEGAIS,
+  LIMITES_DE_TEXTO,
+  linkDoWhatsapp,
+  type PaginaPublica,
+} from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -65,8 +70,19 @@ export default function PaginaDoProfissional() {
         mensagem: mensagem.trim() || undefined,
       });
       setEnviado(true);
-    } catch {
-      setErro('Não foi possível enviar agora. Tente de novo em instantes.');
+    } catch (e: unknown) {
+      /*
+        O `catch` cego dizia "tente de novo em instantes" para TUDO.
+
+        Para quem errou o próprio e-mail, essa frase é uma armadilha: ela tenta
+        de novo, com o mesmo erro, e conclui que o profissional não recebe
+        contato. A recusa por conteúdo vem do banco com a frase já escrita para
+        a tela ("E-mail inválido."), e é ela que diz o que corrigir.
+      */
+      if (e instanceof ErroApi && e.codigo === 'DADOS_INVALIDOS') setErro(e.message);
+      else if (e instanceof ErroApi && e.codigo === 'LIMITE_EXCEDIDO')
+        setErro('Esta página recebeu muitos pedidos agora. Tente novamente em alguns minutos.');
+      else setErro('Não foi possível enviar agora. Tente de novo em instantes.');
     } finally {
       setEnviando(false);
     }
@@ -181,9 +197,16 @@ export default function PaginaDoProfissional() {
                 </p>
               </div>
 
+              {/*
+                Os `maxLength` repetem os limites de `enviarPedidoSchema` — e
+                agora também os do banco. Sem eles o formulário deixa escrever
+                à vontade e a recusa só chega depois do envio, que é a pior
+                ordem possível para descobrir um limite.
+              */}
               <Campo
                 rotulo="Seu nome"
                 required
+                maxLength={LIMITES_DE_TEXTO.curto}
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
               />
@@ -191,12 +214,14 @@ export default function PaginaDoProfissional() {
                 rotulo="E-mail"
                 type="email"
                 required
+                maxLength={160}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
               <Campo
                 rotulo="Telefone (opcional)"
                 type="tel"
+                maxLength={20}
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
               />
@@ -207,6 +232,7 @@ export default function PaginaDoProfissional() {
                 <textarea
                   className="min-h-[90px] rounded-md border p-md"
                   style={entrada}
+                  maxLength={1000}
                   value={mensagem}
                   onChange={(e) => setMensagem(e.target.value)}
                   placeholder="Conte um pouco do seu objetivo."

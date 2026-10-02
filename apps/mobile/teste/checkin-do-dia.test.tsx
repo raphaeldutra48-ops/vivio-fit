@@ -124,6 +124,24 @@ describe('check-in do dia', () => {
     expect(enviado()).toMatchObject({ teveDor: true, energia: 4, observacao: 'dormi mal' });
   });
 
+  it('se não deu para LER o de hoje, a tela avisa antes de deixar substituir', async () => {
+    /*
+      O defeito que esta prova fixa. A leitura existe para a tela não abrir em
+      branco; quando ela falhava em silêncio, a tela abria em branco de todo
+      jeito — e salvar SUBSTITUI o registro do dia. A pessoa voltava para
+      corrigir a dor e apagava a energia que havia respondido de manhã, sem
+      nada na tela indicando que aquilo ia acontecer.
+    */
+    listarCheckins.mockRejectedValue(new Error('Failed to fetch'));
+    await abrirTela();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para conferir/i));
+    expect(textoDaTela()).toMatch(/substitui o que você respondeu antes/i);
+    // E não afirma o contrário: não diz, com certeza, que ela já respondeu.
+    expect(textoDaTela()).not.toMatch(/pode alterar o que quiser/i);
+    expect(textoDaTela()).not.toMatch(/failed to fetch/i);
+  });
+
   it('o check-in de ONTEM não é carregado como se fosse o de hoje', async () => {
     // Senão a tela do dia novo abriria com as respostas do dia anterior, e
     // quem confirmasse sem ler registraria ontem como hoje.

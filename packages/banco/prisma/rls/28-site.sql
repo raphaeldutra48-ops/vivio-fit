@@ -182,17 +182,75 @@ set search_path = public
 as $funcao$
 declare
   v_perfil_id text;
+  v_email text := lower(btrim(coalesce(p_email, '')));
+  v_na_ultima_hora int;
 begin
   if public.pagina_publica(p_slug) is null then
     raise exception 'Página não encontrada.' using errcode = 'P0002';
   end if;
 
+  /*
+    Conferência de tamanho AQUI, e não só no formulário.
+
+    Esta é a única escrita do sistema feita por quem não tem conta, e quem chama
+    pode ser o formulário da página ou um script apontado para a RPC. O schema do
+    cliente limita nome, e-mail e mensagem; do lado de fora nada limitava — e
+    `mensagem` sem teto é convite a gravar megabytes na caixa de alguém.
+  */
+  if length(btrim(coalesce(p_nome, ''))) < 2 or length(btrim(p_nome)) > 120 then
+    raise exception 'Nome inválido.' using errcode = '22023';
+  end if;
+
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$' or length(v_email) > 160 then
+    raise exception 'E-mail inválido.' using errcode = '22023';
+  end if;
+
+  if length(coalesce(p_telefone, '')) > 40 or length(coalesce(p_mensagem, '')) > 1000 then
+    raise exception 'Mensagem longa demais.' using errcode = '22023';
+  end if;
+
   select pp.id into v_perfil_id
   from public."PerfilPublico" pp where pp.slug = lower(btrim(p_slug));
 
+  /*
+    O MESMO e-mail não enfileira duas vezes na mesma página enquanto não for
+    atendido.
+
+    Serve para duas coisas: o toque duplo de quem está com internet ruim, que
+    geraria dois contatos idênticos, e o script que repete o envio. Não é erro
+    para quem está do outro lado — o pedido dela já está lá —, então sai em
+    silêncio em vez de explodir na cara de um cliente em potencial.
+  */
+  if exists (
+    select 1 from public."PedidoDeContato" pc
+    where pc."perfilId" = v_perfil_id
+      and pc.email = v_email
+      and pc."atendidoEm" is null
+  ) then
+    return;
+  end if;
+
+  /*
+    Teto por página e por hora.
+
+    Sem ele, qualquer um inunda a caixa de um profissional e os pedidos de
+    verdade somem no meio — o recurso deixa de servir justamente por estar
+    aberto. Vinte por hora é mais do que qualquer página real recebe e menos do
+    que um script precisa para atrapalhar.
+  */
+  select count(*) into v_na_ultima_hora
+  from public."PedidoDeContato" pc
+  where pc."perfilId" = v_perfil_id
+    and pc."criadoEm" > now() - interval '1 hour';
+
+  if v_na_ultima_hora >= 20 then
+    raise exception 'Muitos pedidos para esta página agora. Tente mais tarde.'
+      using errcode = '53400';
+  end if;
+
   insert into public."PedidoDeContato" (id, "perfilId", nome, email, telefone, mensagem)
   values (
-    gen_random_uuid()::text, v_perfil_id, btrim(p_nome), lower(btrim(p_email)),
+    gen_random_uuid()::text, v_perfil_id, btrim(p_nome), v_email,
     nullif(btrim(coalesce(p_telefone, '')), ''), nullif(btrim(coalesce(p_mensagem, '')), '')
   );
 end;

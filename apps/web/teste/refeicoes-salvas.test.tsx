@@ -274,4 +274,22 @@ describe('Refeições salvas', () => {
     // E o botão volta a ser o de criação — é o `editando: ''` fazendo efeito.
     expect(screen.getByRole('button', { name: 'Criar refeição' })).toBeInTheDocument();
   });
+
+  it('falha ao buscar as receitas não faz o atalho delas desaparecer calado', async () => {
+    /*
+      O bloco "Ou usar uma receita sua" some de propósito quando a pessoa não
+      tem receita nenhuma. Quando a busca FALHA, sumir é outra coisa: quem tem
+      receitas cadastradas conclui que elas se perderam, e vai recadastrar.
+    */
+    listarReceitas.mockRejectedValue(new Error('Failed to fetch'));
+    const usuario = userEvent.setup();
+    render(<RefeicoesSalvas />);
+
+    await usuario.click(await screen.findByRole('button', { name: '+ Nova refeição' }));
+
+    expect(await screen.findByText(/não deu para carregar suas receitas/i)).toBeInTheDocument();
+    // E diz o que a pessoa precisa saber: elas não se perderam.
+    expect(document.body.textContent).toMatch(/continuam salvas/i);
+    expect(document.body.textContent).not.toMatch(/failed to fetch/i);
+  });
 });

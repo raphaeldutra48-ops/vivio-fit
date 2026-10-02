@@ -26,6 +26,7 @@ export default function Nutricao() {
   const [registros, setRegistros] = useState<Record<string, string>>({});
   /** true quando não se sabe o que já foi registrado hoje — a cobrança se cala. */
   const [falhouOsRegistros, setFalhouOsRegistros] = useState(false);
+  const [falhouAAgua, setFalhouAAgua] = useState(false);
   const [semDieta, setSemDieta] = useState(false);
   /** Falha de rede — diferente de não ter plano. */
   const [falhou, setFalhou] = useState(false);
@@ -70,7 +71,20 @@ export default function Nutricao() {
         if (e instanceof ErroApi && e.status === 404) setSemDieta(true);
         else setFalhou(true);
       });
-    sdk.agua.resumo(usuario.id).then(setAgua).catch(() => undefined);
+    /*
+      Falhar na água fazia o cartão inteiro DESAPARECER — e com ele o único
+      jeito de registrar um copo. Nada na tela dizia por quê, então a leitura
+      natural é que o recurso saiu do app. É pouco dado e muito efeito: quem
+      abre para registrar não registra, e não volta.
+    */
+    setFalhouAAgua(false);
+    sdk.agua
+      .resumo(usuario.id)
+      .then((r) => {
+        setAgua(r);
+        setFalhouAAgua(false);
+      })
+      .catch(() => setFalhouAAgua(true));
     /*
       Sem os registros do dia, a cobrança CALA — não chuta zero.
 
@@ -194,6 +208,13 @@ export default function Nutricao() {
       )}
 
       {/* --- Água ---------------------------------------------------------- */}
+      {falhouAAgua && !agua && (
+        <FalhouAoCarregar
+          mensagem="Não deu para buscar sua água de hoje. O que você já registrou continua salvo."
+          aoTentarDeNovo={() => void recarregar()}
+        />
+      )}
+
       {agua && (
         <View style={{ ...cartao, gap: espacamento.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>

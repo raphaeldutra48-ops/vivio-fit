@@ -22,13 +22,15 @@ const meusProfissionais = vi.fn();
 const listarConsentimentos = vi.fn();
 const conceder = vi.fn();
 const revogar = vi.fn();
+const aceitar = vi.fn();
+const recusar = vi.fn();
 
 vi.mock('../src/sdk', () => ({
   sdk: {
     vinculos: {
       meusProfissionais: (...a: unknown[]) => meusProfissionais(...a),
-      aceitar: vi.fn(),
-      recusar: vi.fn(),
+      aceitar: (...a: unknown[]) => aceitar(...a),
+      recusar: (...a: unknown[]) => recusar(...a),
     },
     consentimentos: {
       listar: (...a: unknown[]) => listarConsentimentos(...a),
@@ -59,6 +61,14 @@ const personal = {
   contraparte: { id: 'prof-1', nome: 'Diego Personal', papel: 'PERSONAL', avatarUrl: null },
 };
 
+/** O mesmo profissional, mas ainda como convite esperando resposta. */
+const convite = {
+  ...personal,
+  id: 'vinculo-2',
+  status: 'PENDENTE',
+  aguardandoMinhaResposta: true,
+};
+
 const consentimentoDeTreino = {
   id: 'consentimento-treino',
   escopo: EscopoDado.TREINO,
@@ -77,10 +87,20 @@ async function abrirTela(consentimentos: unknown[] = []): Promise<void> {
   await waitFor(() => expect(screen.getByText('Diego Personal')).toBeInTheDocument());
 }
 
+async function abrirComConvite(): Promise<void> {
+  meusProfissionais.mockResolvedValue([convite]);
+  listarConsentimentos.mockResolvedValue([]);
+  const { default: Equipe } = await import('../app/equipe');
+  render(<Equipe />);
+  await waitFor(() => expect(screen.getByText('Recusar')).toBeInTheDocument());
+}
+
 beforeEach(() => {
   alertas.length = 0;
   conceder.mockResolvedValue(undefined);
   revogar.mockResolvedValue(undefined);
+  recusar.mockResolvedValue(undefined);
+  aceitar.mockResolvedValue(undefined);
 });
 
 describe('o que eu compartilho', () => {
@@ -130,6 +150,54 @@ describe('o que eu compartilho', () => {
 
     await new Promise((r) => setTimeout(r, 100));
     expect(revogar).not.toHaveBeenCalled();
+  });
+
+  it('recusar o convite PERGUNTA antes — o botão fica do lado do de aceitar', async () => {
+    /*
+      Os dois botões do convite têm o mesmo tamanho e ficam lado a lado. Um
+      toque errado no da direita apagava o convite sem volta, e quem acabou de
+      instalar o app não sabe que precisa pedir outro: fica com a tela inicial
+      dizendo que não tem profissional nenhum.
+    */
+    await abrirComConvite();
+
+    fireEvent.click(screen.getByText('Recusar'));
+
+    await waitFor(() => expect(alertas).toHaveLength(1));
+    expect(alertas[0]!.titulo).toMatch(/recusar diego personal/i);
+    // O ponto: até aqui, nada foi recusado.
+    expect(recusar).not.toHaveBeenCalled();
+  });
+
+  it('confirmando, recusa o convite certo', async () => {
+    await abrirComConvite();
+    fireEvent.click(screen.getByText('Recusar'));
+    await waitFor(() => expect(alertas).toHaveLength(1));
+
+    responderAlerta('recusar');
+
+    await waitFor(() => expect(recusar).toHaveBeenCalledWith('vinculo-2'));
+  });
+
+  it('cancelando, o convite continua esperando resposta', async () => {
+    await abrirComConvite();
+    fireEvent.click(screen.getByText('Recusar'));
+    await waitFor(() => expect(alertas).toHaveLength(1));
+
+    responderAlerta('cancelar');
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(recusar).not.toHaveBeenCalled();
+    expect(screen.getByText('Recusar')).toBeInTheDocument();
+  });
+
+  it('aceitar continua sendo um toque só — a pergunta é só na direção que desfaz', async () => {
+    await abrirComConvite();
+
+    fireEvent.click(screen.getByText('Aceitar e liberar treino'));
+
+    await waitFor(() => expect(aceitar).toHaveBeenCalledWith('vinculo-2'));
+    expect(alertas).toHaveLength(0);
   });
 
   it('o texto que a pessoa lê é o mesmo que fica gravado no consentimento', async () => {

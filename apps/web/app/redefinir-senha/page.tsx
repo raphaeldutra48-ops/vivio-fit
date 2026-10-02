@@ -28,13 +28,27 @@ function Formulario() {
   // O Supabase avisa link expirado por aqui.
   const erroDoLink = parametros.get('error_description') ?? parametros.get('error');
   const [temSessao, setTemSessao] = useState<boolean | null>(null);
+  /*
+    Não conseguir CONFERIR o link é diferente de o link não valer.
+
+    O `.then(setTemSessao)` estava sem par: uma falha de rede deixava
+    `temSessao` em `null` para sempre, e a tela ficava em "Conferindo o link…"
+    — sem erro, sem saída, no meio do único caminho que alguém trancado fora da
+    conta tem. Dizer "link expirado" seria pior: mandaria pedir outro link que
+    ia dar no mesmo.
+  */
+  const [falhouAConferencia, setFalhouAConferencia] = useState(false);
 
   useEffect(() => {
     if (erroDoLink) {
       setTemSessao(false);
       return;
     }
-    void sdk.auth.sessaoAberta().then(setTemSessao);
+    setFalhouAConferencia(false);
+    void sdk.auth
+      .sessaoAberta()
+      .then(setTemSessao)
+      .catch(() => setFalhouAConferencia(true));
   }, [erroDoLink]);
 
   const [senha, setSenha] = useState('');
@@ -75,6 +89,23 @@ function Formulario() {
       );
       setEnviando(false);
     }
+  }
+
+  if (falhouAConferencia) {
+    return (
+      <Cartao>
+        <p className="mb-xs font-semibold">Não deu para conferir o link</p>
+        <Aviso tipo="erro">
+          O link pode continuar válido — foi a conexão que falhou. Recarregue esta página para
+          tentar de novo.
+        </Aviso>
+        <div className="mt-lg">
+          <Link href="/esqueci-senha" className="text-sm underline">
+            Pedir um link novo
+          </Link>
+        </div>
+      </Cartao>
+    );
   }
 
   if (temSessao === null) {

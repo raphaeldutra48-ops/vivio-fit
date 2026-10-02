@@ -1,6 +1,7 @@
 'use client';
 
 import { ROTULO_SEVERIDADE, SeveridadeAlerta, type AlertaResumo } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { sdk } from '../lib/sdk';
@@ -34,29 +35,73 @@ export function AlertasClinicos({
 }) {
   const [alertas, setAlertas] = useState<AlertaResumo[]>([]);
   const [semConsentimento, setSemConsentimento] = useState(false);
+  /*
+    Não poder ver é diferente de não ter conseguido buscar.
+
+    O `.catch` mandava QUALQUER erro para `semConsentimento`, e com ele a seção
+    desaparecia: um tropeço de rede fazia a ficha do aluno abrir sem alertas
+    clínicos nenhum, no meio de um atendimento, e a ausência se lê como "não há
+    alerta". Aqui isso não é um incômodo de interface — é a parte da tela que
+    existe para avisar que algo precisa de olhar.
+  */
+  const [falhou, setFalhou] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const [ocultarResolvidos, setOcultarResolvidos] = useState(true);
 
   useEffect(() => {
+    setFalhou(false);
     sdk.alertas
       .listar(alunoId)
-      .then(setAlertas)
+      .then((lista) => {
+        setAlertas(lista);
+        setSemConsentimento(false);
+        setFalhou(false);
+      })
       // 403 aqui é informação, não falha: pode ser papel sem alerta ou falta de
       // consentimento clínico. Nos dois casos a seção simplesmente não aparece.
-      .catch(() => setSemConsentimento(true));
+      .catch((e: unknown) => {
+        if (e instanceof ErroApi && e.status === 403) setSemConsentimento(true);
+        else setFalhou(true);
+      });
   }, [alunoId, atualizarEm]);
 
   async function reconhecer(id: string) {
-    const atualizado = await sdk.alertas.reconhecer(alunoId, id).catch(() => null);
-    if (atualizado) setAlertas((atual) => atual.map((a) => (a.id === id ? atualizado : a)));
+    try {
+      const atualizado = await sdk.alertas.reconhecer(alunoId, id);
+      setAlertas((atual) => atual.map((a) => (a.id === id ? atualizado : a)));
+      setErro(null);
+    } catch {
+      /*
+        O botão falhava calado: o alerta continuava pendente e a tela não mudava
+        nada. Quem clicou acha que marcou como visto, e o alerta volta a cobrar
+        atenção na próxima abertura — ou pior, não volta a ser olhado.
+      */
+      setErro('Não foi possível marcar este alerta como visto. Ele continua pendente.');
+    }
   }
 
-  if (semConsentimento || alertas.length === 0) return null;
+  if (semConsentimento) return null;
+
+  if (falhou) {
+    return (
+      <section>
+        <Aviso tipo="erro">
+          Não deu para buscar os alertas clínicos agora. Esta seção pode estar incompleta —
+          recarregue a página antes de concluir que não há nada a olhar.
+        </Aviso>
+      </section>
+    );
+  }
+
+  if (alertas.length === 0) return null;
 
   const pendentes = alertas.filter((a) => a.reconhecidoEm === null);
   const visiveis = ocultarResolvidos ? pendentes : alertas;
 
   return (
     <section>
+      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
       <div className="mb-md flex flex-wrap items-center justify-between gap-md">
         <h2 className="text-lg font-semibold">
           Alertas clínicos

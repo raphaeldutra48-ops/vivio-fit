@@ -18,6 +18,7 @@ export default function CarteiraDeAlunos() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [emailConvite, setEmailConvite] = useState('');
+  const [convidando, setConvidando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   /**
    * Quem precisa de atencao, por aluno.
@@ -70,6 +71,15 @@ export default function CarteiraDeAlunos() {
 
   async function convidar(evento: React.FormEvent) {
     evento.preventDefault();
+    /*
+      O botão ficava clicável durante o envio, e o campo só é limpo DEPOIS da
+      resposta. Dois cliques — ou um Enter repetido, que é o que acontece quando
+      a resposta demora — mandavam dois convites para o mesmo e-mail: o primeiro
+      dá certo, o segundo volta como conflito, e a tela troca "Convite enviado"
+      por uma frase de erro. O profissional conclui que não convidou.
+    */
+    if (convidando) return;
+    setConvidando(true);
     setMensagem(null);
     try {
       await sdk.vinculos.convidar(emailConvite);
@@ -78,6 +88,8 @@ export default function CarteiraDeAlunos() {
       await recarregar();
     } catch (e) {
       setMensagem(fraseDeErro(e, 'Não foi possível convidar.'));
+    } finally {
+      setConvidando(false);
     }
   }
 
@@ -105,7 +117,9 @@ export default function CarteiraDeAlunos() {
               placeholder="aluno@exemplo.com"
             />
           </div>
-          <Botao type="submit">Convidar</Botao>
+          <Botao type="submit" disabled={convidando}>
+            {convidando ? 'Convidando…' : 'Convidar'}
+          </Botao>
         </form>
         {mensagem && (
           <div className="mt-md">

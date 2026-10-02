@@ -47,6 +47,16 @@ export default function Checkin() {
   const [localDor, setLocalDor] = useState('');
   const [observacao, setObservacao] = useState('');
   const [jaRespondido, setJaRespondido] = useState(false);
+  /*
+    Não conseguir LER o check-in de hoje é diferente de não haver um.
+
+    A leitura existe para preencher a tela com o que já foi dito — o comentário
+    abaixo explica por quê. Com `.catch(() => undefined)`, uma falha de rede
+    abria o formulário em branco sem avisar, e salvar SUBSTITUI o registro do
+    dia: a pessoa voltava para corrigir a dor e apagava a energia que havia
+    respondido de manhã, exatamente o estrago que a leitura evita.
+  */
+  const [falhouAoLer, setFalhouAoLer] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [peso, setPeso] = useState('');
@@ -75,8 +85,11 @@ export default function Checkin() {
         setTeveDor(deHoje.teveDor);
         setLocalDor(deHoje.localDor ?? '');
         setObservacao(deHoje.observacao ?? '');
+        setFalhouAoLer(false);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (ativo) setFalhouAoLer(true);
+      });
 
     // Há quanto tempo a pessoa não se pesa — decide se o campo aparece.
     sdk.medidas
@@ -189,6 +202,13 @@ export default function Checkin() {
       style={{ flex: 1, backgroundColor: tema.fundo }}
     >
       <ScrollView contentContainerStyle={{ padding: espacamento.lg, gap: espacamento.lg }}>
+        {falhouAoLer && (
+          <Text style={{ color: tema.alerta, fontSize: tipografia.tamanho.sm }}>
+            Não deu para conferir se você já fez o check-in de hoje. Se já fez, salvar daqui
+            substitui o que você respondeu antes — vale rever todos os campos.
+          </Text>
+        )}
+
         {jaRespondido && (
           <Text style={{ color: tema.textoSecundario, fontSize: tipografia.tamanho.sm }}>
             Você já fez o check-in de hoje. Pode alterar o que quiser — o registro do dia é

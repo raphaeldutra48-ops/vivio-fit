@@ -393,6 +393,25 @@ export function erroDoSupabase(e: { message?: string; status?: number; code?: st
     const nossa = bruto !== '' && !/duplicate key|unique constraint/i.test(bruto);
     return new ErroApi('CONFLITO', nossa ? bruto : 'Esse registro já existe.', 409);
   }
+  /*
+    `22023` (invalid_parameter_value) e `53400` (configuration_limit_exceeded)
+    são os dois códigos que as nossas funções usam para "o conteúdo está errado"
+    e "você passou do teto". Sem estas duas linhas, os dois caíam no
+    `ERRO_INTERNO` do fim — e a tela, que trata erro interno como tropeço
+    nosso, mandava a pessoa tentar de novo tanto quando ela precisava CORRIGIR
+    algo quanto quando precisava ESPERAR.
+  */
+  if (e.code === '22023') {
+    return new ErroApi('DADOS_INVALIDOS', bruto || 'Dados inválidos.', 422);
+  }
+  if (e.code === '53400') {
+    return new ErroApi(
+      'LIMITE_EXCEDIDO',
+      bruto || 'Muitas tentativas. Espere um pouco e tente de novo.',
+      429,
+    );
+  }
+
   if (e.code === '23514') {
     // `check_violation`: a função recusou o conteúdo, e disse por quê.
     return new ErroApi('DADOS_INVALIDOS', bruto || 'Dados inválidos.', 422);

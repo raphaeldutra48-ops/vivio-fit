@@ -19,6 +19,7 @@ export default function Cardapios() {
   const [planos, setPlanos] = useState<{ id: string; nome: string; aluno: string }[]>([]);
   const [planoEscolhido, setPlanoEscolhido] = useState('');
   const [nomeDoModelo, setNomeDoModelo] = useState('');
+  const [salvandoModelo, setSalvandoModelo] = useState(false);
 
   async function recarregar() {
     try {
@@ -78,6 +79,10 @@ export default function Cardapios() {
 
   async function salvarDoPlano() {
     if (!planoEscolhido || nomeDoModelo.trim().length < 2) return;
+    // Sem a trava, dois cliques guardam o mesmo cardápio duas vezes no acervo —
+    // e o acervo é uma lista de nomes, onde duas linhas iguais não se explicam.
+    if (salvandoModelo) return;
+    setSalvandoModelo(true);
     setErro(null);
     try {
       await sdk.cardapios.salvarDoPlano({ planoDietaId: planoEscolhido, nome: nomeDoModelo });
@@ -86,6 +91,8 @@ export default function Cardapios() {
       await recarregar();
     } catch (e) {
       setErro(e instanceof ErroApi ? e.message : 'Não foi possível salvar o cardápio.');
+    } finally {
+      setSalvandoModelo(false);
     }
   }
 
@@ -183,10 +190,10 @@ As dietas já aplicadas a partir dele continuam valendo.`))
             placeholder="Cutting 1.800 kcal"
           />
           <Botao
-            disabled={!planoEscolhido || nomeDoModelo.trim().length < 2}
+            disabled={!planoEscolhido || nomeDoModelo.trim().length < 2 || salvandoModelo}
             onClick={() => void salvarDoPlano()}
           >
-            Salvar
+            {salvandoModelo ? 'Salvando…' : 'Salvar'}
           </Botao>
 
           {/*

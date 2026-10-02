@@ -30,6 +30,7 @@ const entrada = {
 export default function RefeicoesSalvas() {
   const [refeicoes, setRefeicoes] = useState<RefeicaoSalvaResumo[]>([]);
   const [receitas, setReceitas] = useState<ReceitaResumo[]>([]);
+  const [falharamAsReceitas, setFalharamAsReceitas] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -51,8 +52,17 @@ export default function RefeicoesSalvas() {
     void carregar();
     sdk.receitas
       .listar()
-      .then(setReceitas)
-      .catch(() => undefined);
+      .then((lista) => {
+        setReceitas(lista);
+        setFalharamAsReceitas(false);
+      })
+      /*
+        O atalho "Ou usar uma receita sua" simplesmente desaparecia quando a
+        busca falhava — e quem tem receitas cadastradas conclui que elas se
+        perderam. O bloco some de propósito quando não há nenhuma; quando não
+        deu para saber, a tela precisa dizer isso.
+      */
+      .catch(() => setFalharamAsReceitas(true));
   }, []);
 
   function abrirNova() {
@@ -240,6 +250,13 @@ export default function RefeicoesSalvas() {
 
             <div className="mt-lg flex flex-col gap-lg">
               <BuscaDeAlimento aoEscolher={adicionarAlimento} />
+
+              {falharamAsReceitas && (
+                <p className="text-sm" style={{ color: 'var(--vv-alerta)' }}>
+                  Não deu para carregar suas receitas agora. Elas continuam salvas — recarregue a
+                  página para usá-las aqui.
+                </p>
+              )}
 
               {receitas.length > 0 && (
                 <div className="flex flex-col gap-sm">

@@ -12,6 +12,7 @@ import {
   descreverCondicao,
   type CondicaoResumo,
 } from '@vivio/contracts';
+import { ErroApi } from '@vivio/sdk';
 import { useEffect, useState } from 'react';
 import { sdk } from '../lib/sdk';
 import { useSessao } from '../lib/sessao';
@@ -49,6 +50,21 @@ export function CondicoesDeSaude({
 
   const [condicoes, setCondicoes] = useState<CondicaoResumo[]>([]);
   const [indisponivel, setIndisponivel] = useState(false);
+  /*
+    Não poder ver é diferente de não ter conseguido buscar.
+
+    Qualquer erro mandava a seção para `indisponivel`, e ela sumia da ficha. É
+    a seção que existe para o personal não prescrever desenvolvimento militar
+    para quem tem lesão no ombro: desaparecer em silêncio por falta de rede é
+    exatamente o cenário que ela deveria evitar.
+  */
+  const [falhou, setFalhou] = useState(false);
+  /*
+    Separado do `erro` do formulário de propósito: aquele só é exibido com o
+    formulário ABERTO, e dar alta se faz com ele fechado. Reaproveitá-lo
+    guardaria a frase num lugar que ninguém vê.
+  */
+  const [erroDaAlta, setErroDaAlta] = useState<string | null>(null);
   const [mostrarResolvidas, setMostrarResolvidas] = useState(false);
 
   const [aberto, setAberto] = useState(false);
@@ -60,11 +76,19 @@ export function CondicoesDeSaude({
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
+    setFalhou(false);
     sdk.condicoes
       .listar(alunoId)
-      .then(setCondicoes)
+      .then((lista) => {
+        setCondicoes(lista);
+        setIndisponivel(false);
+        setFalhou(false);
+      })
       // 403 aqui é falta de consentimento clínico, não falha: a seção some.
-      .catch(() => setIndisponivel(true));
+      .catch((e: unknown) => {
+        if (e instanceof ErroApi && e.status === 403) setIndisponivel(true);
+        else setFalhou(true);
+      });
   }, [alunoId]);
 
   const exigeRegiao = TIPOS_COM_REGIAO.includes(tipo);
@@ -93,16 +117,35 @@ export function CondicoesDeSaude({
   }
 
   async function resolver(id: string) {
-    const atualizada = await sdk.condicoes.resolver(alunoId, id).catch(() => null);
-    if (!atualizada) return;
-
-    setCondicoes((atual) => atual.map((c) => (c.id === id ? atualizada : c)));
-    // A alta apaga os alertas que a condição gerava; sem avisar, eles ficariam
-    // na tela até alguém recarregar.
-    aoMudar?.();
+    try {
+      const atualizada = await sdk.condicoes.resolver(alunoId, id);
+      setCondicoes((atual) => atual.map((c) => (c.id === id ? atualizada : c)));
+      setErroDaAlta(null);
+      // A alta apaga os alertas que a condição gerava; sem avisar, eles ficariam
+      // na tela até alguém recarregar.
+      aoMudar?.();
+    } catch {
+      /*
+        Dar alta é decisão clínica, e o botão falhava calado: a condição
+        continuava ativa e a tela não dizia nada. O médico sai da ficha achando
+        que resolveu, e a condição segue bloqueando exercício em todo o plano.
+      */
+      setErroDaAlta('Não foi possível dar alta nesta condição. Ela continua ativa.');
+    }
   }
 
   if (indisponivel) return null;
+
+  if (falhou) {
+    return (
+      <section>
+        <Aviso tipo="erro">
+          Não deu para buscar as condições de saúde agora. Recarregue a página antes de prescrever
+          — esta seção pode estar incompleta.
+        </Aviso>
+      </section>
+    );
+  }
 
   const ativas = condicoes.filter((c) => c.resolvidaEm === null);
   const visiveis = mostrarResolvidas ? condicoes : ativas;
@@ -111,6 +154,8 @@ export function CondicoesDeSaude({
 
   return (
     <section>
+      {erroDaAlta && <Aviso tipo="erro">{erroDaAlta}</Aviso>}
+
       <div className="mb-md flex flex-wrap items-center justify-between gap-md">
         <h2 className="text-lg font-semibold">
           Condições de saúde

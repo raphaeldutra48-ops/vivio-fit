@@ -5,6 +5,7 @@ import {
   TIPOS_MENSURAVEIS,
   TipoMeta,
   UNIDADE_TIPO_META,
+  numeroDoCampo,
   type ExercicioResumo,
   type MetaResumo,
 } from '@vivio/contracts';
@@ -133,6 +134,7 @@ function Item({ meta, acao }: { meta: MetaResumo; acao: AcaoNaMeta }) {
 export function MetasDoAluno({ alunoId }: { alunoId: string }) {
   const [metas, setMetas] = useState<MetaResumo[]>([]);
   const [exercicios, setExercicios] = useState<ExercicioResumo[]>([]);
+  const [falhouABiblioteca, setFalhouABiblioteca] = useState(false);
   const [semAutorizacao, setSemAutorizacao] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abrindoForm, setAbrindoForm] = useState(false);
@@ -171,8 +173,16 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
     if (!precisaExercicio || exercicios.length > 0) return;
     sdk.exercicios
       .listar({ limit: 100 })
-      .then(setExercicios)
-      .catch(() => undefined);
+      .then((lista) => {
+        setExercicios(lista);
+        setFalhouABiblioteca(false);
+      })
+      /*
+        Sem isto, a falha deixava o `select` com só "Escolha…": o profissional
+        não conseguia criar a meta de carga e a tela não dizia por quê. Ele
+        conclui que a biblioteca de exercícios do app está vazia.
+      */
+      .catch(() => setFalhouABiblioteca(true));
     // `exercicios.length` na lista porque ele decide o `return` acima: sem ele,
     // a dependência mentia sobre o que o efeito lê.
   }, [precisaExercicio, exercicios.length]);
@@ -185,8 +195,14 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
       await sdk.metas.criar(alunoId, {
         tipo,
         titulo: titulo.trim(),
-        // O estado guarda TEXTO; a conversão acontece aqui, uma vez.
-        alvo: mensuravel ? Number(alvo.replace(',', '.')) : undefined,
+        /*
+          O estado guarda TEXTO; a conversão acontece aqui, uma vez — e pela
+          mesma função que os dois aplicativos usam. O `replace(',', '.')`
+          escrito à mão troca só a PRIMEIRA vírgula e devolve `NaN` em vez de
+          ausência, que é o par de defeitos que `numeroDoCampo` existe para não
+          repetir.
+        */
+        alvo: mensuravel ? (numeroDoCampo(alvo) ?? undefined) : undefined,
         exercicioId: precisaExercicio ? exercicioId : undefined,
         prazo: prazo || undefined,
       });
@@ -202,10 +218,10 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
     }
   }
 
-  const alvoNumerico = Number(alvo.replace(',', '.'));
+  const alvoNumerico = numeroDoCampo(alvo);
   const podeSalvar =
     titulo.trim().length >= 3 &&
-    (!mensuravel || (alvo !== '' && Number.isFinite(alvoNumerico) && alvoNumerico > 0)) &&
+    (!mensuravel || (alvoNumerico !== null && alvoNumerico > 0)) &&
     (!precisaExercicio || exercicioId !== '') &&
     !salvando;
 
@@ -308,6 +324,12 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
                       </option>
                     ))}
                   </select>
+                  {falhouABiblioteca && (
+                    <span className="text-xs" style={{ color: 'var(--vv-alerta)' }}>
+                      Não deu para carregar a lista de exercícios agora. Recarregue a página para
+                      escolher um.
+                    </span>
+                  )}
                 </label>
               )}
 
@@ -339,7 +361,13 @@ export function MetasDoAluno({ alunoId }: { alunoId: string }) {
         </Cartao>
       )}
 
-      {metas.length === 0 && !abrindoForm && (
+      {/*
+        `!erro` no meio da condição: sem ele, a falha de leitura mostrava o aviso
+        de erro E a frase "Nenhuma meta definida" logo abaixo, uma desmentindo a
+        outra. A frase de vazio só pode aparecer quando a busca deu certo e
+        voltou sem nada.
+      */}
+      {metas.length === 0 && !abrindoForm && !erro && (
         <Cartao>
           <p className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
             Nenhuma meta definida. Metas de peso, cintura, carga e frequência são acompanhadas

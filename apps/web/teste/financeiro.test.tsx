@@ -231,6 +231,34 @@ describe('financeiro: as três ações de dinheiro', () => {
     confirmar.mockRestore();
   });
 
+  it('o segundo clique em "confirmar recebimento" não chega ao servidor', async () => {
+    /*
+      O botão ficava clicável durante a requisição. O segundo clique chega com a
+      cobrança já paga, o servidor responde "Esta cobrança já está paga." — e o
+      profissional registra um recebimento com sucesso e lê uma mensagem de erro
+      sobre dinheiro logo depois. Nada se corrompe; o que se perde é a confiança
+      na única tela do app em que ela não pode faltar.
+    */
+    let liberar: (() => void) | undefined;
+    registrarPagamento.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          liberar = () => resolve();
+        }),
+    );
+    await abrirComCobranca();
+
+    fireEvent.click(screen.getByText('Registrar pagamento'));
+    fireEvent.click(await screen.findByText('Confirmar recebimento'));
+
+    // Em voo: o botão diz o que está acontecendo e não aceita outro clique.
+    await waitFor(() => expect(screen.getByText('Registrando…')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Registrando…'));
+
+    expect(registrarPagamento).toHaveBeenCalledTimes(1);
+    liberar?.();
+  });
+
   it('se a ação falhar, a tela diz — em vez de parecer que não fez nada', async () => {
     const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
     cancelar.mockRejectedValue(new Error('Failed to fetch'));

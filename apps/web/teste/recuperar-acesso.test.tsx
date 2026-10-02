@@ -113,6 +113,22 @@ describe('escolher senha nova', () => {
     expect(screen.getByText('Pedir um link novo')).toBeInTheDocument();
   });
 
+  it('falha ao CONFERIR o link não deixa a tela presa em "conferindo"', async () => {
+    /*
+      O `.then(setTemSessao)` estava sem par: a rejeição deixava o estado em
+      `null` e a tela em "Conferindo o link…" para sempre — sem erro e sem
+      saída, no único caminho de quem está trancado fora da conta. Dizer "link
+      expirado" seria pior ainda: mandaria pedir outro link e queimar o bom.
+    */
+    sessaoAberta.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'fetch failed', 0));
+    await abrirRedefinir();
+
+    await waitFor(() => expect(textoDaTela()).toMatch(/não deu para conferir o link/i));
+    expect(textoDaTela()).toMatch(/foi a conexão que falhou/i);
+    expect(textoDaTela()).not.toMatch(/link expirado ou já usado/i);
+    expect(textoDaTela()).not.toMatch(/conferindo o link/i);
+  });
+
   it('link expirado avisado pelo Supabase na URL é tratado como expirado', async () => {
     parametros = new URLSearchParams({ error_description: 'Email link is invalid or has expired' });
     await abrirRedefinir();

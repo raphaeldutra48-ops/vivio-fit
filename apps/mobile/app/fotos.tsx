@@ -170,7 +170,19 @@ export default function Fotos() {
         style: 'destructive',
         onPress: () => {
           if (!usuario) return;
-          void sdk.fotos.remover(usuario.id, foto.id).then(recarregar);
+          setErro(null);
+          /*
+            O `.then(recarregar)` estava sem par: a falha virava rejeição não
+            tratada e a tela não mudava nada. Quem confirmou "Apagar" vê a foto
+            continuar ali, sem uma palavra — e não tem como saber se o servidor
+            apagou e a lista está velha, ou se nada aconteceu.
+          */
+          void sdk.fotos
+            .remover(usuario.id, foto.id)
+            .then(recarregar)
+            .catch(() =>
+              setErro('Não foi possível apagar esta foto. Ela continua na sua linha do tempo.'),
+            );
         },
       },
     ]);

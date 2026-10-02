@@ -47,6 +47,7 @@ export default function Financeiro() {
 
   /** Cobrança com o formulário de pagamento aberto. */
   const [pagando, setPagando] = useState<string | null>(null);
+  const [registrandoPagamento, setRegistrandoPagamento] = useState(false);
   const [forma, setForma] = useState<FormaPagamento>('PIX');
 
   /*
@@ -97,12 +98,26 @@ export default function Financeiro() {
   }
 
   async function pagar(c: CobrancaResumo) {
+    /*
+      Trava contra o segundo clique.
+
+      "Confirmar recebimento" ficava clicável durante a requisição. O segundo
+      clique chega com a cobrança já paga e o servidor responde "Esta cobrança
+      já está paga." — então o profissional registra um pagamento com sucesso e
+      lê uma mensagem de erro sobre dinheiro logo depois. Nada se corrompe, mas
+      ele passa a desconfiar do que a tela diz justamente na parte do app em que
+      não pode desconfiar.
+    */
+    if (registrandoPagamento) return;
+    setRegistrandoPagamento(true);
     try {
       await sdk.financeiro.registrarPagamento(c.id, { pagaEm: new Date(), formaPagamento: forma });
       setPagando(null);
       await carregar();
     } catch (e) {
       setErro(fraseDeErro(e, 'Não foi possível registrar o pagamento.'));
+    } finally {
+      setRegistrandoPagamento(false);
     }
   }
 
@@ -348,7 +363,9 @@ O aluno deixa de dever este valor, e ele sai do total do mês.`,
                     <Botao variante="neutra" onClick={() => setPagando(null)}>
                       Cancelar
                     </Botao>
-                    <Botao onClick={() => pagar(c)}>Confirmar recebimento</Botao>
+                    <Botao disabled={registrandoPagamento} onClick={() => void pagar(c)}>
+                      {registrandoPagamento ? 'Registrando…' : 'Confirmar recebimento'}
+                    </Botao>
                   </div>
                 ) : (
                   <div className="mt-md flex flex-wrap justify-end gap-sm">
