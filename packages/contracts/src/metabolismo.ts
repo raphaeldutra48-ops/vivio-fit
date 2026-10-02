@@ -295,7 +295,7 @@ export function idadeEmAnos(nascimento: Date | null, agora: Date = new Date()): 
 export const FAIXA_TMB_MEDIDA = { min: 800, max: 4500 } as const;
 
 export const registrarCalorimetriaSchema = z.object({
-  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
+  data: z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
   /**
    * Faixa larga de propósito: 800 cobre pessoa pequena em restrição, 4500
    * cobre atleta grande. Fora disso é quase certo erro de digitação — e um

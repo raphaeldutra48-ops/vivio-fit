@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 
 /**
  * Códigos de erro estáveis. O cliente decide o que mostrar a partir do código,
@@ -43,7 +44,10 @@ export type CodigoErro = (typeof CodigoErro)[keyof typeof CodigoErro];
 export const erroRespostaSchema = z.object({
   erro: z.object({
     codigo: z.nativeEnum(CodigoErro),
-    mensagem: z.string(),
+    // Frase de erro é frase: o teto evita que uma mensagem de servidor sem
+    // limite chegue à tela — e a varredura exige teto em todo campo de texto,
+    // sem abrir exceção para "este é só de resposta".
+    mensagem: z.string().max(LIMITES_DE_TEXTO.frase),
     detalhes: z.record(z.unknown()).optional(),
   }),
 });
@@ -51,7 +55,8 @@ export type ErroResposta = z.infer<typeof erroRespostaSchema>;
 
 /** Envelope de paginação por cursor usado por toda listagem da API. */
 export const paginacaoQuerySchema = z.object({
-  cursor: z.string().optional(),
+  // Cursor é id ou instante; o teto evita um corpo de requisição sem limite.
+  cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 export type PaginacaoQuery = z.infer<typeof paginacaoQuerySchema>;

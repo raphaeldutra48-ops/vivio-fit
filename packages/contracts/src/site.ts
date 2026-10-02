@@ -40,7 +40,7 @@ export const salvarPerfilPublicoSchema = z.object({
   atendeOnline: z.boolean().default(true),
   atendePresencial: z.boolean().default(false),
   /** Só dígitos; a tela monta o link do WhatsApp. */
-  whatsapp: z.string().regex(/^\d{10,13}$/, 'Use só números, com DDD').optional(),
+  whatsapp: z.string().max(13).regex(/^\d{10,13}$/, 'Use só números, com DDD').optional(),
   instagram: z.string().max(40).optional(),
   publicado: z.boolean().default(false),
 });

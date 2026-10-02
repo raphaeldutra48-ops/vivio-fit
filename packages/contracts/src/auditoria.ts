@@ -12,7 +12,8 @@ export const AcaoAuditoria = {
 export type AcaoAuditoria = (typeof AcaoAuditoria)[keyof typeof AcaoAuditoria];
 
 export const consultaAuditoriaSchema = z.object({
-  cursor: z.string().optional(),
+  // Cursor é id ou instante; o teto evita um corpo de requisição sem limite.
+  cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   escopo: z.nativeEnum(EscopoDado).optional(),
 });

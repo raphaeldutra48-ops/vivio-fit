@@ -82,6 +82,7 @@ export const salvarRefeicaoSchema = z.object({
   nome: z.string().min(2).max(120),
   horarioSugerido: z
     .string()
+    .max(5)
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use o formato HH:MM')
     .optional(),
   observacao: z.string().max(500).optional(),

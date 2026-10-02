@@ -29,7 +29,8 @@ export const enviarMensagemSchema = z.object({
 export type EnviarMensagemInput = z.infer<typeof enviarMensagemSchema>;
 
 export const listarMensagensSchema = z.object({
-  cursor: z.string().optional(),
+  // Cursor é id ou instante; o teto evita um corpo de requisição sem limite.
+  cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(40),
 });
 export type ListarMensagensQuery = z.infer<typeof listarMensagensSchema>;

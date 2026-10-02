@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { diaOuInstanteSchema } from './datas';
 
 export const TipoCompromisso = {
   AVALIACAO_FISICA: 'AVALIACAO_FISICA',
@@ -87,8 +88,8 @@ export const mudarStatusSchema = z.object({
 export type MudarStatusInput = z.infer<typeof mudarStatusSchema>;
 
 export const consultaAgendaSchema = z.object({
-  de: z.string(),
-  ate: z.string(),
+  de: diaOuInstanteSchema,
+  ate: diaOuInstanteSchema,
   incluirCancelados: z.coerce.boolean().default(false),
 });
 export type ConsultaAgenda = z.infer<typeof consultaAgendaSchema>;
@@ -112,6 +113,8 @@ export interface CompromissoResumo {
 
 export const horarioAgendaSchema = z
   .string()
+  // Cinco caracteres: "HH:MM". Teto declarado, não deduzido da expressão.
+  .max(5)
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
 
 export const definirDisponibilidadeSchema = z.object({

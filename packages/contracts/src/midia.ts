@@ -110,7 +110,18 @@ export const ROTULO_ANGULO_FOTO: Record<AnguloFoto, string> = {
 };
 
 export const registrarFotoSchema = z.object({
-  chave: z.string().min(10),
+  /*
+    Teto e FORMA, não só tamanho mínimo.
+
+    A chave é um caminho dentro do armazenamento, e quem a monta é o SDK — mas
+    schema não existe para confiar em quem chama, existe para o caso de não dar.
+    Só os caracteres que uma chave nossa usa; nada de `..`, espaço ou controle.
+  */
+  chave: z
+    .string()
+    .min(10)
+    .max(300)
+    .regex(/^[A-Za-z0-9/._-]+$/, 'Chave de arquivo inválida'),
   mimeType: z.string().min(3).max(100),
   tamanhoBytes: z.number().int().positive(),
   data: z.coerce.date().default(() => new Date()),
@@ -120,12 +131,17 @@ export const registrarFotoSchema = z.object({
    * Quem pode ver. Vazio = só o próprio aluno.
    * A foto de evolução é o dado mais íntimo do app; o padrão é não compartilhar.
    */
-  visivelPara: z.array(z.enum(['PERSONAL', 'NUTRICIONISTA', 'MEDICO'])).default([]),
+  /*
+    Três é o teto porque três é quantos papéis existem. Sem ele, a lista aceitava
+    dez mil repetições de um papel válido — vai para uma coluna de array no
+    Postgres, e o corpo da requisição não tinha tamanho máximo nenhum.
+  */
+  visivelPara: z.array(z.enum(['PERSONAL', 'NUTRICIONISTA', 'MEDICO'])).max(3).default([]),
 });
 export type RegistrarFotoInput = z.infer<typeof registrarFotoSchema>;
 
 export const atualizarVisibilidadeFotoSchema = z.object({
-  visivelPara: z.array(z.enum(['PERSONAL', 'NUTRICIONISTA', 'MEDICO'])),
+  visivelPara: z.array(z.enum(['PERSONAL', 'NUTRICIONISTA', 'MEDICO'])).max(3),
 });
 export type AtualizarVisibilidadeFotoInput = z.infer<typeof atualizarVisibilidadeFotoSchema>;
 

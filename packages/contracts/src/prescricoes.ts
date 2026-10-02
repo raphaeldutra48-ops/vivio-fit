@@ -77,7 +77,7 @@ export const posologiaSchema = z.object({
   unidade: z.string().max(20).optional(),
   /** Texto livre: "2x ao dia", "a cada 8h", "1x ao dia em jejum". */
   frequencia: z.string().max(120).optional(),
-  horarios: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(8).default([]),
+  horarios: z.array(z.string().max(5).regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(8).default([]),
   duracaoDias: z.number().int().min(1).max(3650).optional(),
   via: z.string().max(40).optional(),
   observacao: z.string().max(500).optional(),

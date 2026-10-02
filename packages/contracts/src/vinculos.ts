@@ -7,7 +7,7 @@ import { Papel, StatusVinculo } from './enums';
  *  - aluno chamando        -> convida o profissional daquele e-mail
  */
 export const convidarVinculoSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(160),
 });
 export type ConvidarVinculoInput = z.infer<typeof convidarVinculoSchema>;
 

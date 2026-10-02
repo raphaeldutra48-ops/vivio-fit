@@ -62,6 +62,8 @@ export const consultaFinanceiroSchema = z.object({
   /** Mês de referência no formato AAAA-MM. Vazio = mês atual. */
   mes: z
     .string()
+    // "AAAA-MM": sete caracteres.
+    .max(7)
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use o formato AAAA-MM')
     .optional(),
   alunoId: z.string().cuid().optional(),

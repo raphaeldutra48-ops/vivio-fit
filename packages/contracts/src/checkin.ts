@@ -26,7 +26,14 @@ export const registrarCheckinSchema = z.object({
    * registrar a noite anterior de manhã — e porque o fuso dele não é o do
    * contêiner. O serviço é que decide se a data é aceitável.
    */
-  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
+  /*
+    `.max(10)` ao lado da expressão: "AAAA-MM-DD" tem dez caracteres, e declarar
+    o teto é o que torna o limite verificável sem ninguém precisar interpretar a
+    expressão regular. A varredura de `todo-campo-tem-teto` exige isso de todo
+    campo de texto, e por um motivo medido: aceitar regex como teto deixou passar
+    a senha sem limite.
+  */
+  data: z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
   treinou: z.boolean(),
   energia: z.number().int().min(ENERGIA_MIN).max(ENERGIA_MAX),
   teveDor: z.boolean().default(false),

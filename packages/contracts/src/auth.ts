@@ -1,16 +1,28 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 import { Papel } from './enums';
 
 /** Senha: mínimo 8, com letra e número. Regra deliberadamente simples de explicar ao usuário. */
+/**
+ * O teto de 72 não é estético: é onde o bcrypt para de ler.
+ *
+ * O Supabase Auth guarda a senha com bcrypt, que considera no máximo 72 bytes e
+ * **descarta o resto em silêncio**. Sem o limite, quem escolhesse uma frase de
+ * 100 caracteres estaria protegido pelos 72 primeiros — e entraria depois
+ * digitando qualquer coisa a partir dali, o que é o oposto do que a frase longa
+ * prometia. Recusar na hora da escolha é dizer a verdade; aceitar e truncar é
+ * mentir sobre a força da senha.
+ */
 export const senhaSchema = z
   .string()
   .min(8, 'A senha precisa de ao menos 8 caracteres')
+  .max(72, 'A senha pode ter até 72 caracteres')
   .regex(/[A-Za-zÀ-ÿ]/, 'A senha precisa de ao menos uma letra')
   .regex(/[0-9]/, 'A senha precisa de ao menos um número');
 
 export const registrarAlunoSchema = z.object({
   nome: z.string().min(2).max(120),
-  email: z.string().email(),
+  email: z.string().email().max(160),
   senha: senhaSchema,
   telefone: z.string().min(8).max(20).optional(),
   dataNascimento: z.coerce.date(),
@@ -21,31 +33,36 @@ export type RegistrarAlunoInput = z.infer<typeof registrarAlunoSchema>;
 
 export const registrarProfissionalSchema = z.object({
   nome: z.string().min(2).max(120),
-  email: z.string().email(),
+  email: z.string().email().max(160),
   senha: senhaSchema,
   telefone: z.string().min(8).max(20).optional(),
   tipo: z.enum([Papel.PERSONAL, Papel.NUTRICIONISTA, Papel.MEDICO]),
   registroConselho: z.string().min(3).max(40),
   ufRegistro: z.string().length(2),
-  especialidades: z.array(z.string()).max(10).default([]),
+  // O teto do ARRAY existia; o de cada item, não — uma especialidade podia ser
+  // um texto de megabytes.
+  especialidades: z.array(z.string().min(2).max(LIMITES_DE_TEXTO.curto)).max(10).default([]),
   bio: z.string().max(1000).optional(),
 });
 export type RegistrarProfissionalInput = z.infer<typeof registrarProfissionalSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  senha: z.string().min(1),
+  email: z.string().email().max(160),
+  // O mesmo teto da escolha: não há senha válida acima dele, e sem o limite o
+  // corpo da requisição de entrar não tinha tamanho máximo nenhum.
+  senha: z.string().min(1).max(72),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
-/**
- * Opcional porque a web não manda o token: ele viaja no cookie httpOnly, fora
- * do alcance do JavaScript. O mobile continua enviando no corpo.
- */
-export const refreshSchema = z.object({
-  refreshToken: z.string().min(20).optional(),
-});
-export type RefreshInput = z.infer<typeof refreshSchema>;
+/*
+  `refreshSchema` morava aqui e saiu em 02/10.
+
+  Era da época da API própria, que renovava o token por rota nossa. Com o
+  Supabase Auth quem renova é o `supabase-js`, sozinho, e nada no projeto
+  importava esse schema nem o tipo dele — a varredura de campos sem teto o achou
+  como "string sem limite" e foi assim que ele apareceu. Schema exportado que
+  ninguém usa é pior que código morto comum: parece contrato.
+*/
 
 /** Conteúdo do access token. Só o essencial — token não é lugar de guardar dado. */
 export interface PayloadAccessToken {

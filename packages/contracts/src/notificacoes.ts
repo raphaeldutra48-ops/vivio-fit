@@ -12,6 +12,8 @@ export type TipoLembrete = (typeof TipoLembrete)[keyof typeof TipoLembrete];
 /** "HH:MM" em 24h. */
 export const horarioSchema = z
   .string()
+  // Cinco caracteres: "HH:MM". Teto declarado, não deduzido da expressão.
+  .max(5)
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use o formato HH:MM, por exemplo 07:30');
 
 export const registrarDispositivoSchema = z.object({
@@ -25,7 +27,7 @@ export const definirLembreteSchema = z.object({
   horarios: z.array(horarioSchema).max(8),
   /** 1 = segunda ... 7 = domingo. Vazio = todos os dias. */
   diasDaSemana: z.array(z.number().int().min(1).max(7)).max(7).default([]),
-  canais: z.array(z.enum(['PUSH', 'SMS', 'WHATSAPP'])).min(1).default(['PUSH']),
+  canais: z.array(z.enum(['PUSH', 'SMS', 'WHATSAPP'])).min(1).max(3).default(['PUSH']),
   ativo: z.boolean().default(true),
 });
 export type DefinirLembreteInput = z.infer<typeof definirLembreteSchema>;

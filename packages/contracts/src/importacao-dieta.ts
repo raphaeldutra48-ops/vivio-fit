@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITES_DE_TEXTO } from './numeros';
 
 /**
  * Leitura automática de uma dieta em PDF ou foto.
@@ -86,12 +87,25 @@ export interface LeituraDeDieta {
  * `alimentoIdSugerido`. O modelo não conhece o catálogo e não deve inventar
  * ids — casar com o catálogo é trabalho do servidor, sobre dado que ele tem.
  */
+/*
+  Tudo com teto, porque a origem destes campos é um MODELO DE LINGUAGEM.
+
+  O que chega aqui não é digitado por ninguém: é a saída da função de borda que
+  lê o PDF da dieta. Um documento longo, uma tabela mal formatada ou um modelo
+  prolixo produzem texto do tamanho que der — e daqui ele segue para a tela e,
+  se o profissional confirmar, para o banco. Schema sobre saída de modelo é a
+  única fronteira que existe: não há usuário para reclamar que o campo não
+  aceitou.
+
+  Os limites são os mesmos que um humano teria no mesmo campo, de
+  `LIMITES_DE_TEXTO` — não um número solto escolhido aqui.
+*/
 export const itemExtraidoSchema = z.object({
-  textoOriginal: z.string(),
-  nomeLido: z.string(),
+  textoOriginal: z.string().max(LIMITES_DE_TEXTO.frase),
+  nomeLido: z.string().max(LIMITES_DE_TEXTO.curto),
   quantidadeG: z.number().positive().max(5000).nullable(),
-  medidaCaseiraLida: z.string().nullable(),
-  observacao: z.string().nullable(),
+  medidaCaseiraLida: z.string().max(LIMITES_DE_TEXTO.curto).nullable(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).nullable(),
 });
 export type ItemExtraido = z.infer<typeof itemExtraidoSchema>;
 
@@ -99,20 +113,26 @@ export const refeicaoExtraidaSchema = z.object({
   nome: z.string().min(1).max(60),
   horarioSugerido: z
     .string()
+    .max(5)
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .nullable(),
-  itens: z.array(itemExtraidoSchema),
+  /*
+    Teto no número de itens também. Doze refeições de até trinta itens é mais do
+    que qualquer dieta real, e sem limite o array vinha do tamanho que o modelo
+    quisesse — a tela de conferência desenha um campo por item.
+  */
+  itens: z.array(itemExtraidoSchema).max(30),
 });
 
 export const dietaExtraidaSchema = z.object({
   nome: z.string().min(1).max(120),
-  observacao: z.string().nullable(),
+  observacao: z.string().max(LIMITES_DE_TEXTO.observacao).nullable(),
   kcalAlvo: z.number().int().min(500).max(8000).nullable(),
   proteinaAlvoG: z.number().int().min(0).max(600).nullable(),
   carboAlvoG: z.number().int().min(0).max(1200).nullable(),
   gorduraAlvoG: z.number().int().min(0).max(400).nullable(),
   refeicoes: z.array(refeicaoExtraidaSchema).min(1).max(12),
-  avisos: z.array(z.string()),
+  avisos: z.array(z.string().max(LIMITES_DE_TEXTO.frase)).max(20),
 });
 export type DietaExtraida = z.infer<typeof dietaExtraidaSchema>;
 

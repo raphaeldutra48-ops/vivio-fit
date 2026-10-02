@@ -13,6 +13,52 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
+### 32. Dezesseis telas da web sem prova que as importe — a lista exata
+**Assumida em:** 2026-10-02 · **Depende de:** tempo, sem risco.
+**Estado:** o inventário de 02/10 contou as telas dos dois lados e cruzou com o
+que as suítes realmente importam. **O aplicativo tem 22 de 22 telas com prova.**
+A web tem 46 telas, 30 com prova.
+
+Três das dezesseis são embrulho de catorze linhas em volta de
+`CatalogoPrescritivel` — `prescricoes/suplementos`, `prescricoes/medicamentos` e
+`prescricoes/fitoterapicos`, cada uma passando um `tipo` diferente. O miolo delas
+passou a ter 10 provas em 02/10; o que falta é só a prova de que cada embrulho
+passa o `tipo` certo, e isso vale uma prova só, não três.
+
+As treze com substância própria, em ordem do que custa mais se falhar calado:
+
+1. `(pro)/feedback` — quem precisa de olhar. Mesma família do resumo.
+2. `(pro)/relatorios` — o relatório da carteira.
+3. `(pro)/cadastros/perfil` — **trocar o registro do conselho DERRUBA a
+   verificação**. Tem confirmação, e a confirmação não tem prova.
+4. `(pro)/cadastros/anamnese` — editor de modelo de questionário.
+5. `(pro)/prescricoes/modelos` — modelo de posologia, com remoção.
+6. `(pro)/alunos/[alunoId]/exames/novo` — lançar exame.
+7. `(pro)/alunos/[alunoId]/exames/[exameId]` — ler a classificação.
+8. `(pro)/alunos/[alunoId]/comparativo` — o documento de antes e depois.
+9. `(pro)/materiais` — já auditado à mão, com os guardas no lugar.
+10. `(pro)/lista-de-compras` — derivado do plano.
+11. `(pro)/metodologia` — gerada da tabela de faixas.
+12. `(pro)/ajuda` — texto.
+13. `(pro)/alunos/[alunoId]/treino/[planoId]/imprimir` — folha de impressão.
+
+⚠️ **O número aqui já estava errado uma vez.** Escrevi "treze" contando as
+telas de prescrição como cobertas porque o componente delas passou a ter prova —
+e o script diz dezesseis, porque ninguém importa os arquivos. Quando o
+inventário e o texto divergem, quem vale é o script.
+
+Em 02/10 saíram da lista `(pro)/resumo` e o componente `CatalogoPrescritivel`
+(que serve as três telas de prescrição), com 18 provas e mutação.
+**Como refazer o inventário:**
+```bash
+python docs/inventario-de-provas.py
+```
+O que ele responde e o que NÃO responde está em
+[`INVENTARIO-DE-PROVAS.md`](INVENTARIO-DE-PROVAS.md).
+**Por que não todas agora:** as quatro primeiras valem um ciclo cada, e as
+quatro últimas são tela de leitura — prova nelas custa o mesmo e protege menos.
+Escrever treze de uma vez trocaria qualidade por contagem.
+
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
 **Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
@@ -277,6 +323,71 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Auditoria de 02/10 — passe 6: inventário exaustivo em vez de amostra, e o teste que mentia
+
+Os cinco passes anteriores varreram por padrão: procurar a família, achar as
+instâncias, corrigir. Este passe trocou o método — **inventário completo, e o
+invariante virando prova** —, e foi o que achou mais.
+
+**1. Todo campo de entrada tem teto, agora verificado por máquina.** Um
+inventário por introspecção do zod contou 166 campos de texto e 20 listas nos
+schemas exportados, e encontrou **32 sem limite nenhum**:
+
+- a **senha**, que o bcrypt do Supabase trunca em 72 bytes **em silêncio** —
+  quem escolhesse uma frase de 100 caracteres estaria protegido pelos 72
+  primeiros, e entraria depois digitando qualquer coisa a partir dali. Aceitar e
+  truncar é mentir sobre a força da senha;
+- **tudo que a leitura automática de dieta devolve** (`textoOriginal`,
+  `nomeLido`, `observacao`, `avisos`, e o número de itens por refeição). A origem
+  é um modelo de linguagem: não há usuário do outro lado para reclamar que o
+  campo não aceitou, e o texto segue para a tela e para o banco;
+- a **chave do arquivo** no armazenamento, sem teto e sem forma;
+- `visivelPara` da foto de evolução e `canais` do lembrete — listas de enum sem
+  teto de QUANTIDADE: dez mil repetições de um valor válido passavam;
+- os cursores de paginação, as datas dos filtros de evolução e agenda, cada
+  especialidade de um profissional, e o e-mail em três cadastros.
+
+Também caiu `refreshSchema`, da época da API própria: schema exportado que
+ninguém usa é pior que código morto comum, porque parece contrato. Foi a
+varredura que o encontrou, como "string sem limite".
+
+A prova (`todo-campo-tem-teto.spec.ts`) percorre todo schema exportado, inclusive
+dentro de listas e de objetos aninhados, e a lista de dispensados está vazia de
+propósito.
+
+**2. E a prova mentiu, na primeira versão.** Ela aceitava `.regex()` como teto,
+com o raciocínio de que forma limitada é tamanho limitado. A mutação desmentiu:
+tirei o `.max(72)` da senha e a prova continuou verde, porque `senhaSchema` tem
+`.regex(/[0-9]/)` — que não limita nada. `.email()` tem o mesmo problema. O
+critério virou estrito — só `.max()`, `.length()` e formatos de comprimento fixo
+—, e isso revelou **15 campos a mais**, todos limitados por expressão ancorada
+mas sem teto declarado. Os quinze receberam o `.max()` do próprio formato. Prova
+que depende de interpretar expressão regular é prova que vai errar na próxima.
+
+**3. Quantas telas não têm prova nenhuma — contado, não estimado.** O aplicativo
+tem **22 de 22**. A web tinha 29 de 46. Entraram `(pro)/resumo` — a tela inicial
+do profissional, a primeira coisa que ele vê — e o `CatalogoPrescritivel`, que
+serve as três telas de prescrição. As dezesseis que faltam estão na pendência 32,
+nomeadas e em ordem de risco.
+
+Escrevi "treze" ali primeiro, descontando as três telas de prescrição porque o
+componente delas passou a ter prova — e o script diz dezesseis, porque ninguém
+importa aqueles arquivos. Ficou corrigido, e a divergência ficou registrada: num
+inventário, quem vale é a medição.
+
+**4. E o segundo teste meu que não provava o que dizia.** No catálogo, a prova
+"uma consulta por palavra, não por tecla" passava mesmo com o atraso ZERADO —
+porque a limpeza do efeito já descarta o timeout anterior a cada tecla. Medir o
+número de consultas não mede o atraso. Separada em duas: uma que confere que
+nada sai antes dos 250 ms, outra que a primeira carga não espera.
+
+**Método:** 11 mutações aplicadas neste passe, em quatro arquivos. Três não
+foram pegas na primeira tentativa — as duas acima e a do teto da senha — e as
+três apontavam falha na PROVA, não no código. Prova que não falha quando devia é
+pior que prova inexistente: ela ocupa o lugar.
+
+1.300 provas, cadeia verde por código de saída.
 
 ### Auditoria de 02/10 — passe 5: o app pedia vírgula e respondia ponto, e dois enums vazaram para a tela
 

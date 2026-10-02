@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { diaOuInstanteSchema } from './datas';
 
 /** Métricas que viram gráfico. */
 export const MetricaCorporal = {
@@ -75,8 +76,8 @@ export interface EvolucaoCorporal {
 }
 
 export const consultaEvolucaoSchema = z.object({
-  de: z.string().optional(),
-  ate: z.string().optional(),
+  de: diaOuInstanteSchema.optional(),
+  ate: diaOuInstanteSchema.optional(),
   limit: z.coerce.number().int().min(2).max(365).default(60),
 });
 export type ConsultaEvolucao = z.infer<typeof consultaEvolucaoSchema>;

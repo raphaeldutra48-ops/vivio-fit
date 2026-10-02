@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Dia do calendário — a conta que o app errava em cinco lugares diferentes.
  *
@@ -89,3 +91,21 @@ export function novoId(prefixo: string): string {
   const aleatorio = Math.random().toString(36).slice(2, 10);
   return `${prefixo}-${Date.now()}-${aleatorio}`;
 }
+
+/**
+ * `AAAA-MM-DD` ou um instante ISO — as duas formas que os filtros de data
+ * aceitam, e nenhuma outra.
+ *
+ * Os campos `de` e `ate` das consultas de evolução e de agenda eram
+ * `z.string()` puro: sem teto e sem forma. O valor vai direto para um filtro
+ * `gte`/`lte` sobre coluna de data, então texto que não é data chega ao Postgres
+ * e volta como erro de servidor — a tela mostra "erro inesperado" onde devia
+ * dizer que a data está errada. E sem teto, nada impedia mandar um megabyte.
+ */
+export const diaOuInstanteSchema = z
+  .string()
+  .max(40)
+  .regex(
+    /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/,
+    'Use AAAA-MM-DD ou um instante ISO',
+  );

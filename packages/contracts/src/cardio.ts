@@ -133,7 +133,7 @@ export const registrarCardioSchema = z.object({
   /** Opcional: nem toda esteira mostra distância, e nem todo mundo olha. */
   distanciaKm: z.number().min(0).max(500).optional(),
   /** Quando foi. O cliente manda porque o fuso dele não é o do servidor. */
-  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
+  data: z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD'),
   observacao: z.string().max(LIMITES_DE_TEXTO.observacao).optional(),
   /** Preenchido quando o cardio foi feito junto de uma sessão de musculação. */
   execucaoId: z.string().cuid().optional(),

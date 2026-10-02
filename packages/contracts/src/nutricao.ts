@@ -47,6 +47,7 @@ export const refeicaoSchema = z.object({
   nome: z.string().min(1).max(60),
   horarioSugerido: z
     .string()
+    .max(5)
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM')
     .optional(),
   itens: z.array(itemRefeicaoSchema).min(1).max(30),
