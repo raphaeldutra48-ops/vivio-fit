@@ -63,6 +63,40 @@ vezes com o MESMO e-mail. O segundo não deve criar um pedido novo em
 pnpm --filter @vivio/banco exec tsx prisma/auditar-rls.ts
 ```
 
+### 1.3-b. Exportar as regras clínicas — IMPEDITIVO para exame e alerta
+
+**Logo depois do `rls:aplicar`, e no mesmo banco.**
+
+```bash
+pnpm --filter @vivio/banco exportar-regras
+```
+
+Três tabelas — `FaixaMarcador`, `MarcadorEscopo` e `RegraDeAlerta` — nascem
+**vazias** das migrações. Elas não têm `INSERT` em migração nenhuma: quem as
+preenche é este script, lendo o TypeScript. O gatilho do banco é que classifica
+exame e deriva alerta, e é dessas três tabelas que ele lê.
+
+Vazias, **nada quebra em tela** — e é por isso que isto esteve faltando aqui
+tanto tempo. O app simplesmente fica menor do que promete, em três direções:
+
+| tabela vazia | o que acontece |
+|---|---|
+| `FaixaMarcador` | `classificar_marcador` não acha a faixa e devolve `ATENCAO`. **Todo** resultado sai marcado para olhar, inclusive os perfeitos. |
+| `RegraDeAlerta` | o laço do gatilho não acha regra e **nenhum alerta cruzado nasce** — é o diferencial do produto, silenciosamente ausente. |
+| `MarcadorEscopo` | `pode_ver_marcador` devolve falso e o **nutricionista não vê marcador nenhum**. |
+
+**Como conferir que funcionou:** o script imprime as contagens, e o diagnóstico
+passou a perguntar isso de propósito —
+
+```bash
+pnpm --filter @vivio/banco diagnostico
+```
+
+As três linhas a procurar no relatório são *faixas de referência exportadas*,
+*escopo de cada marcador exportado* e *regras de alerta ativas no banco*. Elas
+também acusam o caso pior que a ausência: faixa **presente com número
+diferente** do TypeScript, que carimba classificação errada com cara de certa.
+
 ### 1.4. Documentos legais preenchidos
 
 `app/termos` e `app/privacidade` têm `[PREENCHER]` no lugar de razão social, CNPJ
@@ -74,7 +108,12 @@ controlador dos dados.
 ### 1.5. Revisão clínica das faixas
 
 As 20 faixas de marcadores de exame e as 8 regras de alerta não passaram por
-revisão profissional. Enquanto não passarem, **não lance exame de pessoa real** —
+revisão profissional. **O que se revisa é o TypeScript** —
+`packages/contracts/src/exames.ts` (`REFERENCIAS`) e
+`packages/banco/regras/regras.ts` (`REGRAS`) —, e não as tabelas do banco: elas
+são cópia gerada dali pelo passo 1.3-b, e `pnpm --filter @vivio/banco
+revisao-clinica` monta o documento de revisão a partir da mesma fonte. Revisar a
+tabela seria revisar a cópia. Enquanto não passarem, **não lance exame de pessoa real** —
 o app vai opinar sobre o resultado, e a opinião não foi conferida por ninguém
 habilitado. Cadastro, treino, dieta e check-in podem ser testados sem isso.
 
@@ -95,7 +134,9 @@ Duas saídas, e a escolha é sua:
 - **(a) Um segundo projeto Supabase só para teste.** É o certo a médio prazo:
   as suítes apontam para lá (`SUPABASE_POOLER_URL` no `.env.supabase` do
   `packages/banco`), e o projeto atual passa a ser só produção. Custa um projeto
-  novo e uma aplicação de RLS (`pnpm --filter @vivio/banco rls:aplicar`).
+  novo, uma aplicação de RLS (`pnpm --filter @vivio/banco rls:aplicar`) e a
+exportação das regras clínicas (passo 1.3-b) — as duas coisas, não só a
+primeira.
 - **(b) Manter um só, aceitando que as suítes de banco e de SDK ficam paradas.**
   As de contracts, web, mobile e ui continuam rodando (não tocam o banco) — são
   1.056 das 1.413 provas. Perde-se a verificação de RLS automatizada.

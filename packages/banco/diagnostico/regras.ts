@@ -162,3 +162,102 @@ export function resumir(checagens: Checagem[]): {
   const avisos = checagens.filter((c) => !c.ok && c.informativo === true);
   return { reprovadas, avisos, codigoDeSaida: reprovadas.length === 0 ? 0 : 1 };
 }
+
+/**
+ * As três tabelas clínicas estão em dia com o TypeScript?
+ *
+ * `FaixaMarcador`, `MarcadorEscopo` e `RegraDeAlerta` nascem VAZIAS das
+ * migrações e só são preenchidas por `pnpm --filter @vivio/banco
+ * exportar-regras`. Vazias, nada quebra — o app fica silenciosamente menor do
+ * que promete, em três direções de uma vez:
+ *
+ * - sem faixa, `classificar_marcador` devolve `ATENCAO` e **todo** resultado
+ *   sai marcado para olhar, inclusive os perfeitos;
+ * - sem regra, o laço do gatilho não acha nada e **nenhum alerta cruzado
+ *   nasce** — que é justamente o diferencial do produto;
+ * - sem escopo, `pode_ver_marcador` devolve falso e o nutricionista não vê
+ *   marcador nenhum.
+ *
+ * Nenhuma das três aparece como erro em tela, e é por isso que precisa de
+ * checagem. O comentário dentro do próprio SQL já nomeava o risco — "só
+ * acontece se o exportador ficar para trás do TypeScript" — e durante meses
+ * ninguém tinha como saber se tinha ficado.
+ *
+ * Esperado e encontrado vêm do mesmo lugar: `regras/exportacao.ts`. Quem
+ * chama passa o que leu do banco e o que aquela derivação diz que devia estar
+ * lá, então esta função não tem opinião própria sobre clínica — ela compara.
+ */
+export function avaliarRegrasClinicas(
+  noBanco: {
+    faixas: Array<{ marcador: string; sexo: string; funcMin: number | null; funcMax: number | null }>;
+    escopos: Array<{ marcador: string; escopo: string }>;
+    regrasAtivas: string[];
+  },
+  esperado: {
+    faixas: Array<{ marcador: string; sexo: string; funcMin: number | null; funcMax: number | null }>;
+    escopos: Array<{ marcador: string; escopo: string }>;
+    regras: string[];
+  },
+): Checagem[] {
+  const chave = (f: { marcador: string; sexo: string }) => `${f.marcador}|${f.sexo}`;
+  const porChave = new Map(noBanco.faixas.map((f) => [chave(f), f]));
+
+  const faltando = esperado.faixas.filter((f) => !porChave.has(chave(f)));
+  /*
+    Divergência é pior que ausência, e por isso é contada em separado.
+    Ausência manda o resultado para `ATENCAO`, que é o lado seguro de errar.
+    Divergência carimba uma classificação ERRADA com cara de certa: a tela
+    mostra "ótimo" sobre um valor que a referência atual considera fora.
+  */
+  const divergindo = esperado.faixas.filter((f) => {
+    const b = porChave.get(chave(f));
+    return b && (b.funcMin !== f.funcMin || b.funcMax !== f.funcMax);
+  });
+
+  const escoposNoBanco = new Map(noBanco.escopos.map((e) => [e.marcador, e.escopo]));
+  const escoposErrados = esperado.escopos.filter(
+    (e) => escoposNoBanco.get(e.marcador) !== e.escopo,
+  );
+
+  const ativas = new Set(noBanco.regrasAtivas);
+  const regrasFaltando = esperado.regras.filter((id) => !ativas.has(id));
+
+  return [
+    {
+      nome: 'faixas de referência exportadas',
+      ok: faltando.length === 0 && divergindo.length === 0,
+      detalhe:
+        faltando.length === 0 && divergindo.length === 0
+          ? `${esperado.faixas.length} faixas, todas iguais ao TypeScript`
+          : [
+              faltando.length > 0 ? `${faltando.length} ausentes (vira ATENCAO)` : '',
+              divergindo.length > 0
+                ? `${divergindo.length} divergentes: ${divergindo.slice(0, 3).map(chave).join(', ')}`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('; ') + ' — rode `exportar-regras`',
+    },
+    {
+      nome: 'escopo de cada marcador exportado',
+      ok: escoposErrados.length === 0,
+      detalhe:
+        escoposErrados.length === 0
+          ? `${esperado.escopos.length} marcadores com escopo`
+          : `${escoposErrados.length} sem escopo ou com escopo errado (nutricionista deixa de ver): ${escoposErrados
+              .slice(0, 3)
+              .map((e) => e.marcador)
+              .join(', ')}`,
+    },
+    {
+      nome: 'regras de alerta ativas no banco',
+      ok: regrasFaltando.length === 0,
+      detalhe:
+        regrasFaltando.length === 0
+          ? `${esperado.regras.length} regras, todas ativas`
+          : `${regrasFaltando.length} de ${esperado.regras.length} não estão ativas (o alerta não nasce): ${regrasFaltando
+              .slice(0, 3)
+              .join(', ')}`,
+    },
+  ];
+}

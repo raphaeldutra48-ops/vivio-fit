@@ -3,10 +3,16 @@ import { DOCUMENTOS_LEGAIS, ENDERECO_DO_APP } from '@vivio/contracts';
 import { config as carregarEnv } from 'dotenv';
 import { urlDoBanco } from '../conexao';
 import {
+  escoposEsperados,
+  faixasEsperadas,
+  regrasEsperadas,
+} from '../regras/exportacao';
+import {
   avaliarCabecalhos,
   avaliarContas,
   avaliarFuncaoDeBorda,
   avaliarMidia,
+  avaliarRegrasClinicas,
   avaliarRotina,
   resumir,
   type Checagem,
@@ -133,6 +139,52 @@ async function doBanco(): Promise<Checagem[]> {
     ok: quantos === 15,
     detalhe: quantos === 15 ? '15 tabelas cobertas' : `${quantos} tabelas — esperado 15`,
   });
+
+  /*
+    As três tabelas que o gatilho clínico lê. Nascem vazias das migrações e só
+    `exportar-regras` as preenche — e vazias nada quebra em tela: todo resultado
+    vira ATENCAO, nenhum alerta cruzado nasce e o nutricionista deixa de ver
+    marcador. O que elas DEVERIAM ter sai da mesma derivação que o exportador
+    usa, então esta conferência não pode divergir dele.
+  */
+  const faixasNoBanco = await q<{
+    marcador: string;
+    sexo: string;
+    funcMin: unknown;
+    funcMax: unknown;
+  }>('select marcador, sexo, "funcMin", "funcMax" from "FaixaMarcador"');
+  const escoposNoBanco = await q<{ marcador: string; escopo: string }>(
+    'select marcador, escopo from "MarcadorEscopo"',
+  );
+  const regrasNoBanco = await q<{ id: string }>('select id from "RegraDeAlerta" where ativa');
+
+  // `numeric` chega como string ou Decimal pelo driver; a comparação é numérica.
+  const numero = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+  checagens.push(
+    ...avaliarRegrasClinicas(
+      {
+        faixas: faixasNoBanco.map((f) => ({
+          marcador: f.marcador,
+          sexo: f.sexo,
+          funcMin: numero(f.funcMin),
+          funcMax: numero(f.funcMax),
+        })),
+        escopos: escoposNoBanco,
+        regrasAtivas: regrasNoBanco.map((r) => r.id),
+      },
+      {
+        faixas: faixasEsperadas().map((f) => ({
+          marcador: f.marcador,
+          sexo: f.sexo,
+          funcMin: f.funcMin,
+          funcMax: f.funcMax,
+        })),
+        escopos: escoposEsperados(),
+        regras: regrasEsperadas().map((r) => r.id),
+      },
+    ),
+  );
 
   const senhas = await q<{ n: number }>('select count(*)::int n from "User" where "senhaHash" is not null');
   checagens.push({

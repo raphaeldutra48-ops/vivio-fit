@@ -78,12 +78,30 @@ export function Campo({
   );
 }
 
+/**
+ * A frase que explica o que houve. Está em quase toda tela do painel.
+ *
+ * **`div`, e não `p`, de propósito.** Era `<p>`, e a tela de importar dieta
+ * passa uma lista de avisos da leitura — `<p>` e `<ul>` como filhos. HTML não
+ * permite bloco dentro de `<p>`: o navegador FECHA o parágrafo ao encontrar o
+ * primeiro, e a árvore que ele monta deixa de ser a que o React renderizou.
+ * Com SSR isso é erro de hidratação, e o conteúdo hasteado para fora perde a
+ * cor e o tamanho que estavam no parágrafo.
+ *
+ * O defeito era latente em todas as telas, não só naquela: bastava alguém
+ * passar um bloco. Com `div` não existe filho inválido, e o visual é idêntico —
+ * o preflight do Tailwind já zera a margem do `<p>`, então não havia nada que
+ * só o parágrafo fizesse.
+ *
+ * `role="alert"` fica: é o que faz o leitor de tela anunciar o erro sem o
+ * usuário ir procurar.
+ */
 export function Aviso({ tipo, children }: { tipo: 'erro' | 'info'; children: ReactNode }) {
   const cor = tipo === 'erro' ? 'var(--vv-erro)' : 'var(--vv-texto-secundario)';
   return (
-    <p className="text-sm" style={{ color: cor }} role={tipo === 'erro' ? 'alert' : undefined}>
+    <div className="text-sm" style={{ color: cor }} role={tipo === 'erro' ? 'alert' : undefined}>
       {children}
-    </p>
+    </div>
   );
 }
 

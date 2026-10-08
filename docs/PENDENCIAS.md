@@ -188,6 +188,137 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 02/10 — passe 8: três tabelas clínicas que nascem vazias, e um alerta que nunca nascia — 08/10/2026
+
+Comecei este passe por uma suspeita minha que se provou **falsa**, e registro
+isso primeiro porque o contrário — guardar só o que deu certo — é o que faz um
+relatório de auditoria valer menos do que parece. Na tarefa anterior eu havia
+encontrado por acidente uma exceção solta que o vitest conta em "Errors" e não
+em "Tests", e supus que a cadeia de verificação, que mede por código de saída,
+estivesse aprovando corridas com exceções dentro. Plantei uma bomba de amostra e
+medi: **o vitest sai 1**. A cadeia nunca foi cega nisso. O que estava errado era
+a minha medição — nos laços que eu escrevia, `$?` pegava o status do `sed` do
+tubo, não o do `pnpm`. A cadeia real (`set -e`, sem tubo) sempre foi a confiável.
+
+**O inventário que rendeu.** O SDK fala com o Postgres por **nome em texto**:
+56 tabelas em `.from('X')` e 43 citadas dentro das strings de `select` (os
+embeds do PostgREST). Nada disso é verificado pelo compilador — não há
+`Database` tipado —, então um `from('Exane')` compila e falha só em produção.
+Confrontei os dois conjuntos com os 67 modelos do `schema.prisma`: **nenhuma
+tabela fantasma**. Mas sobraram quatro modelos que o cliente nunca toca, e três
+deles são exatamente os clínicos.
+
+**O achado.** `FaixaMarcador`, `MarcadorEscopo` e `RegraDeAlerta` são lidas por
+**gatilho**, não pelo cliente — isso é por desenho. O problema é que elas nascem
+vazias: nenhuma migração tem `INSERT`, e quem as preenche é
+`pnpm --filter @vivio/banco exportar-regras`, que precisa do banco na mão. Esse
+script aparecia em **zero documentos**. A lista de passos para o primeiro teste
+com gente de verdade mandava aplicar o RLS e seguir.
+
+Vazias, nada quebra em tela — e é essa a razão de ter passado sete passes sem
+ser visto. O app fica silenciosamente menor do que promete, em três direções:
+
+- sem faixa, `classificar_marcador` devolve `ATENCAO`: **todo** resultado sai
+  marcado para olhar, inclusive os perfeitos;
+- sem regra, o laço do gatilho não acha nada e **nenhum alerta cruzado nasce** —
+  o diferencial do produto, ausente sem aviso;
+- sem escopo, `pode_ver_marcador` devolve falso e o **nutricionista não vê
+  marcador nenhum**.
+
+O comentário dentro do próprio SQL já nomeava o risco: *"só acontece se o
+exportador ficar para trás do TypeScript"*. Estava escrito, e não era
+verificável por ninguém.
+
+**O que foi feito.** A derivação saiu do script e virou função pura em
+`packages/banco/regras/exportacao.ts`. Agora há **uma** derivação com dois
+consumidores: o exportador grava o que dali sai, e o diagnóstico compara o banco
+com o que dali sai. As duas respostas não podem mais divergir. O script perdeu
+90 linhas de lógica e ficou só com a gravação.
+
+**E a função pura, ao ganhar prova, encontrou um defeito real e vivo.**
+`INTOLERANCIA` e `RESTRICAO_ALIMENTAR` compartilham a regra
+`restricao-alimentar` de propósito — mesmo texto para as duas. Mas a linha
+gravada carrega `tipoCondicao`, e o id era `regra:papel`: o `upsert` da segunda
+sobrescrevia o tipo da primeira. O gatilho casa por tipo. Resultado:
+**condição do tipo intolerância não gerava alerta nenhum**. Uma intolerância à
+lactose registrada pelo médico não avisava o nutricionista.
+
+É a segunda vez que esta mesma família morde o projeto — o próprio exportador
+documenta que a primeira versão transcreveu as regras de condição à mão e
+esqueceu seis tipos, e "no dia em que a API parou de derivar, esses avisos
+simplesmente deixaram de existir". A prova antiga testava `alertasDaCondicao`, a
+função; ninguém testava as **linhas exportadas**, que é onde a perda acontecia.
+
+A correção: o id passa a carregar tudo que o gatilho casa — `regra:tipo:região:papel`.
+Custo zero no histórico, e isso foi conferido em vez de suposto: o id do alerta
+é `sha256(alunoId || regraId || condicaoId)` e a coluna `regra` guarda
+`split_part(id, ':', 1)`, o primeiro segmento — inserir o tipo no meio não muda
+o slug que a tela mostra.
+
+**Provas novas: 25.** Catorze sobre a derivação e onze no diagnóstico, todas com
+a disciplina que este projeto já tinha fixado: nada é conferido contra a própria
+função. A contagem de regras de marcador é **recontada** de `REGRAS`; a cobertura
+dos tipos de condição é perguntada sobre o enum inteiro, não sobre uma lista; e a
+checagem do diagnóstico tem amostra boa e amostra ruim passando pelo mesmo
+caminho — porque checagem é a coisa mais fácil de aprovar tudo para sempre,
+bastando uma comparação invertida.
+
+Sete mutações conferidas na derivação: o id sem o tipo; um sexo só ganhando
+faixa; a faixa ignorando o sexo de quem fez o exame; `ABAIXO` lendo o máximo; a
+sentinela sobrando no texto do aviso; a volta do defeito histórico das regiões;
+e um marcador ficando sem escopo.
+
+**O que isso muda para quem publica:** `docs/TESTE-REAL.md` ganhou o passo
+**1.3-b**, logo depois do RLS, com a tabela das três consequências. E o passo da
+revisão clínica passou a dizer **qual fonte** o profissional revisa — o
+TypeScript, não as tabelas, que são cópia gerada. Revisar a tabela seria revisar
+a cópia.
+
+#### O segundo achado veio da saída que eu vinha filtrando
+
+A cadeia imprimia **"This will cause a hydration error"** duas vezes, e durante
+semanas ninguém leu — eu inclusive, que filtrava a saída por `Tests` e `FAIL`.
+Lido, era HTML inválido: `Aviso` embrulhava os filhos num `<p>`, e a tela de
+importar dieta passa os avisos da leitura como `<p>` e `<ul>`.
+
+HTML não permite bloco dentro de `<p>`. O navegador **fecha** o parágrafo ao
+encontrar o primeiro, e a árvore que ele monta deixa de ser a que o React
+renderizou — com SSR isso é mismatch de hidratação, e o conteúdo hasteado para
+fora perde a cor e o tamanho que estavam no parágrafo. O `Aviso` está em quase
+toda tela do painel, então o defeito era **latente em todas**: bastava alguém
+passar um bloco. Virou `div`, com o `role="alert"` mantido. O visual é idêntico
+— o preflight do Tailwind já zerava a margem do `<p>`, e não havia nada que só o
+parágrafo fizesse.
+
+**E o aviso virou portão.** O `preparo.ts` da web passa a reprovar a prova que
+renderizar árvore inválida, em qualquer uma das 626. Só essa família: outros
+`console.error` continuam passando, porque há provas que provocam falha de rede
+de propósito, e suíte vermelha por ruído deixa de ser portão — quem vê falha que
+"sempre falha" para de olhar.
+
+O critério foi para `teste/dom-valido.ts`, com dez provas de amostra boa e
+amostra ruim, e as ruins são **texto real do React** copiado da saída daquele
+dia, não frase que eu inventei para casar com o meu próprio regex. E foi a
+mutação de conferência que expôs um defeito no portão: ele fechava certo e
+relatava `In HTML, %s cannot be a descendant of <%s>.` — o React manda o molde e
+os valores em argumentos separados, como `printf`, e juntá-los com espaço
+deixava os `%s` crus. Portão que fecha sem dizer o quê custa a hora de quem for
+ler. Agora há um formatador com prova própria, e a mensagem nomeia os dois
+culpados.
+
+`packages/ui` não ganhou o portão, e isso foi decidido por evidência e não por
+simetria: o pacote é tokens, tema, contraste e matemática de gráfico — não
+renderiza DOM.
+
+**O quarto heredoc que comeu uma contrabarra.** Ao reescrever o `preparo.ts` por
+script, `join('
+  ')` virou uma string partida em duas linhas e a suíte inteira
+parou de compilar — 626 provas vermelhas de uma vez. É a quarta ocorrência desta
+mesma armadilha no projeto (as três primeiras foram regex de varredura, em que o
+efeito era pior: a checagem aprovava tudo em silêncio). A diferença é que esta
+quebrou alto. A regra que fica: **arquivo que contém escape não passa por
+heredoc de script** — vai por edição direta.
+
 ### Pendência 32, segunda metade — a web fechou em 46 de 46 telas com prova — 08/10/2026
 
 As doze que faltavam saíram. **Medido, não estimado:**
