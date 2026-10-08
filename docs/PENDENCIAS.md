@@ -2306,8 +2306,7 @@ componente de cima: dentro, o React o trataria como um tipo novo a cada tecla e
 tiraria o cursor do campo.
 **Verificado também o que não estava quebrado:** dose decimal digitada dígito a
 dígito ("2.5") chega como `2.5`; e a única outra tela com o mesmo padrão
-(`opcoes.join('
-')` na anamnese) já filtrava as vazias antes de enviar.
+(`opcoes.join('\n')` na anamnese) já filtrava as vazias antes de enviar.
 **De quebra:** a validação e a montagem do corpo do modelo de anamnese saíram do
 componente para `lib/anamnese.ts`, com 13 testes que confrontam "o que a tela
 deixa salvar" com "o que o schema do servidor aceita" — divergir aí é erro que
