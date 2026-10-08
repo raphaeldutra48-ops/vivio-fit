@@ -1,5 +1,6 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar, tocar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -62,7 +63,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Chat } = await import('../app/chat');
-  return render(<Chat />);
+  return renderizar(<Chat />);
 }
 
 beforeEach(() => {
@@ -205,9 +206,14 @@ describe('conversas: enviar', () => {
     await waitFor(() => expect(screen.getByLabelText(/escreva sua mensagem/i)).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText(/escreva sua mensagem/i), { target: { value: '   ' } });
-    fireEvent.click(screen.getByLabelText(/enviar mensagem/i));
+    /*
+      `tocar` descarrega as promessas pendentes dentro de `act`. Antes isto era
+      `setTimeout(80)` — provar um negativo por soneca passa a depender de a
+      máquina ser rápida o bastante, e 80 ms escolhidos a dedo são uma aposta
+      que o CI perde num dia de carga. A descarga é determinística.
+    */
+    await tocar(screen.getByLabelText(/enviar mensagem/i));
 
-    await new Promise((r) => setTimeout(r, 80));
     expect(enviar).not.toHaveBeenCalled();
   });
 });

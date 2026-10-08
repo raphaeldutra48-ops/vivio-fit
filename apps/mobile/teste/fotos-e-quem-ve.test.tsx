@@ -1,9 +1,9 @@
 import { ErroApi } from '@vivio/sdk';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import * as ImagePicker from 'expo-image-picker';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { alertas, responderAlerta } from './preparo';
+import { alertas, renderizar, responderAlerta } from './preparo';
 
 /**
  * As fotos de evolução — a decisão mais difícil de desfazer no aplicativo.
@@ -89,7 +89,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Fotos } = await import('../app/fotos');
-  return render(<Fotos />);
+  return renderizar(<Fotos />);
 }
 
 /** Toca em "+ Adicionar foto" e espera o envio terminar. */
@@ -257,7 +257,7 @@ describe('fotos de evolução: quem vê', () => {
 
     fireEvent.click(screen.getByLabelText(/apagar esta foto/i));
     await waitFor(() => expect(alertas).toHaveLength(1));
-    responderAlerta('apagar');
+    await responderAlerta('apagar');
 
     await waitFor(() => expect(textoDaTela()).toMatch(/continua na sua linha do tempo/i));
   });
@@ -314,7 +314,15 @@ describe('fotos de evolução: quem vê', () => {
     expect(definirVisibilidade).toHaveBeenCalledWith('aluna-1', 'foto-1', ['PERSONAL']);
     // E o pedido que apagaria a liberação do personal não existe.
     expect(definirVisibilidade).not.toHaveBeenCalledWith('aluna-1', 'foto-1', ['NUTRICIONISTA']);
-    concluir();
+    /*
+      A corrida já foi afirmada acima; isto só fecha a prova soltando o pedido
+      que ela deixou pendurado. Dentro de `act` porque o `setState` que vem da
+      resolução acontecia DEPOIS do fim do teste — e com a limpeza do DOM no
+      lugar, atualizar um componente já desmontado é a próxima reclamação.
+    */
+    await act(async () => {
+      concluir();
+    });
   });
 
   it('se a gravação falhar, a tela NÃO diz que alguém passou a ver', async () => {
@@ -369,7 +377,7 @@ describe('fotos de evolução: apagar', () => {
     fireEvent.click(screen.getByLabelText(/apagar esta foto/i));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('apagar');
+    await responderAlerta('apagar');
 
     await waitFor(() => expect(remover).toHaveBeenCalledWith('aluna-1', 'foto-1'));
   });

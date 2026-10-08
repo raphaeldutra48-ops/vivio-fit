@@ -1,7 +1,7 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { alertas, mudarEstadoDoApp, responderAlerta } from './preparo';
+import { alertas, mudarEstadoDoApp, renderizar, responderAlerta } from './preparo';
 
 /**
  * A tela de executar o treino — a razão de o aplicativo existir.
@@ -127,7 +127,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Execucao } = await import('../app/execucao/[sessaoId]');
-  return render(<Execucao />);
+  return renderizar(<Execucao />);
 }
 
 /** Espera a tela sair de "Carregando treino…". */
@@ -302,7 +302,7 @@ describe('execução do treino: o que não se perde', () => {
     await waitFor(() => expect(alertas).toHaveLength(1));
     // Até aqui nada foi apagado: a pergunta é a proteção.
     expect(textoDaTela()).toMatch(/1\/2 séries/);
-    responderAlerta('começar do zero');
+    await responderAlerta('começar do zero');
 
     await waitFor(() => expect(textoDaTela()).toMatch(/0\/2 séries/));
     expect(descartarRascunho).toHaveBeenCalledWith('aluna-1');

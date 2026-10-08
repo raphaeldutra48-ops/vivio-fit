@@ -310,14 +310,82 @@ culpados.
 simetria: o pacote é tokens, tema, contraste e matemática de gráfico — não
 renderiza DOM.
 
-**O quarto heredoc que comeu uma contrabarra.** Ao reescrever o `preparo.ts` por
-script, `join('
-  ')` virou uma string partida em duas linhas e a suíte inteira
-parou de compilar — 626 provas vermelhas de uma vez. É a quarta ocorrência desta
-mesma armadilha no projeto (as três primeiras foram regex de varredura, em que o
-efeito era pior: a checagem aprovava tudo em silêncio). A diferença é que esta
-quebrou alto. A regra que fica: **arquivo que contém escape não passa por
-heredoc de script** — vai por edição direta.
+#### O terceiro achado: 440 linhas de ruído, e a suíte do app sem limpeza
+
+Aplicado o princípio ("aviso que não reprova é aviso que não existe"), varri
+tudo que a cadeia imprime e ninguém lê. Além dos dois de hidratação, havia
+**440** avisos de `An update to X inside a test was not wrapped in act(...)`, em
+20 telas do aplicativo.
+
+Primeiro achei uma coisa pior, e ela se provou **inofensiva** — registro as
+duas. A suíte do aplicativo **não tinha `afterEach(cleanup)`**: nem no preparo,
+nem em prova nenhuma. A da web tem desde o começo, com o motivo escrito. Sem a
+limpeza, cada tela montada ficava de pé até o fim do arquivo, e a hipótese
+óbvia era grave: **uma prova podendo passar lendo o DOM da anterior**.
+Acrescentei a limpeza e rodei: as 226 continuaram passando. Nenhuma lia o DOM
+vazado. A limpeza ficou de todo modo — é a origem dos "Found multiple elements"
+que apareciam sob carga —, mas a suspeita era falsa, e dizer isso importa.
+
+A causa dos 440 era outra: `render` é síncrono e volta antes de a busca do
+`useEffect` resolver, então o `setState` cai fora de `act`. Medi num arquivo
+antes de supor — 112 avisos viraram **0** com a montagem dentro de `act`, e as
+15 provas seguiram passando.
+
+A correção virou dois helpers no preparo, e não 26 cópias: `renderizar` monta
+esperando os efeitos assentarem, e `tocar` é o irmão para o clique que dispara
+envio. Mais `responderAlerta`, que passou a esperar — o botão do alerta é por
+onde passam as ações irreversíveis do aplicativo, e todas chamam o servidor.
+Saldo: **440 → 0**, com as 226 provas intactas.
+
+Duas delas melhoraram de verdade no caminho:
+
+- `conversas` provava que espaço em branco não vira mensagem esperando
+  `setTimeout(80)`. Provar um negativo por soneca é apostar que a máquina é
+  rápida o bastante, e 80 ms escolhidos a dedo é uma aposta que o CI perde num
+  dia de carga. Virou descarga determinística.
+- `fotos` deixava a promessa retida da corrida resolver **depois** do fim do
+  teste. Com a limpeza no lugar, isso passaria a atualizar componente
+  desmontado. Agora resolve dentro do `act`, depois de a corrida já ter sido
+  afirmada.
+
+**E o ruído virou portão nos dois aplicativos.** `avisos-do-react.ts` reprova a
+prova que emitir aviso de validade de DOM (defeito de produto) ou de
+atualização fora de `act` (prova afirmando no meio do caminho). Só essas duas
+famílias: reprovar qualquer `console.error` deixaria a suíte vermelha por
+ruído, e há provas que provocam falha de rede de propósito.
+
+O critério existe em **duas cópias**, uma por aplicativo, porque cada suíte tem
+`setupFiles` próprio e um pacote compartilhado para sessenta linhas exigiria
+build, dependência nova e mexer na resolução que o Metro usa — o que é
+precisamente a pendência 7. A cópia não é cega: uma prova lê o arquivo do outro
+aplicativo e **reprova se as listas de padrões divergirem**, com amostra ruim
+própria, porque um regex que não casa nada transformaria a igualdade em
+`'' === ''` e o guarda aprovaria tudo.
+
+Três mutações conferidas: o `Aviso` voltando a `<p>` (web), a montagem sem
+`act` (app) e as duas listas divergindo. As três reprovam.
+
+O lint fechou de brinde um tipo errado: `onPress` do dublê de alerta era
+declarado `() => void`, e ele pegou o `await` sobre um valor "não-Thenable".
+Quem estava errado era a declaração — as ações atrás de uma confirmação são
+assíncronas.
+
+#### Os heredocs que comeram contrabarras: quarto, quinto e sexto
+
+Ao reescrever o `preparo.ts` por script, `join('\n  ')` virou uma string
+partida em duas linhas e a suíte inteira parou de compilar — 626 provas
+vermelhas de uma vez. Depois a mesma coisa no preparo do aplicativo. E, para
+fechar com ironia, **esta própria seção** saiu com a contrabarra comida: o
+parágrafo que descreve a armadilha caiu nela.
+
+São a quarta, a quinta e a sexta ocorrências no projeto. As três primeiras
+foram regex de varredura, e lá o efeito era pior — a checagem aprovava tudo em
+silêncio. Estas quebraram alto, o que é sorte.
+
+A regra que fica, e que eu quebrei duas vezes **depois** de escrevê-la:
+**arquivo que contém escape não passa por heredoc de script** — vai por edição
+direta. E um desvio que funciona, quando o script é mesmo necessário: ele
+escreve um marcador textual e a edição direta troca o marcador pelo escape.
 
 ### Pendência 32, segunda metade — a web fechou em 46 de 46 telas com prova — 08/10/2026
 

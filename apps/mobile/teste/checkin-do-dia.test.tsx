@@ -1,7 +1,7 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { navegacao } from './preparo';
+import { navegacao, renderizar } from './preparo';
 
 /**
  * O check-in de hoje.
@@ -48,7 +48,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Checkin } = await import('../app/checkin');
-  return render(<Checkin />);
+  return renderizar(<Checkin />);
 }
 
 /** O enviado ao servidor no último registro de check-in. */

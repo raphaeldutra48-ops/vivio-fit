@@ -1,6 +1,7 @@
 import { ErroApi } from '@vivio/sdk';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -120,12 +121,12 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTreino() {
   const { default: Treino } = await import('../app/(tabs)/treino');
-  return render(<Treino />);
+  return renderizar(<Treino />);
 }
 
 async function abrirEvolucao() {
   const { default: Evolucao } = await import('../app/(tabs)/evolucao');
-  return render(<Evolucao />);
+  return renderizar(<Evolucao />);
 }
 
 beforeEach(() => {

@@ -1,6 +1,7 @@
 import type { RegistrarExecucaoInput } from '@vivio/contracts';
 import { ErroApi } from '@vivio/sdk';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar, tocar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   descartar,
@@ -92,8 +93,13 @@ function Tela({ aoRegistrar }: { aoRegistrar?: (r: unknown) => void }) {
   );
 }
 
-function abrirApp(aoRegistrar?: (r: unknown) => void) {
-  return render(
+/*
+  Monta dentro de `act`, como o `renderizar` do preparo — aqui o elemento é
+  montado à mão porque a prova precisa do provider em volta, e é o provider que
+  tenta sincronizar ao montar. Era essa tentativa que caía fora de `act`.
+*/
+async function abrirApp(aoRegistrar?: (r: unknown) => void) {
+  return renderizar(
     <SincronizacaoProvider>
       <Tela aoRegistrar={aoRegistrar} />
     </SincronizacaoProvider>,
@@ -114,9 +120,9 @@ describe('fila de treinos', () => {
     */
     registrar.mockResolvedValue(resumoDoServidor);
     const recebido = vi.fn();
-    abrirApp(recebido);
+    await abrirApp(recebido);
 
-    screen.getByText('registrar').click();
+    await tocar(screen.getByText('registrar'));
 
     await waitFor(() => expect(recebido).toHaveBeenCalledWith(resumoDoServidor));
     expect(await lerFila()).toHaveLength(0);
@@ -125,9 +131,9 @@ describe('fila de treinos', () => {
   it('sem rede: o treino FICA gravado no aparelho, e some da tela nada', async () => {
     registrar.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
     const recebido = vi.fn();
-    abrirApp(recebido);
+    await abrirApp(recebido);
 
-    screen.getByText('registrar').click();
+    await tocar(screen.getByText('registrar'));
 
     // Devolve `null` — não houve resumo —, mas o treino está salvo.
     await waitFor(() => expect(recebido).toHaveBeenCalledWith(null));
@@ -140,12 +146,12 @@ describe('fila de treinos', () => {
 
   it('a rede volta: a próxima tentativa envia o que estava guardado', async () => {
     registrar.mockRejectedValueOnce(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
-    abrirApp();
-    screen.getByText('registrar').click();
+    await abrirApp();
+    await tocar(screen.getByText('registrar'));
     await waitFor(async () => expect(await lerFila()).toHaveLength(1));
 
     registrar.mockResolvedValue(resumoDoServidor);
-    screen.getByText('sincronizar').click();
+    await tocar(screen.getByText('sincronizar'));
 
     await waitFor(async () => expect(await lerFila()).toHaveLength(0));
     expect(registrar).toHaveBeenCalledTimes(2);
@@ -158,14 +164,14 @@ describe('fila de treinos', () => {
       memória do processo.
     */
     registrar.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
-    const primeira = abrirApp();
-    screen.getByText('registrar').click();
+    const primeira = await abrirApp();
+    await tocar(screen.getByText('registrar'));
     await waitFor(async () => expect(await lerFila()).toHaveLength(1));
     primeira.unmount();
 
     registrar.mockReset();
     registrar.mockResolvedValue(resumoDoServidor);
-    abrirApp(); // o provider tenta sincronizar ao montar
+    await abrirApp(); // o provider tenta sincronizar ao montar
 
     await waitFor(async () => expect(await lerFila()).toHaveLength(0));
     expect(registrar).toHaveBeenCalledTimes(1);
@@ -178,9 +184,9 @@ describe('fila de treinos', () => {
       como uma fila de saída morre em silêncio.
     */
     registrar.mockRejectedValue(new ErroApi('DADOS_INVALIDOS', 'Sessão não existe.', 422));
-    abrirApp();
+    await abrirApp();
 
-    screen.getByText('registrar').click();
+    await tocar(screen.getByText('registrar'));
 
     await waitFor(async () => expect(await lerFila()).toHaveLength(0));
   });
@@ -189,11 +195,11 @@ describe('fila de treinos', () => {
     // Toque duplo no botão de finalizar, ou retry da tela. O `clienteUuid` é a
     // identidade do treino, e é ele que o servidor usa para não duplicar.
     registrar.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'Sem rede.', 0));
-    abrirApp();
+    await abrirApp();
 
-    screen.getByText('registrar').click();
+    await tocar(screen.getByText('registrar'));
     await waitFor(async () => expect(await lerFila()).toHaveLength(1));
-    screen.getByText('registrar').click();
+    await tocar(screen.getByText('registrar'));
 
     await waitFor(() => expect(registrar).toHaveBeenCalledTimes(2));
     expect(await lerFila()).toHaveLength(1);
@@ -209,7 +215,7 @@ describe('a costura entre a recusa definitiva e o descarte', () => {
       fila e APARECER nos descartados.
     */
     registrar.mockRejectedValue(new ErroApi('CONSENTIMENTO_AUSENTE', 'sem autorização', 403));
-    abrirApp();
+    await abrirApp();
 
     fireEvent.click(screen.getByText('registrar'));
 
@@ -222,7 +228,7 @@ describe('a costura entre a recusa definitiva e o descarte', () => {
     // O outro lado da regra. Sem rede, o treino espera — descartar aqui seria
     // perder treino por causa de sinal fraco.
     registrar.mockRejectedValue(new ErroApi('ERRO_DE_REDE', 'sem rede', 0));
-    abrirApp();
+    await abrirApp();
 
     fireEvent.click(screen.getByText('registrar'));
 
@@ -232,7 +238,7 @@ describe('a costura entre a recusa definitiva e o descarte', () => {
 
   it('tentar de novo devolve à fila e reenvia — e some dos descartados quando aceito', async () => {
     registrar.mockRejectedValue(new ErroApi('CONSENTIMENTO_AUSENTE', 'sem autorização', 403));
-    abrirApp();
+    await abrirApp();
     fireEvent.click(screen.getByText('registrar'));
     await waitFor(() => expect(screen.getByTestId('descartados')).toHaveTextContent('1'));
 

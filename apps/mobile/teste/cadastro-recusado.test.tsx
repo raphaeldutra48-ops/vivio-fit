@@ -1,6 +1,7 @@
 import { ErroApi } from '@vivio/sdk';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar, tocar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -31,7 +32,7 @@ vi.mock('../src/sessao', () => ({
 /** Preenche o formulário com dados válidos e envia. */
 async function preencherEEnviar(): Promise<void> {
   const { default: Cadastrar } = await import('../app/cadastrar');
-  render(<Cadastrar />);
+  await renderizar(<Cadastrar />);
 
   const campos = document.querySelectorAll('input');
   // Nome, e-mail, senha e data de nascimento, na ordem em que a tela pede.
@@ -40,8 +41,7 @@ async function preencherEEnviar(): Promise<void> {
   fireEvent.change(campos[2]!, { target: { value: 'Senha@123' } });
   fireEvent.change(campos[3]!, { target: { value: '31/12/1990' } });
 
-  const botao = screen.getByText('Criar conta');
-  fireEvent.click(botao);
+  await tocar(screen.getByText('Criar conta'));
 }
 
 beforeEach(() => {

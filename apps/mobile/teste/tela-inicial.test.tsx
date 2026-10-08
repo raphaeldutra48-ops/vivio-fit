@@ -1,6 +1,7 @@
 import { ErroApi } from '@vivio/sdk';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -131,7 +132,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Inicio } = await import('../app/(tabs)/index');
-  return render(<Inicio />);
+  return renderizar(<Inicio />);
 }
 
 beforeEach(() => {

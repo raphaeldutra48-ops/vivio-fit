@@ -1,7 +1,7 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { navegacao } from './preparo';
+import { navegacao, renderizar } from './preparo';
 
 /**
  * As medidas digitadas à mão — sete campos, todos opcionais, todos decimais.
@@ -28,7 +28,7 @@ vi.mock('../src/sessao', () => ({ useSessao: () => sessao }));
 
 async function abrirTela() {
   const { default: Medidas } = await import('../app/medidas');
-  return render(<Medidas />);
+  return renderizar(<Medidas />);
 }
 
 function digitar(rotulo: RegExp, valor: string): void {

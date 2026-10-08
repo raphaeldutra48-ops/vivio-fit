@@ -1,5 +1,99 @@
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { afterEach, beforeEach, expect, vi } from 'vitest';
+import { avisosProibidos, mensagemDoConsole } from './avisos-do-react';
+
+/**
+ * O DOM de uma prova não sobra para a seguinte.
+ *
+ * A suíte da web tem isto desde o começo, com o motivo escrito: sem a limpeza,
+ * `getByLabelText` acha dois campos "Dose" vindos de renderizações diferentes.
+ * A do aplicativo **não tinha** — cada tela montada ficava de pé até o fim do
+ * arquivo, e era essa a origem dos "Found multiple elements" que apareciam
+ * quando a máquina estava sob carga.
+ *
+ * Conferido antes de afirmar mais do que isto: ao acrescentar a limpeza, as 226
+ * provas continuaram passando. Nenhuma estava lendo o DOM da anterior — a
+ * suspeita era razoável e era falsa.
+ */
+afterEach(cleanup);
+
+/**
+ * Aviso proibido do React REPROVA a prova, em vez de virar linha de log.
+ *
+ * Esta suíte imprimia **440** avisos de atualização fora de `act` numa corrida
+ * só. Nenhum era defeito de produto — mas 440 linhas de ruído são o que faz o
+ * aviso seguinte passar em branco, e foi exatamente assim que dois avisos de
+ * HTML inválido ficaram semanas na saída da suíte da web sem ninguém ver.
+ *
+ * O critério, com prova própria de amostra boa e ruim, está em
+ * `avisos-do-react.ts`. Aqui só a coleta.
+ */
+let erroOriginal: typeof console.error;
+let mensagens: string[] = [];
+
+beforeEach(() => {
+  mensagens = [];
+  erroOriginal = console.error;
+  console.error = (...args: unknown[]) => {
+    mensagens.push(mensagemDoConsole(args));
+    erroOriginal(...args);
+  };
+});
+
+afterEach(() => {
+  console.error = erroOriginal;
+  const proibidos = avisosProibidos(mensagens);
+  if (proibidos.length > 0) {
+    const lista = proibidos.map((m) => `  ${m}`).join('\n');
+    expect.fail(`Aviso do React que não pode aparecer:\n${lista}`);
+  }
+});
+
+/**
+ * Monta a tela e **espera os efeitos assentarem**, dentro de `act`.
+ *
+ * Toda tela do aplicativo busca no `useEffect` e guarda o resultado no estado.
+ * `render` é síncrono: ele volta antes de a promessa do dublê resolver, e o
+ * `setState` que vem depois acontece fora de `act`. O React avisa — "An update
+ * to X inside a test was not wrapped in act(...)" — e eram **440 linhas** desse
+ * aviso numa corrida da suíte.
+ *
+ * Nenhuma era defeito de produto. O problema é o que 440 linhas de ruído fazem
+ * com a leitura: foi exatamente assim que dois avisos de HTML inválido ficaram
+ * semanas na saída da suíte da web sem ninguém ver. Ruído não é inofensivo —
+ * ele esconde o aviso seguinte.
+ *
+ * Vive aqui, e não copiado em cada arquivo, porque são 26 pontos de montagem em
+ * 17 provas e duas versões disto divergiriam na primeira vez que uma mudasse.
+ */
+export async function renderizar(elemento: ReactElement) {
+  let resultado: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    resultado = render(elemento);
+  });
+  return resultado!;
+}
+
+/**
+ * Toca em algo que dispara trabalho assíncrono, e espera assentar.
+ *
+ * O irmão do `renderizar`, para o outro momento em que o estado muda fora de
+ * `act`: enviar formulário, confirmar remoção, mandar mensagem. O clique é
+ * síncrono, o `await sdk.x()` de dentro do manipulador não é, e o `setState`
+ * que vem depois cai fora.
+ *
+ * Só para os cliques que REALMENTE disparam busca ou envio. Trocar todo
+ * `fireEvent.click` por isto faria a suíte esperar por nada em dezenas de
+ * lugares e esconderia, atrás de uma espera genérica, justamente a corrida que
+ * algumas destas provas existem para pegar.
+ */
+export async function tocar(elemento: Element | null): Promise<void> {
+  await act(async () => {
+    fireEvent.click(elemento!);
+  });
+}
 
 /**
  * O que o aplicativo espera do sistema operacional, e que o navegador de teste
@@ -91,17 +185,38 @@ vi.mock('react-native-svg', () => ({
 interface BotaoDeAlerta {
   text?: string;
   style?: string;
-  onPress?: () => void;
+  /*
+    Pode ser assíncrono, e quase sempre é.
+
+    O tipo dizia `() => void`, e isso era mais do que imprecisão: as ações atrás
+    de uma confirmação — retirar autorização, apagar foto, recomeçar o treino —
+    todas chamam o servidor. O lint pegou ao ver um `await` sobre algo declarado
+    como `void`, e quem estava errado era a declaração.
+  */
+  onPress?: () => void | Promise<void>;
 }
 
 export const alertas: { titulo: string; mensagem?: string; botoes: BotaoDeAlerta[] }[] = [];
 
 /** Toca no botão do último alerta — é assim que o teste "confirma" uma ação. */
-export function responderAlerta(texto: string): void {
+/**
+ * Responde à pergunta de confirmação, e espera a consequência assentar.
+ *
+ * O botão do alerta é por onde passam as ações irreversíveis do aplicativo —
+ * retirar uma autorização, apagar uma foto, começar o treino do zero. Todas
+ * chamam o servidor, então `onPress` dispara trabalho assíncrono: `await` aqui
+ * dentro de `act` é o que faz a prova seguinte olhar o resultado e não o meio
+ * do caminho.
+ *
+ * Era síncrona, e o `setState` da resposta caía fora de `act` em nove provas.
+ */
+export async function responderAlerta(texto: string): Promise<void> {
   const ultimo = alertas.at(-1);
   const botao = ultimo?.botoes.find((b) => b.text?.toLowerCase().includes(texto.toLowerCase()));
   if (!botao) throw new Error(`nenhum botão com "${texto}" no alerta: ${JSON.stringify(ultimo)}`);
-  botao.onPress?.();
+  await act(async () => {
+    await botao.onPress?.();
+  });
 }
 
 /*

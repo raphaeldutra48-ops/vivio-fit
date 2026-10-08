@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect } from 'vitest';
-import { avisosDeDomInvalido, mensagemDoConsole } from './dom-valido';
+import { avisosProibidos, mensagemDoConsole } from './avisos-do-react';
 
 // Sem isto, o DOM de um teste sobra para o seguinte e `getByLabelText` acha
 // dois campos "Dose" que vieram de renderizações diferentes.
@@ -21,7 +21,7 @@ afterEach(cleanup);
  * ninguém leu — eu inclusive, que filtrava a saída por "Tests" e "FAIL". Aviso
  * que não reprova é aviso que não existe: ou vira portão, ou vira ruído.
  *
- * O critério mora em `dom-valido.ts`, com prova própria de amostra boa e
+ * O critério mora em `avisos-do-react.ts`, com prova própria de amostra boa e
  * amostra ruim. Aqui só a coleta.
  */
 let erroOriginal: typeof console.error;
@@ -38,9 +38,9 @@ beforeEach(() => {
 
 afterEach(() => {
   console.error = erroOriginal;
-  const invalidos = avisosDeDomInvalido(mensagens);
-  if (invalidos.length > 0) {
-    const lista = invalidos.map((m) => `  ${m}`).join('\n');
-    expect.fail(`HTML inválido renderizado (quebra a hidratação em produção):\n${lista}`);
+  const proibidos = avisosProibidos(mensagens);
+  if (proibidos.length > 0) {
+    const lista = proibidos.map((m) => `  ${m}`).join('\n');
+    expect.fail(`Aviso do React que não pode aparecer:\n${lista}`);
   }
 });

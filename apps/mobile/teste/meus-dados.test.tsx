@@ -1,5 +1,6 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -46,7 +47,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Perfil } = await import('../app/perfil');
-  return render(<Perfil />);
+  return renderizar(<Perfil />);
 }
 
 const enviado = () => (atualizarPerfil.mock.calls[0] as [Record<string, unknown>])[0];

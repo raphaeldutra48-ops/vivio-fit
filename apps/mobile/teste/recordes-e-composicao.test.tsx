@@ -1,5 +1,6 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar } from './preparo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -70,12 +71,12 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirRecordes() {
   const { default: Recordes } = await import('../app/recordes');
-  return render(<Recordes />);
+  return renderizar(<Recordes />);
 }
 
 async function abrirComposicao() {
   const { default: Composicao } = await import('../app/composicao');
-  return render(<Composicao />);
+  return renderizar(<Composicao />);
 }
 
 beforeEach(() => {
@@ -123,7 +124,7 @@ describe('meus recordes', () => {
       marcas: [marca({ cargaMaximaEm: '2026-01-10' })],
     });
     const { default: Recordes } = await import('../app/recordes');
-    const outra = render(<Recordes />);
+    const outra = await renderizar(<Recordes />);
 
     await waitFor(() => expect(outra.container.textContent).toContain('Supino reto'));
     expect(outra.container.textContent).not.toContain('NOVO');

@@ -1,8 +1,8 @@
 import { ErroApi } from '@vivio/sdk';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { navegacao } from './preparo';
+import { navegacao, renderizar } from './preparo';
 
 /**
  * A porta de entrada.
@@ -43,7 +43,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Login } = await import('../app/login');
-  return render(<Login />);
+  return renderizar(<Login />);
 }
 
 function preencher(email: string, senha: string): void {

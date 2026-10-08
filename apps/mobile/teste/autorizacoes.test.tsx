@@ -1,8 +1,8 @@
 import { EscopoDado, FINALIDADE_POR_ESCOPO } from '@vivio/contracts';
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { alertas, responderAlerta } from './preparo';
+import { alertas, renderizar, responderAlerta } from './preparo';
 
 /**
  * A tela onde o aluno decide o que compartilha — a mais sensível do aplicativo.
@@ -85,7 +85,7 @@ async function abrirTela(consentimentos: unknown[] = []): Promise<void> {
   meusProfissionais.mockResolvedValue([personal]);
   listarConsentimentos.mockResolvedValue(consentimentos);
   const { default: Equipe } = await import('../app/equipe');
-  render(<Equipe />);
+  await renderizar(<Equipe />);
   await waitFor(() => expect(screen.getByText('Diego Personal')).toBeInTheDocument());
 }
 
@@ -93,7 +93,7 @@ async function abrirComConvite(): Promise<void> {
   meusProfissionais.mockResolvedValue([convite]);
   listarConsentimentos.mockResolvedValue([]);
   const { default: Equipe } = await import('../app/equipe');
-  render(<Equipe />);
+  await renderizar(<Equipe />);
   await waitFor(() => expect(screen.getByText('Recusar')).toBeInTheDocument());
 }
 
@@ -138,7 +138,7 @@ describe('o que eu compartilho', () => {
     fireEvent.click(screen.getByText('Treino'));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('parar de compartilhar');
+    await responderAlerta('parar de compartilhar');
 
     await waitFor(() => expect(revogar).toHaveBeenCalledWith('consentimento-treino'));
   });
@@ -148,7 +148,7 @@ describe('o que eu compartilho', () => {
     fireEvent.click(screen.getByText('Treino'));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('cancelar');
+    await responderAlerta('cancelar');
 
     await new Promise((r) => setTimeout(r, 100));
     expect(revogar).not.toHaveBeenCalled();
@@ -176,7 +176,7 @@ describe('o que eu compartilho', () => {
     fireEvent.click(screen.getByText('Recusar'));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('recusar');
+    await responderAlerta('recusar');
 
     await waitFor(() => expect(recusar).toHaveBeenCalledWith('vinculo-2'));
   });
@@ -186,7 +186,7 @@ describe('o que eu compartilho', () => {
     fireEvent.click(screen.getByText('Recusar'));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('cancelar');
+    await responderAlerta('cancelar');
 
     await new Promise((r) => setTimeout(r, 100));
     expect(recusar).not.toHaveBeenCalled();
@@ -214,7 +214,7 @@ describe('o que eu compartilho', () => {
     meusProfissionais.mockRejectedValue(new Error('Failed to fetch'));
     listarConsentimentos.mockResolvedValue([]);
     const { default: Equipe } = await import('../app/equipe');
-    render(<Equipe />);
+    await renderizar(<Equipe />);
 
     await waitFor(() => expect(textoDaTela()).toMatch(/não deu para carregar sua equipe/i));
     expect(textoDaTela()).toMatch(/o que você já autorizou continua valendo/i);
@@ -246,7 +246,7 @@ describe('o que eu compartilho', () => {
     meusProfissionais.mockRejectedValue(new Error('rede'));
     listarConsentimentos.mockRejectedValue(new Error('rede'));
     const { default: Equipe } = await import('../app/equipe');
-    render(<Equipe />);
+    await renderizar(<Equipe />);
 
     await waitFor(() => expect(textoDaTela()).toMatch(/não deu para carregar sua equipe/i));
     /*

@@ -1,7 +1,7 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { alertas, responderAlerta } from './preparo';
+import { alertas, renderizar, responderAlerta } from './preparo';
 
 /**
  * A agenda do aluno.
@@ -54,7 +54,7 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirTela() {
   const { default: Agenda } = await import('../app/(tabs)/agenda');
-  return render(<Agenda />);
+  return renderizar(<Agenda />);
 }
 
 beforeEach(() => {
@@ -167,7 +167,7 @@ describe('agenda: responder', () => {
 
     fireEvent.click(screen.getAllByLabelText(/cancelar este atendimento/i)[1]!);
     await waitFor(() => expect(alertas).toHaveLength(1));
-    responderAlerta('não vou');
+    await responderAlerta('não vou');
 
     await waitFor(() => expect(mudarStatus).toHaveBeenCalledWith('c2', { status: 'CANCELADO' }));
   });
@@ -180,7 +180,7 @@ describe('agenda: responder', () => {
     fireEvent.click(screen.getByLabelText(/cancelar este atendimento/i));
     await waitFor(() => expect(alertas).toHaveLength(1));
 
-    responderAlerta('manter o horário');
+    await responderAlerta('manter o horário');
 
     await new Promise((r) => setTimeout(r, 80));
     expect(mudarStatus).not.toHaveBeenCalled();

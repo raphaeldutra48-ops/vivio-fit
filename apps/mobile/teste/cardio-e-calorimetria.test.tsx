@@ -1,5 +1,6 @@
 import { obterTema } from '@vivio/ui-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderizar } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -99,12 +100,12 @@ const textoDaTela = () => document.body.textContent ?? '';
 
 async function abrirCardio() {
   const { default: Cardio } = await import('../app/cardio');
-  return render(<Cardio />);
+  return renderizar(<Cardio />);
 }
 
 async function abrirCalorimetria() {
   const { default: Calorimetria } = await import('../app/calorimetria');
-  return render(<Calorimetria />);
+  return renderizar(<Calorimetria />);
 }
 
 beforeEach(() => {
