@@ -6,8 +6,8 @@ na auditoria de 02/10/2026, depois de cinco passes que varreram por amostra — 
 que por isso deixavam a pergunta "falta alguma?" sem resposta.
 
 O segundo virou prova automática e roda em todo push. O primeiro é um script para
-rodar à mão, porque o número certo de telas sem prova não é zero hoje: é uma
-decisão de prioridade, e ela mora na pendência 32.
+rodar à mão — e desde 08/10/2026 o número certo **é** zero nos dois aplicativos,
+o que o transforma na pergunta a fazer sempre que uma tela nova entra.
 
 ---
 
@@ -54,10 +54,27 @@ for nome, lista in [('WEB', web), ('APP', mob)]:
         print('   -', f)
 ```
 
-**Medido em 08/10/2026:** aplicativo 22 de 22 cobertas; web 34 de 46. As doze
-restantes estão nomeadas e em ordem de risco na pendência 32 do
-[`PENDENCIAS.md`](PENDENCIAS.md) — três delas são embrulho de catorze linhas em
-volta de um componente que JÁ tem prova, e isso está dito lá.
+**Medido em 08/10/2026, depois de fechada a pendência 32:** aplicativo 22 de
+22; web **46 de 46**. O número certo passou a ser zero, e é por isso que este
+script agora vale mais como guarda do que como lista: toda tela nova nasce
+acusada até ganhar prova.
+
+**Como saber que o zero é verdadeiro.** "Zero sem prova" é também a resposta de
+um script quebrado. A conferência é esconder uma suíte e rodar de novo — ao
+tirar `apps/web/teste/telas-de-leitura.test.tsx` ele acusa exatamente as cinco
+telas daquela suíte, nominalmente, e nenhuma outra:
+
+```
+=== WEB: 46 telas, 5 sem prova
+   - apps/web/app/(pro)/ajuda/page.tsx
+   - apps/web/app/(pro)/alunos/[alunoId]/comparativo/page.tsx
+   - apps/web/app/(pro)/alunos/[alunoId]/treino/[planoId]/imprimir/page.tsx
+   - apps/web/app/(pro)/lista-de-compras/page.tsx
+   - apps/web/app/(pro)/metodologia/page.tsx
+```
+
+Vale repetir isso antes de confiar no zero depois de qualquer mudança no
+script ou na organização das pastas.
 
 ### O que o script NÃO responde
 

@@ -13,49 +13,6 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
-### 32. Doze telas da web sem prova que as importe — a lista exata
-**Assumida em:** 2026-10-02 · **Atualizada em:** 2026-10-08 · **Depende de:**
-tempo, sem risco.
-**Estado:** medido por `python docs/inventario-de-provas.py`. **O aplicativo tem
-22 de 22 telas com prova.** A web tem 46 telas, **34 com prova** — eram 29 em
-02/10.
-
-Pagas desde então: `(pro)/resumo`, `CatalogoPrescritivel` (o componente das três
-telas de prescrição), `(pro)/feedback`, `(pro)/relatorios`,
-`(pro)/cadastros/perfil` e `(pro)/prescricoes/modelos` — as quatro últimas em
-08/10, com 40 provas e 17 mutações conferidas.
-
-As doze que faltam, em ordem do que custa mais se falhar calado:
-
-1. `(pro)/cadastros/anamnese` — editor de modelo de questionário, com remoção.
-2. `(pro)/alunos/[alunoId]/exames/novo` — lançar exame. As 20 faixas e as 8
-   regras de alerta já têm prova exaustiva em `packages/contracts` e
-   `packages/banco/regras`; o que falta aqui é a fiação da tela.
-3. `(pro)/alunos/[alunoId]/exames/[exameId]` — ler a classificação.
-4. `(pro)/alunos/[alunoId]/comparativo` — o documento de antes e depois.
-5. `(pro)/materiais` — já auditado à mão, com os guardas no lugar e o
-   "tentar de novo" do passe da pendência 30.
-6. `(pro)/lista-de-compras` — derivado do plano; a conta tem prova em contracts.
-7. `(pro)/metodologia` — gerada da tabela de faixas.
-8. `(pro)/ajuda` — texto.
-9. `(pro)/alunos/[alunoId]/treino/[planoId]/imprimir` — folha de impressão.
-10. `prescricoes/suplementos`, 11. `prescricoes/medicamentos`,
-    12. `prescricoes/fitoterapicos` — embrulho de catorze linhas sobre
-    `CatalogoPrescritivel`, que tem 10 provas. O que falta é só conferir que cada
-    um passa o `tipo` certo, e isso vale **uma** prova, não três.
-
-**Como refazer o inventário:**
-```bash
-python docs/inventario-de-provas.py
-```
-O que ele responde e o que NÃO responde está em
-[`INVENTARIO-DE-PROVAS.md`](INVENTARIO-DE-PROVAS.md).
-**Por que não todas de uma vez:** as quatro de maior risco já saíram. Das doze
-restantes, cinco são tela de leitura ou derivada — prova nelas custa o mesmo e
-protege menos. Escrever doze de uma vez trocaria qualidade por contagem, e foi
-exatamente nas provas escritas com pressa que apareceram os três autoenganos
-desta auditoria.
-
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
 **Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
@@ -169,15 +126,212 @@ não uma escolha.
 migrações e `prisma/rls/` aplicados por `aplicar-rls.ts`, e `DATABASE_URL_TEST`
 apontando para ele. O caminho já existe no arranjo das suítes.
 
-### 14b. RESOLVIDA — as 24 telas do aplicativo têm prova
-**Assumida em:** dívidas técnicas · **Atualizada em:** 2026-09-29
-**Estado:** encerrada em 29/09. O aplicativo tinha ZERO prova e passou a ter
+### 20. Confirmação automática de pagamento exige gateway
+**Assumida em:** Receba Fácil
+**Estado:** o app **gera** o PIX copia e cola (BR Code do BACEN, padrão aberto),
+mas **não sabe quando o pagamento cai**. Sem gateway não existe webhook, então o
+profissional confere no banco e marca como recebido no Controle financeiro.
+**Por que resolve mesmo assim:** o público-alvo cobra por PIX direto. O dinheiro
+vai do aluno para a conta dele, sem a plataforma intermediar, sem taxa e sem
+CNPJ — o que também evita a plataforma virar instituição de pagamento.
+**Se um dia precisar de confirmação automática:** conta em gateway (Pagar.me,
+Asaas), webhook de confirmação e conciliação pelo identificador que o BR Code já
+carrega — o modelo de dados não muda.
+**O que a tela promete:** exatamente isso, e nada além. O aviso na tela diz que
+o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
+
+### 21. A tabela de faixas funcionais não passou por revisão profissional
+**Assumida em:** leitor de exames (2026-08-02)
+**Estado:** `packages/contracts/src/exames.ts` traz 20 marcadores, cada um com
+faixa laboratorial, faixa funcional e as duas fontes. As faixas laboratoriais
+saem de diretriz de sociedade médica onde existe diretriz; as funcionais, de
+diretriz quando a própria diretriz define alvo (vitamina D, LDL, TFG) e de
+consenso de prática funcional no resto.
+**O risco:** é a melhor leitura das fontes citadas, **não um parecer**. Cinco
+marcadores têm até a faixa LABORATORIAL vindo de fonte que não é diretriz —
+`INSULINA_JEJUM`, `HOMA_IR`, `FERRITINA`, `VITAMINA_B12` e `PCR_US` — e é a
+faixa laboratorial que carimba "Crítico". Há teste congelando essa lista de
+cinco, para crescê-la ser decisão consciente e não descuido.
+**Pagar em:** antes de o primeiro paciente real ver a tela. Um médico e um
+nutricionista precisam percorrer a tabela marcador por marcador. O aviso de
+que são referências de otimização, e não critério de diagnóstico, já está na
+tela de resultado e na Metodologia — mas aviso não substitui revisão.
+**O que ajuda na revisão:** a página `/metodologia` lista as 20 faixas com as
+fontes, geradas da própria tabela. Dá para imprimir e revisar sem ler código.
+**Vale também para as 8 regras de alerta** (`packages/banco/regras/regras.ts`):
+elas decidem quando um achado vira orientação para outro profissional, e o
+texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
+é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
+
+### 23. Sobra um filete de mídia órfã, e não vale um deletador automático
+**Assumida em:** upload do laudo (2026-08-04)
+**O que era o problema de verdade, e foi corrigido:** a auditoria das rotas
+que mexem em arquivo achou **dois vazamentos reais**, os dois já pagos —
+`exercicios.vincularVideo` trocava o vídeo sem apagar o anterior (até 100 MB
+cada, e regravar a demonstração algumas vezes enchia o disco), e o
+`anexarLaudo` não conferia se a chave era de quem estava anexando, o que
+além de vazar arquivo deixava apontar o exame para o laudo de outra pessoa.
+Fotos, materiais e a troca de laudo já limpavam corretamente.
+**O que sobra:** o arquivo que subiu para o storage e cujo vínculo com o banco
+falhou logo depois — rede caindo entre o upload e a chamada que grava a chave.
+É a única fonte que resta, e ela é estreita.
+**Por que NÃO existe uma varredura que apaga:** um processo que apaga arquivo
+"sem dono no banco" é perigoso na proporção inversa do problema que resolve.
+Um bug nele apaga foto de evolução de paciente, que é irreversível, para
+recuperar alguns megabytes. O risco não paga.
+**Se um dia valer a pena**, o desenho seguro é: `listar(prefixo)` na interface
+`Armazenamento`, um comando que só **relata** os órfãos, e só depois — com o
+relatório limpo por algumas semanas — um modo que apaga, restrito a arquivos
+com mais de N dias. Nunca começar pelo que apaga.
+**Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
+uns 60% sem explicação.
+
+## Resolvidas
+
+### Pendência 32, segunda metade — a web fechou em 46 de 46 telas com prova — 08/10/2026
+
+As doze que faltavam saíram. **Medido, não estimado:**
+`python docs/inventario-de-provas.py` responde `WEB: 46 telas, 0 sem prova` e
+`APP: 22 telas, 0 sem prova`. A suíte inteira passou de 1353 para 1419 provas.
+
+Cinco arquivos novos, e um deles merece explicação porque junta cinco telas:
+`telas-de-leitura.test.tsx` cobre comparativo, lista de compras, metodologia,
+ajuda e a folha de impressão do treino. Vêm juntas porque **nenhuma escreve
+nada** — o risco delas não é corromper dado, é *mentir ou não abrir* —, e a
+prova pergunta sempre as mesmas três coisas: a tela abre com o que promete,
+falha de leitura não se disfarça de ausência, e o que ela afirma sobre período,
+fonte ou aluno veio do servidor.
+
+Duas tinham algo próprio que valia travar:
+
+**O comparativo** é um documento que sai impresso e vai para a mão do aluno.
+Falta de autorização ali **não é erro, é decisão dele**, e as duas situações
+pedem reações opostas: diante de erro o profissional tenta de novo ou chama o
+suporte; diante da ausência de autorização, ele conversa com o aluno. A prova
+trava a distinção e trava a frase que diz *de quem* é a autorização — senão o
+profissional pede ao suporte o que só o aluno pode dar.
+
+**A metodologia** é gerada da mesma tabela de faixas que classifica exame. A
+prova amarra o documento à regra que o código garante — nada é classificado
+como Crítico por causa da faixa funcional —, porque é justamente este documento
+que um profissional leria para decidir se confia na classificação. Se o
+classificador mudar e o texto ficar, o documento passa a descrever um método que
+o app não usa.
+
+**A folha de impressão** ganhou uma prova que não é sobre dado: *cada série tem
+uma linha em branco para anotar a carga*. É o ponto do papel — ficha impressa
+serve para escrever em cima, e é a anotação que volta ao professor. Sem a coluna
+o papel é um cartaz. E o que é controle de tela (voltar, botão de imprimir,
+explicação do PDF) tem de estar dentro de `[data-nao-imprime]`, enquanto o
+documento **não** pode estar — senão o papel sai em branco.
+
+**Dois autoenganos meus, corrigidos no caminho**, e os dois do mesmo tipo:
+inventei a forma do dado em vez de ler o contrato.
+
+1. A fixture do plano de treino tinha `profissional` e `repeticoesAlvo`, que não
+   existem; o tipo diz `personal` e `repsAlvo`. Essa quebrou alto — a tela
+   estourou em `plano.personal.nome` — e por isso foi a fácil.
+2. A da lista de compras era `{ itens, porGrupo, dias }`, que também não existe
+   (o contrato é `{ planoNome, dias, totalItens, secoes, geradaEm }`). Essa
+   quebrou **baixo**: o teste do caminho feliz passava, porque só verificava que
+   o SDK foi chamado com o aluno certo, e a tela estourava em `lista.secoes.map`
+   *depois* de o teste terminar, como exceção solta que o vitest conta em
+   "Errors" e não em "Tests". Saldo: o caminho feliz daquela tela nunca tinha
+   sido verificado. Agora é — seções do mercado, quantidade formatada no
+   servidor (com vírgula, e a prova recusa o ponto), equivalência caseira, e
+   marcar como comprado **risca** o item em vez de removê-lo, porque no meio do
+   mercado o item riscado ainda precisa estar visível.
+
+Daí uma regra para a suíte, escrita dentro do arquivo: **fixture sai do
+contrato, e caminho feliz tem de afirmar algo na tela.** Teste que só confere
+que o SDK foi chamado não provou que a tela desenha.
+
+**Sete mutações conferidas**, cada uma matando exatamente uma prova: a falha de
+leitura deixando de virar aviso; a mensagem técnica vazando para o papel; o
+papel perdendo o aviso de prescrição individual; o botão de imprimir saindo
+impresso; a coluna de anotação caindo para uma linha só; a tela reformatando a
+quantidade e perdendo a vírgula; e marcar como comprado removendo o item.
+
+**E o medidor foi medido.** "Zero sem prova" é também o que um script quebrado
+responde, então escondi `telas-de-leitura.test.tsx` e rodei de novo: ele acusou
+exatamente as cinco telas daquela suíte, nominalmente, e nenhuma outra. É a
+mesma regra das varreduras de código desta auditoria — toda checagem precisa de
+uma amostra boa e de uma amostra ruim, porque "nada encontrado" é indistinguível
+de "não olhou".
+
+As três telas de prescrição (suplementos, medicamentos, fitoterápicos) ganharam
+**uma** prova, não três, como estava previsto: são embrulho de catorze linhas
+sobre `CatalogoPrescritivel`, e o que faltava era conferir que cada uma passa o
+`tipo` certo.
+
+### Pendência 32, primeira metade — as quatro telas de maior risco ganharam prova — 08/10/2026
+
+40 provas novas, 17 mutações conferidas uma a uma. A web passou de 29 para 34
+telas cobertas de 46; o aplicativo segue em 22 de 22.
+
+**`(pro)/feedback` — quem reclamou de dor.** Três decisões do produto que se
+desfaziam sem quebrar nada: a lista vem por URGÊNCIA e não por data (ordenar por
+data enterraria a dor de seis dias atrás embaixo dos "foi tranquilo" de hoje);
+lista vazia NÃO é boa notícia, porque o feedback é opcional no fim do treino e
+quem não respondeu não disse que está bem; e a sequência de dor só aparece do
+segundo em diante, porque dor isolada acontece com todo mundo e mostrar "1º
+treino seguido com dor" transformaria o número em ruído.
+
+**`(pro)/relatorios` — a tabela da carteira.** O mais delicado não é número
+nenhum: é a diferença entre **zero e "não posso ver"**. Cada linha mistura dado
+de três autorizações diferentes. Escrever "0 kg" onde a pessoa não autorizou é
+inventar um dado sobre o corpo dela. A prova trava as três leituras — "não
+autorizado", travessão para ausência de medida, e sinal no ganho de peso — e a
+guarda de corrida entre janelas de 30 e 90 dias.
+
+**`(pro)/cadastros/perfil` — a ação mais irreversível do painel.** Trocar o
+registro no conselho DERRUBA a verificação, e isso acontece ao salvar um
+formulário que também guarda nome e telefone. A tela avisa três vezes, e a prova
+trava as três: no corpo da tela assim que o campo muda, na pergunta ao salvar
+(com as duas consequências concretas — não recebe aluno novo, sai do ar na
+página pública), e na confirmação depois, que diz que a verificação CAIU em vez
+de só "salvo". E trava o contrário: quem ainda está em análise corrigindo um
+dígito não é assustado com aviso sobre perder algo que não tem.
+
+**`(pro)/prescricoes/modelos` — o atalho que evita redigitar posologia.** É
+redigitando que se troca "1 comprimido" por "1 mL", então o valor do modelo é o
+cartão mostrar a dose escrita, sem obrigar a abrir. A prova trava isso, o "sem
+posologia definida" para item salvo em branco, a pergunta antes de remover um
+molde que pode estar em uso há meses, e a ordem do aviso de falha — que vem
+DEPOIS da recarga, porque a recarga limpa o erro e apagaria o aviso no mesmo
+instante.
+
+**Dois enganos meus, pegos pela própria execução:**
+
+- a fixture do perfil tinha `...extras` DEPOIS do objeto montado, e por isso um
+  `{ profissional: { verificadoEm: null } }` apagava registro, UF e tipo — a
+  prova morreu procurando um campo que tinha deixado de existir. Fixture que
+  substitui onde devia mesclar falha longe da causa;
+- a prova do relatório media a tela INTEIRA onde a pergunta era sobre uma
+  célula, e reprovou por causa do rodapé que explica o que "não autorizado"
+  significa. Passou a olhar dentro da linha.
+
+1.353 provas, cadeia verde por código de saída.
+
+### Pendência 14b — o aplicativo saiu de zero prova para cobertura inteira — 29/09/2026
+
+> **Sobre os dois números.** Esta entrada foi escrita contando *telas como
+> experiência* e chegou a 24; `docs/inventario-de-provas.py` conta *arquivos
+> de rota* e responde 22. A diferença não é tela sem prova: "fila offline" e
+> "rascunho do treino" vivem dentro da aba de treino e da execução, e
+> "autorizações" é `equipe.tsx`. Ficou registrada porque a regra desta
+> auditoria é que **o script ganha da memória** — e um cabeçalho com um
+> número que o medidor não confirma é exatamente o tipo de divergência que
+> envelhece calada. A contagem válida hoje é 22 de 22.
+
+**Assumida em:** dívidas técnicas · **Encerrada em:** 29/09/2026. O aplicativo tinha ZERO prova e passou a ter
 **196**, cobrindo todas as 24 telas mais a barreira de erro: cadastro, login,
 autorizações, tela inicial, aba de treino, aba de evolução, agenda, execução do
 treino, fila offline, rascunho do treino, nutrição do dia, fotos, check-in,
 medidas, composição, recordes, metas, lembretes, conversas, prescrições,
-materiais, cardio, calorimetria e meus dados. A web segue com 322.
-**O que a varredura final encontrou** (24 telas, uma por uma):
+materiais, cardio, calorimetria e meus dados. A web tinha 322 provas naquele
+dia; são 1419 em todo o projeto depois da pendência 32.
+**O que a varredura final encontrou** (uma tela por vez, as 24 da lista acima):
 - **Prescrições** dizia "Nenhuma prescrição — quando seu nutricionista ou médico
   prescrever algo, aparece aqui" quando a busca falhava, por um
   `catch(() => undefined)`. Era o pior desta família no app inteiro: a frase
@@ -258,117 +412,6 @@ do teste agora é fixo.
 **O que a suíte do aplicativo NÃO cobre, por desenho:** gesto, layout nativo,
 permissão de câmera e módulo nativo. Para isso não há substituto a um aparelho —
 e é o que o primeiro build de teste vai servir para conferir.
-
-### 20. Confirmação automática de pagamento exige gateway
-**Assumida em:** Receba Fácil
-**Estado:** o app **gera** o PIX copia e cola (BR Code do BACEN, padrão aberto),
-mas **não sabe quando o pagamento cai**. Sem gateway não existe webhook, então o
-profissional confere no banco e marca como recebido no Controle financeiro.
-**Por que resolve mesmo assim:** o público-alvo cobra por PIX direto. O dinheiro
-vai do aluno para a conta dele, sem a plataforma intermediar, sem taxa e sem
-CNPJ — o que também evita a plataforma virar instituição de pagamento.
-**Se um dia precisar de confirmação automática:** conta em gateway (Pagar.me,
-Asaas), webhook de confirmação e conciliação pelo identificador que o BR Code já
-carrega — o modelo de dados não muda.
-**O que a tela promete:** exatamente isso, e nada além. O aviso na tela diz que
-o Vívio Fit não recebe o dinheiro nem sabe quando o pagamento cai.
-
-### 21. A tabela de faixas funcionais não passou por revisão profissional
-**Assumida em:** leitor de exames (2026-08-02)
-**Estado:** `packages/contracts/src/exames.ts` traz 20 marcadores, cada um com
-faixa laboratorial, faixa funcional e as duas fontes. As faixas laboratoriais
-saem de diretriz de sociedade médica onde existe diretriz; as funcionais, de
-diretriz quando a própria diretriz define alvo (vitamina D, LDL, TFG) e de
-consenso de prática funcional no resto.
-**O risco:** é a melhor leitura das fontes citadas, **não um parecer**. Cinco
-marcadores têm até a faixa LABORATORIAL vindo de fonte que não é diretriz —
-`INSULINA_JEJUM`, `HOMA_IR`, `FERRITINA`, `VITAMINA_B12` e `PCR_US` — e é a
-faixa laboratorial que carimba "Crítico". Há teste congelando essa lista de
-cinco, para crescê-la ser decisão consciente e não descuido.
-**Pagar em:** antes de o primeiro paciente real ver a tela. Um médico e um
-nutricionista precisam percorrer a tabela marcador por marcador. O aviso de
-que são referências de otimização, e não critério de diagnóstico, já está na
-tela de resultado e na Metodologia — mas aviso não substitui revisão.
-**O que ajuda na revisão:** a página `/metodologia` lista as 20 faixas com as
-fontes, geradas da própria tabela. Dá para imprimir e revisar sem ler código.
-**Vale também para as 8 regras de alerta** (`packages/banco/regras/regras.ts`):
-elas decidem quando um achado vira orientação para outro profissional, e o
-texto que o personal recebe é conduta — "evite creatina e dieta hiperproteica"
-é uma recomendação clínica, ainda que derivada. Revisar junto com as faixas.
-
-### 23. Sobra um filete de mídia órfã, e não vale um deletador automático
-**Assumida em:** upload do laudo (2026-08-04)
-**O que era o problema de verdade, e foi corrigido:** a auditoria das rotas
-que mexem em arquivo achou **dois vazamentos reais**, os dois já pagos —
-`exercicios.vincularVideo` trocava o vídeo sem apagar o anterior (até 100 MB
-cada, e regravar a demonstração algumas vezes enchia o disco), e o
-`anexarLaudo` não conferia se a chave era de quem estava anexando, o que
-além de vazar arquivo deixava apontar o exame para o laudo de outra pessoa.
-Fotos, materiais e a troca de laudo já limpavam corretamente.
-**O que sobra:** o arquivo que subiu para o storage e cujo vínculo com o banco
-falhou logo depois — rede caindo entre o upload e a chamada que grava a chave.
-É a única fonte que resta, e ela é estreita.
-**Por que NÃO existe uma varredura que apaga:** um processo que apaga arquivo
-"sem dono no banco" é perigoso na proporção inversa do problema que resolve.
-Um bug nele apaga foto de evolução de paciente, que é irreversível, para
-recuperar alguns megabytes. O risco não paga.
-**Se um dia valer a pena**, o desenho seguro é: `listar(prefixo)` na interface
-`Armazenamento`, um comando que só **relata** os órfãos, e só depois — com o
-relatório limpo por algumas semanas — um modo que apaga, restrito a arquivos
-com mais de N dias. Nunca começar pelo que apaga.
-**Reavaliar quando:** existir rota de exclusão de exame, ou o volume passar de
-uns 60% sem explicação.
-
-## Resolvidas
-
-### Pendência 32, primeira metade — as quatro telas de maior risco ganharam prova — 08/10/2026
-
-40 provas novas, 17 mutações conferidas uma a uma. A web passou de 29 para 34
-telas cobertas de 46; o aplicativo segue em 22 de 22.
-
-**`(pro)/feedback` — quem reclamou de dor.** Três decisões do produto que se
-desfaziam sem quebrar nada: a lista vem por URGÊNCIA e não por data (ordenar por
-data enterraria a dor de seis dias atrás embaixo dos "foi tranquilo" de hoje);
-lista vazia NÃO é boa notícia, porque o feedback é opcional no fim do treino e
-quem não respondeu não disse que está bem; e a sequência de dor só aparece do
-segundo em diante, porque dor isolada acontece com todo mundo e mostrar "1º
-treino seguido com dor" transformaria o número em ruído.
-
-**`(pro)/relatorios` — a tabela da carteira.** O mais delicado não é número
-nenhum: é a diferença entre **zero e "não posso ver"**. Cada linha mistura dado
-de três autorizações diferentes. Escrever "0 kg" onde a pessoa não autorizou é
-inventar um dado sobre o corpo dela. A prova trava as três leituras — "não
-autorizado", travessão para ausência de medida, e sinal no ganho de peso — e a
-guarda de corrida entre janelas de 30 e 90 dias.
-
-**`(pro)/cadastros/perfil` — a ação mais irreversível do painel.** Trocar o
-registro no conselho DERRUBA a verificação, e isso acontece ao salvar um
-formulário que também guarda nome e telefone. A tela avisa três vezes, e a prova
-trava as três: no corpo da tela assim que o campo muda, na pergunta ao salvar
-(com as duas consequências concretas — não recebe aluno novo, sai do ar na
-página pública), e na confirmação depois, que diz que a verificação CAIU em vez
-de só "salvo". E trava o contrário: quem ainda está em análise corrigindo um
-dígito não é assustado com aviso sobre perder algo que não tem.
-
-**`(pro)/prescricoes/modelos` — o atalho que evita redigitar posologia.** É
-redigitando que se troca "1 comprimido" por "1 mL", então o valor do modelo é o
-cartão mostrar a dose escrita, sem obrigar a abrir. A prova trava isso, o "sem
-posologia definida" para item salvo em branco, a pergunta antes de remover um
-molde que pode estar em uso há meses, e a ordem do aviso de falha — que vem
-DEPOIS da recarga, porque a recarga limpa o erro e apagaria o aviso no mesmo
-instante.
-
-**Dois enganos meus, pegos pela própria execução:**
-
-- a fixture do perfil tinha `...extras` DEPOIS do objeto montado, e por isso um
-  `{ profissional: { verificadoEm: null } }` apagava registro, UF e tipo — a
-  prova morreu procurando um campo que tinha deixado de existir. Fixture que
-  substitui onde devia mesclar falha longe da causa;
-- a prova do relatório media a tela INTEIRA onde a pergunta era sobre uma
-  célula, e reprovou por causa do rodapé que explica o que "não autorizado"
-  significa. Passou a olhar dentro da linha.
-
-1.353 provas, cadeia verde por código de saída.
 
 ### Auditoria de 02/10 — passe 7: a verificação que aprovava tudo sem olhar
 
