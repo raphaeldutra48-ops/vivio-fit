@@ -26,6 +26,41 @@ export interface ConsentimentoResumo {
   profissional: ResumoPessoa | null;
 }
 
+/**
+ * O nome curto de cada escopo, em DUAS línguas — e são duas de propósito.
+ *
+ * `ROTULO_ESCOPO` usa o vocabulário de quem prescreve: "Nutrição", "Dados
+ * clínicos", "Evolução". `ROTULO_ESCOPO_PARA_O_ALUNO` usa o de quem decide sobre
+ * o próprio corpo: "Alimentação", "Saúde", "Peso, medidas e fotos". Quem está
+ * autorizando não precisa aprender o nome técnico para entender o que vai
+ * entregar — e a tela de autorização é, pela LGPD, onde o entendimento tem de
+ * acontecer.
+ *
+ * As duas estavam espalhadas: a do aluno dentro de `equipe.tsx`, a do
+ * profissional dentro de `resumo/page.tsx` — e esta segunda era
+ * `Partial<Record<...>>`. Com `Partial`, escopo novo sem rótulo não dá erro
+ * nenhum: a tela escreve o enum em caixa alta. Foi assim que `MEDICO` e
+ * `LADO_DIREITO` chegaram à tela em 02/10. `Record` total obriga a dar nome, e
+ * escopo novo sem nome não compila.
+ */
+export const ROTULO_ESCOPO: Record<EscopoDado, string> = {
+  TREINO: 'Treino',
+  NUTRICAO: 'Nutrição',
+  CLINICO: 'Dados clínicos',
+  EVOLUCAO: 'Evolução',
+  MENSAGENS: 'Mensagens',
+  LEITURA_AUTOMATICA: 'Leitura automática',
+};
+
+export const ROTULO_ESCOPO_PARA_O_ALUNO: Record<EscopoDado, string> = {
+  TREINO: 'Treino',
+  NUTRICAO: 'Alimentação',
+  CLINICO: 'Saúde',
+  EVOLUCAO: 'Peso, medidas e fotos',
+  MENSAGENS: 'Conversa entre profissionais',
+  LEITURA_AUTOMATICA: 'Leitura automática de documentos',
+};
+
 /** Texto exibido ao aluno no momento do aceite. É a prova de finalidade específica. */
 export const FINALIDADE_POR_ESCOPO: Record<EscopoDado, string> = {
   TREINO:

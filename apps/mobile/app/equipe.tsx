@@ -5,6 +5,7 @@ import {
   type ConsentimentoResumo,
   type VinculoResumo,
   ROTULO_PAPEL_INCLUSIVO,
+  ROTULO_ESCOPO_PARA_O_ALUNO,
 } from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -12,15 +13,6 @@ import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } 
 import { FalhouAoCarregar } from '../src/componentes/Estado';
 import { sdk } from '../src/sdk';
 import { useSessao } from '../src/sessao';
-
-const ROTULO_ESCOPO: Record<EscopoDado, string> = {
-  TREINO: 'Treino',
-  NUTRICAO: 'Alimentação',
-  CLINICO: 'Saúde',
-  EVOLUCAO: 'Peso, medidas e fotos',
-  MENSAGENS: 'Conversa entre profissionais',
-  LEITURA_AUTOMATICA: 'Leitura automática de documentos',
-};
 
 /** A ordem em que fazem sentido decididos, não a do enum. */
 const ESCOPOS: EscopoDado[] = [
@@ -173,7 +165,7 @@ export default function Equipe() {
       pessoa entender por quê, e o susto é pior que o toque a mais.
     */
     Alert.alert(
-      `Parar de compartilhar ${ROTULO_ESCOPO[escopo]}?`,
+      `Parar de compartilhar ${ROTULO_ESCOPO_PARA_O_ALUNO[escopo]}?`,
       'Seus profissionais deixam de ver esses dados na hora. Você pode autorizar de novo quando quiser.',
       [
         { text: 'Cancelar', style: 'cancel' },
@@ -362,7 +354,7 @@ export default function Equipe() {
               key={escopo}
               accessibilityRole="switch"
               accessibilityState={{ checked: ativo }}
-              accessibilityLabel={`${ROTULO_ESCOPO[escopo]}: ${ativo ? 'compartilhando' : 'não compartilhado'}`}
+              accessibilityLabel={`${ROTULO_ESCOPO_PARA_O_ALUNO[escopo]}: ${ativo ? 'compartilhando' : 'não compartilhado'}`}
               disabled={ocupado === escopo}
               onPress={() => (ativo ? pedirParaRevogar(escopo) : void alternar(escopo))}
               style={{
@@ -377,7 +369,7 @@ export default function Equipe() {
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: espacamento.sm }}>
                 <Text style={{ color: tema.textoPrimario, fontWeight: '700', flex: 1 }}>
-                  {ROTULO_ESCOPO[escopo]}
+                  {ROTULO_ESCOPO_PARA_O_ALUNO[escopo]}
                 </Text>
                 <Text
                   style={{

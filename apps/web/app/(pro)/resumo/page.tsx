@@ -1,6 +1,6 @@
 'use client';
 
-import { EscopoDado, type ResumoDoProfissional } from '@vivio/contracts';
+import { ROTULO_ESCOPO, type ResumoDoProfissional } from '@vivio/contracts';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Aviso, Botao, Cartao, EstadoVazio, Explicacao } from '../../../components/ui';
@@ -22,15 +22,6 @@ import { useSessao } from '../../../lib/sessao';
  * O que aparece aqui, aparece porque leva a uma ação de hoje. Contador que só
  * enfeita ficou de fora.
  */
-
-const NOME_DO_ESCOPO: Partial<Record<EscopoDado, string>> = {
-  TREINO: 'Treino',
-  NUTRICAO: 'Nutrição',
-  CLINICO: 'Dados clínicos',
-  EVOLUCAO: 'Evolução',
-  MENSAGENS: 'Mensagens',
-  LEITURA_AUTOMATICA: 'Leitura automática',
-};
 
 /** Faixa de seção, no mesmo espírito das do Prime: orienta sem ocupar. */
 function Faixa({ children }: { children: string }) {
@@ -220,7 +211,7 @@ export default function Resumo() {
                         {p.nome}
                       </Link>
                       <span className="text-sm" style={{ color: 'var(--vv-texto-secundario)' }}>
-                        falta autorizar {p.faltando.map((e) => NOME_DO_ESCOPO[e] ?? e).join(', ')}
+                        falta autorizar {p.faltando.map((e) => ROTULO_ESCOPO[e]).join(', ')}
                       </span>
                     </li>
                   ))}

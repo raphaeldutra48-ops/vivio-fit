@@ -324,6 +324,57 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 02/10 — passe 7: a verificação que aprovava tudo sem olhar
+
+Este passe achou **um defeito de produto e um defeito de método** — e o segundo
+é o que vale mais.
+
+**O defeito de produto: mais um mapa de rótulo parcial.** `ROTULO_ESCOPO` existia
+duas vezes, com palavras diferentes e um dos dois `Partial`: o do aplicativo
+(total) chamava os escopos de "Alimentação", "Saúde", "Peso, medidas e fotos"; o
+da web (parcial) chamava de "Nutrição", "Dados clínicos", "Evolução". As duas
+línguas são certas — o aluno que decide sobre o próprio corpo não precisa
+aprender o nome técnico, e a tela de autorização é, pela LGPD, onde o
+entendimento tem de acontecer. Então viraram duas tabelas canônicas em
+`@vivio/contracts`, as duas `Record<EscopoDado, string>` TOTAIS:
+`ROTULO_ESCOPO` e `ROTULO_ESCOPO_PARA_O_ALUNO`. Escopo novo sem nome não compila.
+
+**O defeito de método: a regra que eu escrevi para impedir isso passou com o
+defeito presente.** Criei uma varredura de fonte que reprova
+`const X: Partial<Record<Enum, string>>` em qualquer tela. Para provar que
+funcionava, devolvi o mapa parcial à tela do resumo — e a varredura aprovou.
+
+A expressão regular tinha ganhado um **byte de controle invisível** (0x08) no
+lugar de um escape ``, ao passar por uma ferramenta de edição. O padrão passou
+a exigir um backspace literal antes de `const`, e portanto não casava com nada:
+a varredura percorria 136 arquivos e aprovava todos sem olhar. Na tela, o arquivo
+parecia correto — o byte não se vê.
+
+**Foi a terceira vez nesta auditoria que uma verificação minha falhou assim.** As
+outras duas: a do auditor de RLS (mesma classe, escape perdido dentro de um
+template literal) e a primeira versão do teto de campos (aceitava `.regex()`
+como limite, e por isso aprovava a senha sem `.max()`).
+
+A conclusão virou regra, e está escrita nos dois arquivos:
+
+> **Varredura de fonte carrega amostra boa e amostra ruim.** Conferir o
+> repositório não serve de autoteste — o resultado esperado ali é "nada
+> encontrado", que é também o resultado de uma verificação quebrada.
+
+As duas regras ganharam autoteste por amostra:
+
+- a de mapa parcial tem três amostras que ela TEM de pegar, quatro que não pode
+  pegar (inclusive `type ValoresDigitados`, que é rascunho de formulário e
+  legitimamente parcial — a primeira versão reprovava), e uma que confere que a
+  expressão não tem caractere de controle escondido;
+- a de teto de campos ganhou um schema que reprova, um que passa, e uma amostra
+  específica para `.regex()` sozinho não contar como teto — as três pelo MESMO
+  caminho que varre o repositório, não por um atalho parecido.
+
+**Mutações:** 5 neste passe. A do mapa parcial foi pega só depois do autoteste;
+a do critério de `.regex()` reprova a amostra específica. 1.313 provas, cadeia
+verde por código de saída.
+
 ### Auditoria de 02/10 — passe 6: inventário exaustivo em vez de amostra, e o teste que mentia
 
 Os cinco passes anteriores varreram por padrão: procurar a família, achar as

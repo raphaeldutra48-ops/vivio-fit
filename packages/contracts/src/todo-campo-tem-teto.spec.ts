@@ -9,6 +9,7 @@ import {
   ZodString,
   type ZodTypeAny,
 } from 'zod';
+import { z } from 'zod';
 import * as contratos from './index';
 
 /**
@@ -99,8 +100,24 @@ interface Achado {
   oque: string;
 }
 
+/**
+ * Percorre UM schema. É o mesmo caminho que a varredura do repositório usa — e
+ * é por isso que as amostras provam a varredura, e não um atalho parecido.
+ */
+function varrerUm(nome: string, schema: ZodTypeAny): Achado[] {
+  return percorrer([[nome, schema]]).achados;
+}
+
 /** Percorre todo schema de objeto exportado, inclusive dentro de listas. */
 function varrer(): { achados: Achado[]; textos: number; listas: number } {
+  return percorrer(
+    Object.entries(contratos).filter(([, v]) => v instanceof ZodObject) as [string, ZodTypeAny][],
+  );
+}
+
+function percorrer(
+  raizes: [string, ZodTypeAny][],
+): { achados: Achado[]; textos: number; listas: number } {
   const achados: Achado[] = [];
   let textos = 0;
   let listas = 0;
@@ -134,21 +151,59 @@ function varrer(): { achados: Achado[]; textos: number; listas: number } {
     }
   };
 
-  for (const [nome, valor] of Object.entries(contratos)) {
-    if (valor instanceof ZodObject) olhar(nome, valor as ZodTypeAny);
-  }
+  for (const [nome, valor] of raizes) olhar(nome, valor);
   return { achados, textos, listas };
 }
+
+/*
+  Amostras para a verificação se provar, antes de olhar o repositório.
+
+  Conferir o repositório NÃO serve de autoteste: o resultado esperado ali é
+  "nada encontrado", que é também o resultado de uma verificação quebrada. Foi
+  exatamente o que aconteceu com a regra de mapa parcial de rótulo, cuja
+  expressão ganhou um byte de controle invisível e passou a aprovar tudo — e com
+  a primeira versão DESTA regra, que aceitava `.regex()` como teto.
+
+  Então: um schema que tem de reprovar e um que tem de passar.
+*/
+export const SCHEMA_RUIM = z.object({
+  textoSolto: z.string(),
+  listaSolta: z.array(z.string().max(10)),
+});
+
+export const SCHEMA_BOM = z.object({
+  textoComTeto: z.string().max(120),
+  identificador: z.string().cuid(),
+  listaComTeto: z.array(z.string().max(10)).max(5),
+  numero: z.number().int(),
+});
+
+describe('a verificação sabe o que procura', () => {
+  it('reprova texto sem teto e lista sem teto', () => {
+    const achados = varrerUm('ruim', SCHEMA_RUIM);
+    expect(achados.map((a) => a.onde)).toEqual(['ruim.textoSolto', 'ruim.listaSolta']);
+  });
+
+  it('aprova o que tem teto — inclusive o formato de comprimento fixo', () => {
+    expect(varrerUm('bom', SCHEMA_BOM)).toEqual([]);
+  });
+
+  it('`.regex()` sozinho NÃO conta como teto', () => {
+    // O erro que a mutação pegou: `senhaSchema` tem `.regex(/[0-9]/)`, que não
+    // limita nada, e por isso a prova aprovava a senha sem `.max()`.
+    const comRegex = z.object({ senha: z.string().min(8).regex(/[0-9]/) });
+    expect(varrerUm('auth', comRegex).map((a) => a.onde)).toEqual(['auth.senha']);
+  });
+});
 
 describe('todo campo de entrada tem teto', () => {
   const { achados, textos, listas } = varrer();
 
   it('a varredura realmente alcança os schemas — senão ela aprova o vazio', () => {
     /*
-      A prova mais importante do arquivo. Um erro na introspecção faria `achados`
-      vir vazio e tudo parecer certo; já aconteceu neste projeto, com uma
-      verificação que não casava com nada e por isso "passava". Os números
-      confirmam que ela olhou.
+      O segundo autoteste: os números confirmam que ela olhou o repositório, e
+      não só as amostras acima. Um caminho errado na introspecção faria `achados`
+      vir vazio e tudo parecer certo.
     */
     expect(textos).toBeGreaterThan(150);
     expect(listas).toBeGreaterThan(20);
