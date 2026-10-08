@@ -54,8 +54,8 @@ for nome, lista in [('WEB', web), ('APP', mob)]:
         print('   -', f)
 ```
 
-**Medido em 02/10/2026:** aplicativo 22 de 22 cobertas; web 30 de 46. As
-dezesseis restantes estão nomeadas e em ordem de risco na pendência 32 do
+**Medido em 08/10/2026:** aplicativo 22 de 22 cobertas; web 34 de 46. As doze
+restantes estão nomeadas e em ordem de risco na pendência 32 do
 [`PENDENCIAS.md`](PENDENCIAS.md) — três delas são embrulho de catorze linhas em
 volta de um componente que JÁ tem prova, e isso está dito lá.
 

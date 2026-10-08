@@ -13,51 +13,48 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
-### 32. Dezesseis telas da web sem prova que as importe — a lista exata
-**Assumida em:** 2026-10-02 · **Depende de:** tempo, sem risco.
-**Estado:** o inventário de 02/10 contou as telas dos dois lados e cruzou com o
-que as suítes realmente importam. **O aplicativo tem 22 de 22 telas com prova.**
-A web tem 46 telas, 30 com prova.
+### 32. Doze telas da web sem prova que as importe — a lista exata
+**Assumida em:** 2026-10-02 · **Atualizada em:** 2026-10-08 · **Depende de:**
+tempo, sem risco.
+**Estado:** medido por `python docs/inventario-de-provas.py`. **O aplicativo tem
+22 de 22 telas com prova.** A web tem 46 telas, **34 com prova** — eram 29 em
+02/10.
 
-Três das dezesseis são embrulho de catorze linhas em volta de
-`CatalogoPrescritivel` — `prescricoes/suplementos`, `prescricoes/medicamentos` e
-`prescricoes/fitoterapicos`, cada uma passando um `tipo` diferente. O miolo delas
-passou a ter 10 provas em 02/10; o que falta é só a prova de que cada embrulho
-passa o `tipo` certo, e isso vale uma prova só, não três.
+Pagas desde então: `(pro)/resumo`, `CatalogoPrescritivel` (o componente das três
+telas de prescrição), `(pro)/feedback`, `(pro)/relatorios`,
+`(pro)/cadastros/perfil` e `(pro)/prescricoes/modelos` — as quatro últimas em
+08/10, com 40 provas e 17 mutações conferidas.
 
-As treze com substância própria, em ordem do que custa mais se falhar calado:
+As doze que faltam, em ordem do que custa mais se falhar calado:
 
-1. `(pro)/feedback` — quem precisa de olhar. Mesma família do resumo.
-2. `(pro)/relatorios` — o relatório da carteira.
-3. `(pro)/cadastros/perfil` — **trocar o registro do conselho DERRUBA a
-   verificação**. Tem confirmação, e a confirmação não tem prova.
-4. `(pro)/cadastros/anamnese` — editor de modelo de questionário.
-5. `(pro)/prescricoes/modelos` — modelo de posologia, com remoção.
-6. `(pro)/alunos/[alunoId]/exames/novo` — lançar exame.
-7. `(pro)/alunos/[alunoId]/exames/[exameId]` — ler a classificação.
-8. `(pro)/alunos/[alunoId]/comparativo` — o documento de antes e depois.
-9. `(pro)/materiais` — já auditado à mão, com os guardas no lugar.
-10. `(pro)/lista-de-compras` — derivado do plano.
-11. `(pro)/metodologia` — gerada da tabela de faixas.
-12. `(pro)/ajuda` — texto.
-13. `(pro)/alunos/[alunoId]/treino/[planoId]/imprimir` — folha de impressão.
+1. `(pro)/cadastros/anamnese` — editor de modelo de questionário, com remoção.
+2. `(pro)/alunos/[alunoId]/exames/novo` — lançar exame. As 20 faixas e as 8
+   regras de alerta já têm prova exaustiva em `packages/contracts` e
+   `packages/banco/regras`; o que falta aqui é a fiação da tela.
+3. `(pro)/alunos/[alunoId]/exames/[exameId]` — ler a classificação.
+4. `(pro)/alunos/[alunoId]/comparativo` — o documento de antes e depois.
+5. `(pro)/materiais` — já auditado à mão, com os guardas no lugar e o
+   "tentar de novo" do passe da pendência 30.
+6. `(pro)/lista-de-compras` — derivado do plano; a conta tem prova em contracts.
+7. `(pro)/metodologia` — gerada da tabela de faixas.
+8. `(pro)/ajuda` — texto.
+9. `(pro)/alunos/[alunoId]/treino/[planoId]/imprimir` — folha de impressão.
+10. `prescricoes/suplementos`, 11. `prescricoes/medicamentos`,
+    12. `prescricoes/fitoterapicos` — embrulho de catorze linhas sobre
+    `CatalogoPrescritivel`, que tem 10 provas. O que falta é só conferir que cada
+    um passa o `tipo` certo, e isso vale **uma** prova, não três.
 
-⚠️ **O número aqui já estava errado uma vez.** Escrevi "treze" contando as
-telas de prescrição como cobertas porque o componente delas passou a ter prova —
-e o script diz dezesseis, porque ninguém importa os arquivos. Quando o
-inventário e o texto divergem, quem vale é o script.
-
-Em 02/10 saíram da lista `(pro)/resumo` e o componente `CatalogoPrescritivel`
-(que serve as três telas de prescrição), com 18 provas e mutação.
 **Como refazer o inventário:**
 ```bash
 python docs/inventario-de-provas.py
 ```
 O que ele responde e o que NÃO responde está em
 [`INVENTARIO-DE-PROVAS.md`](INVENTARIO-DE-PROVAS.md).
-**Por que não todas agora:** as quatro primeiras valem um ciclo cada, e as
-quatro últimas são tela de leitura — prova nelas custa o mesmo e protege menos.
-Escrever treze de uma vez trocaria qualidade por contagem.
+**Por que não todas de uma vez:** as quatro de maior risco já saíram. Das doze
+restantes, cinco são tela de leitura ou derivada — prova nelas custa o mesmo e
+protege menos. Escrever doze de uma vez trocaria qualidade por contagem, e foi
+exatamente nas provas escritas com pressa que apareceram os três autoenganos
+desta auditoria.
 
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
@@ -323,6 +320,55 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Pendência 32, primeira metade — as quatro telas de maior risco ganharam prova — 08/10/2026
+
+40 provas novas, 17 mutações conferidas uma a uma. A web passou de 29 para 34
+telas cobertas de 46; o aplicativo segue em 22 de 22.
+
+**`(pro)/feedback` — quem reclamou de dor.** Três decisões do produto que se
+desfaziam sem quebrar nada: a lista vem por URGÊNCIA e não por data (ordenar por
+data enterraria a dor de seis dias atrás embaixo dos "foi tranquilo" de hoje);
+lista vazia NÃO é boa notícia, porque o feedback é opcional no fim do treino e
+quem não respondeu não disse que está bem; e a sequência de dor só aparece do
+segundo em diante, porque dor isolada acontece com todo mundo e mostrar "1º
+treino seguido com dor" transformaria o número em ruído.
+
+**`(pro)/relatorios` — a tabela da carteira.** O mais delicado não é número
+nenhum: é a diferença entre **zero e "não posso ver"**. Cada linha mistura dado
+de três autorizações diferentes. Escrever "0 kg" onde a pessoa não autorizou é
+inventar um dado sobre o corpo dela. A prova trava as três leituras — "não
+autorizado", travessão para ausência de medida, e sinal no ganho de peso — e a
+guarda de corrida entre janelas de 30 e 90 dias.
+
+**`(pro)/cadastros/perfil` — a ação mais irreversível do painel.** Trocar o
+registro no conselho DERRUBA a verificação, e isso acontece ao salvar um
+formulário que também guarda nome e telefone. A tela avisa três vezes, e a prova
+trava as três: no corpo da tela assim que o campo muda, na pergunta ao salvar
+(com as duas consequências concretas — não recebe aluno novo, sai do ar na
+página pública), e na confirmação depois, que diz que a verificação CAIU em vez
+de só "salvo". E trava o contrário: quem ainda está em análise corrigindo um
+dígito não é assustado com aviso sobre perder algo que não tem.
+
+**`(pro)/prescricoes/modelos` — o atalho que evita redigitar posologia.** É
+redigitando que se troca "1 comprimido" por "1 mL", então o valor do modelo é o
+cartão mostrar a dose escrita, sem obrigar a abrir. A prova trava isso, o "sem
+posologia definida" para item salvo em branco, a pergunta antes de remover um
+molde que pode estar em uso há meses, e a ordem do aviso de falha — que vem
+DEPOIS da recarga, porque a recarga limpa o erro e apagaria o aviso no mesmo
+instante.
+
+**Dois enganos meus, pegos pela própria execução:**
+
+- a fixture do perfil tinha `...extras` DEPOIS do objeto montado, e por isso um
+  `{ profissional: { verificadoEm: null } }` apagava registro, UF e tipo — a
+  prova morreu procurando um campo que tinha deixado de existir. Fixture que
+  substitui onde devia mesclar falha longe da causa;
+- a prova do relatório media a tela INTEIRA onde a pergunta era sobre uma
+  célula, e reprovou por causa do rodapé que explica o que "não autorizado"
+  significa. Passou a olhar dentro da linha.
+
+1.353 provas, cadeia verde por código de saída.
 
 ### Auditoria de 02/10 — passe 7: a verificação que aprovava tudo sem olhar
 
