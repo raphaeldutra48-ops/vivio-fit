@@ -121,3 +121,32 @@ Porque o projeto já tinha `LIMITES_DE_TEXTO` e o hábito de usar `.max()`, e me
 assim 32 campos passaram. Eles não tinham nada em comum além de ninguém ter
 olhado. Corrigir os 32 resolve os 32; o que impede o 33º é a prova — e ela falha
 antes de o campo chegar a uma tela.
+
+---
+
+## 3. Texto que o compilador não vê
+
+Terceiro inventário, nascido no passe 9 de 09/10/2026. O SDK fala com o Postgres
+por **nomes em texto** — tabelas, colunas, constraints, funções, argumentos,
+compartimentos de armazenamento —, e nenhum deles passa pelo compilador. Um erro
+de digitação compila, passa em toda prova que não toca o banco, e só aparece em
+produção.
+
+A suíte do SDK pega isso, mas fala com o Supabase de verdade e se pula sem
+credencial. A conferência estática vive em `packages/banco/prisma`:
+
+| arquivo | o que confere |
+|---|---|
+| `sdk-x-esquema.ts` / `.spec.ts` | tabela, coluna, embed, dica de constraint, chave de escrita, coluna obrigatória × gatilho, assinatura de `rpc`, privilégio de execução, política por operação, deriva entre `schema.prisma` e migrações |
+| `compartimentos.ts` / `.spec.ts` | limite e formatos de mídia: `contracts` × `storage.buckets` |
+
+**Como saber que o "nenhum achado" é verdadeiro.** É o mesmo problema dos outros
+dois inventários: uma conferência quebrada também responde "nada". Por isso cada
+regra tem uma amostra ruim e uma boa passando pelo mesmo caminho, a varredura do
+repositório exige um piso de cobertura (hoje: 196 cadeias, 162 selects, 343
+filtros, 70 escritas, 31 rpcs, 251 operações), e a recontagem por regex é
+independente da AST. Os pisos sobem e descem de propósito, por quem muda o SDK.
+
+**Para acrescentar uma regra nova**, o caminho é o das existentes: escreva a
+amostra ruim primeiro, veja a prova falhar por ela, e só então a regra.
+Uma regra cuja amostra ruim nunca foi vista falhando não prova nada.

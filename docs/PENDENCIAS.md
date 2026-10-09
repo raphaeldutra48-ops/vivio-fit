@@ -188,6 +188,103 @@ uns 60% sem explicação.
 
 ## Resolvidas
 
+### Auditoria de 02/10 — passe 9: o SDK fala com o banco por texto, e agora há quem confira — 09/10/2026
+
+**Resultado, dito primeiro: não encontrei defeito vivo no SDK.** Esta é a
+auditoria que mais gastou verificação e menos achou, e o relatório vale mais por
+dizer isso do que por inflar o que sobrou.
+
+**A lente.** O passe 8 confrontou nomes de *tabela* com o esquema e deixou de
+fora a metade maior do mesmo problema: o SDK escreve, em texto, cerca de 600
+nomes que o compilador não vê — colunas em `select('id,nome')`, em `eq`, `order`,
+`or`; chaves de `insert`/`update`/`upsert`; **23 nomes de constraint** como
+`User!Vinculo_alunoId_fkey`; **30 chamadas `rpc`** com o nome de cada argumento.
+Um erro de digitação compila, passa em toda prova que não toca o banco, e o
+PostgREST responde `PGRST200`/`42703`/`PGRST202` na primeira vez que alguém usa
+aquela tela. A suíte do SDK pega isso, mas fala com o Supabase de verdade e se
+pula sem credencial: nunca roda na cadeia nem no CI.
+
+**O que passou a ser conferido, sem banco, a cada push** (`prisma/sdk-x-esquema.ts`
+e `compartimentos.ts`, 138 provas):
+
+| conferência | tamanho medido hoje |
+|---|---|
+| tabela, coluna (select, filtros, order, or), embed e relação entre as tabelas | 196 cadeias · 162 selects · 343 filtros |
+| embed ambíguo (duas chaves entre as mesmas tabelas, sem dica) | — |
+| nome de constraint usado como dica liga *aquelas duas* tabelas | 23 constraints, 51 usos lidos |
+| chaves de `insert`/`update`/`upsert` são colunas | 70 escritas |
+| coluna obrigatória sem default do banco tem gatilho que a preencha | 12 inserts sem a coluna, todos cobertos |
+| assinatura da `rpc`: nome da função, de cada argumento, obrigatórios | 30 chamadas + o embrulho genérico |
+| a função chamada é executável por quem chama | — |
+| toda operação (tabela × comando) do SDK tem política que a cubra | 124 pares distintos · 251 operações lidas · 140 políticas |
+| `schema.prisma` × migrações: toda FK declarada existe com o nome do Prisma | deriva |
+| limite e formatos por tipo de mídia: `contracts` × `storage.buckets` | 5 tipos |
+
+Tudo limpo. A leitura é pela AST do TypeScript, e não por regex: resolve
+`select` montado por concatenação, constante estática da classe, condicional
+(`lado === 'aluno' ? 'alunoId' : 'profissionalId'`), parâmetro tipado com união de
+literais e objeto montado aos poucos (`campos.nome = …`).
+
+**O que isso corrige no que já existia.** `auditar-rls.ts` descobria "o que o SDK
+insere" raspando texto: o `.from('X')` mais próximo nas 40 linhas anteriores e
+qualquer `palavra:` nas 30 seguintes. Medi o raspador contra a AST, nos dois
+sentidos, nas 156 colunas obrigatórias: nunca deu por enviada uma coluna que
+ninguém envia — **não mascarava nada**, a margem era de sorte e não de método — e
+perdia uma, `DemonstracaoProfissional.exercicioId`, por reconhecer atalho de
+objeto só sozinho na linha (`{ profissionalId: eu, exercicioId, videoChave }`).
+Teria acusado um alarme falso na primeira rodada. Agora o auditor usa a AST. **Eu
+não rodei `rls:auditar`**: ele precisa do banco, e a função trocada é a única
+coisa que mudou nele — typecheck, e a mesma função coberta por seis provas.
+
+**Os erros foram meus, e as amostras ruins os pegaram.** A regra deste projeto —
+toda varredura leva uma amostra boa e uma ruim pelo mesmo caminho — pagou três
+vezes aqui:
+
+1. A regra de junção muitos-para-muitos aceitava qualquer tabela ligada às duas
+   em *qualquer* direção, e deixou passar um embed sem relação nenhuma. No
+   PostgREST a junção precisa ter FK **saindo dela** para as duas.
+2. `Buffer.from(base64)` e `Array.from(texto)` foram lidos como tabelas.
+3. Meu `podeExecutar` tratava `revoke … from anon` como fechamento — **o mesmo
+   equívoco que o `99-fechar-portas.sql` documenta** ("tirar de `anon` o que ele
+   recebe por `PUBLIC` deixa o acesso de pé"). Um papel executa se tem grant
+   direto *ou* se `PUBLIC` tem.
+
+**Segurança, como teste.** O arquivo 99 fecha as funções por um laço dinâmico
+(`execute format('revoke execute … from public, anon')`), invisível a qualquer
+leitura de comandos soltos. Modelado, o conjunto de funções alcançáveis por
+`anon` — **das 103 do esquema, e não só das 30 que o SDK chama** — é exatamente
+`pagina_publica` e `enviar_pedido_de_contato`. Uma terceira função aberta, ou uma
+dessas duas fechada, reprova.
+
+**Vinte e três mutações no repositório de verdade**, cada uma derrubando a prova
+certa com tabela e linha na mensagem: tabela com letras trocadas, coluna num
+`select`, caixa trocada numa constraint, gatilho que deixa de preencher `autorId`,
+coluna renomeada no esquema, constraint derrubada por migração nova, relação
+declarada sem migração, teto de mídia só no cliente, formato só no balde, balde
+da evolução público, argumento de `rpc` com a letra trocada, `grant` removido,
+função aberta ao `anon`, parâmetro renomeado no SQL, a varredura do 99 removida
+ou enfraquecida, política de insert trocada por select, política derrubada no fim
+dos arquivos. **Uma sobreviveu e a culpa era minha**: acrescentei o
+`grant … to anon` no meio dos arquivos, e o `revoke` do 39 vem depois e o
+desfaz — a prova modelava a ordem certo, a mutação estava mal posta. Refeita no
+último arquivo, morre.
+
+**O que NÃO é conferido**, para ninguém achar que é: o *tipo* do valor
+(`alunoId` recebendo número), o corpo da requisição à função de borda
+`ler-dieta`, e a existência da linha. A varredura do 99 só é modelada pelo padrão
+exato que ela usa; outro laço dinâmico, escrito de outro jeito, seria invisível.
+Qualquer ponto cujo nome seja de fato dinâmico vira `NAO_RESOLVIDO` e **reprova**
+— um buraco conhecido é melhor que um buraco calado.
+
+**Correção a um diagnóstico meu, do passe 8.** Registrei que "o heredoc comeu a
+contrabarra". A causa estava errada: o shell preserva a contrabarra num heredoc
+com delimitador entre aspas; quem a interpretava era o **literal do Python** (um
+`'\n'` dentro de `"""…"""` vira quebra de linha de verdade). A regra de conduta
+continua valendo e ganha o motivo certo: arquivo com escape vai por edição
+direta, ou por `r'''…'''`. Nesta rodada apareceu um segundo defeito, este sim do
+shell: heredocs grandes com aspas e crases foram recusados três vezes com
+"unexpected EOF". Edição direta resolve os dois.
+
 ### Auditoria de 02/10 — passe 8: três tabelas clínicas que nascem vazias, e um alerta que nunca nascia — 08/10/2026
 
 Comecei este passe por uma suspeita minha que se provou **falsa**, e registro

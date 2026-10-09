@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { urlDoBanco } from '../conexao';
 import { colunaTemQuemPreencha } from './regras-da-auditoria';
+import { colunasQueOSdkPreenche as colunasDoSdk, lerEsquema } from './sdk-x-esquema';
 
 /**
  * Auditoria das políticas, contra o banco de verdade.
@@ -100,37 +101,22 @@ function usoDoSdk(): Map<string, Set<string>> {
  * literal das ~30 linhas seguintes ao `.insert(`. Objeto montado em variável
  * separada vira falso alarme, e é por isso que o achado é informativo.
  */
+/**
+ * O que o SDK manda em cada tabela, lido pela AST.
+ *
+ * Era uma raspagem de texto — `.from('X')` até 40 linhas acima, e qualquer
+ * `palavra:` nas 30 seguintes —, e errava nas duas direções: contava como
+ * enviada a palavra de um comentário ou de um objeto aninhado (margem de sorte,
+ * não de método) e perdia o atalho de objeto na mesma linha, como
+ * `{ profissionalId: eu, exercicioId, videoChave }`, o que acusaria
+ * `DemonstracaoProfissional.exercicioId` sem razão. Medido contra o SDK de
+ * 09/10: nunca deu por enviada uma coluna que ninguém envia, e perdia uma.
+ * A leitura vive em `sdk-x-esquema.ts`, que tem prova.
+ */
 function colunasQueOSdkPreenche(): Map<string, Set<string>> {
-  const caminho = join(__dirname, '../../../packages/sdk/src/supabase.ts');
-  const linhas = readFileSync(caminho, 'utf8').split('\n');
-  const mapa = new Map<string, Set<string>>();
-
-  for (let i = 0; i < linhas.length; i++) {
-    if (!/\.(insert|upsert)\s*\(/.test(linhas[i]!)) continue;
-    let tabela: string | null = null;
-    for (let j = i; j >= Math.max(0, i - 40); j--) {
-      const dono = linhas[j]!.match(/\.from\(\s*'(\w+)'\s*\)/);
-      if (dono) {
-        tabela = dono[1]!;
-        break;
-      }
-    }
-    if (tabela === null) continue;
-
-    const campos = mapa.get(tabela) ?? new Set<string>();
-    for (const linha of linhas.slice(i, i + 30)) {
-      // Para no fim do bloco: a próxima chamada encadeada já é outra coisa.
-      if (/^\s*\)\s*[.;]/.test(linha)) break;
-      for (const m of linha.matchAll(/(?:^|[{,\s])(\w+)\s*:/g)) campos.add(m[1]!);
-      // Abreviação de objeto (`id,` em vez de `id: id`) — o jeito mais comum
-      // de passar a variável homônima, e ignorá-la fazia a varredura acusar
-      // quinze colunas que estão preenchidas.
-      const curto = linha.match(/^\s*(\w+),\s*$/);
-      if (curto) campos.add(curto[1]!);
-    }
-    mapa.set(tabela, campos);
-  }
-  return mapa;
+  const esquema = lerEsquema(readFileSync(join(__dirname, 'schema.prisma'), 'utf8'));
+  const fonte = readFileSync(join(__dirname, '../../../packages/sdk/src/supabase.ts'), 'utf8');
+  return colunasDoSdk(fonte, esquema);
 }
 
 /** Nomes de política que algum arquivo de `rls/` cria. */
