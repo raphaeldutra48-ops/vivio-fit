@@ -45,6 +45,7 @@ export function TelaQuebrada({
             não `router.push`, porque a navegação do Next pode ser justamente o que
             quebrou.
           */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- recarregar inteiro é o ponto aqui */}
           <a href="/alunos" className="self-center text-sm underline">
             Ir para meus alunos
           </a>

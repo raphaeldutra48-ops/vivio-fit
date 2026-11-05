@@ -1,3 +1,4 @@
+import nextPlugin from '@next/eslint-plugin-next';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
@@ -126,6 +127,28 @@ export default tseslint.config(
         'warn',
         { checksVoidReturn: { attributes: false } },
       ],
+    },
+  },
+  {
+    /*
+      As regras do próprio Next, só na web: link interno sem `<Link>` (recarrega
+      a página inteira e perde a sessão em memória), `<img>` cru, script
+      síncrono, fonte carregada fora do lugar. O build do Next 16 avisava que o
+      plugin não estava configurado — e, sem ele, nada disso era conferido.
+    */
+    files: ['apps/web/**/*.{ts,tsx}'],
+    plugins: { '@next/next': nextPlugin },
+    settings: { next: { rootDir: 'apps/web' } },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      /*
+        `<img>` é decisão, não descuido: o otimizador de imagem do Next está
+        DESLIGADO (`images.unoptimized`, depois da falha crítica de setembro), e
+        as imagens daqui vêm de links assinados que expiram em minutos — o
+        `<Image>` não acrescentaria otimização nenhuma, só a dependência.
+      */
+      '@next/next/no-img-element': 'off',
     },
   },
   {

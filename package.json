@@ -16,6 +16,7 @@
     "cf:deploy": "pnpm --filter @vivio/web cf:deploy"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "16.4.5",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "turbo": "^2.3.3",
