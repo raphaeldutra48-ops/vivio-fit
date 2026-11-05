@@ -37,9 +37,9 @@ jobs:
       DIRECT_URL: postgresql://nao:existe@localhost:5432/nenhum
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -84,20 +84,43 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Provas que não precisam do banco
-        run: |
-          pnpm --filter @vivio/contracts test
-          pnpm --filter @vivio/ui test
-          pnpm --filter @vivio/web test
-          pnpm --filter @vivio/mobile test
-          pnpm --filter @vivio/banco run test:sem-banco
+      # Cada suíte é um passo, e todos rodam mesmo que um anterior tenha falhado.
+      #
+      # Eram um passo só, e o bash para na primeira falha. Entre 08/10 e 05/11/2026
+      # duas provas da web reprovaram aqui (fuso do runner, UTC) e, por causa
+      # disso, as suítes do app e do banco, o build da Cloudflare e o
+      # empacotamento do app NÃO RODARAM em nenhum push — por quatro semanas. O
+      # vermelho estava certo, mas escondia o tamanho do que não se sabia.
+      # `!cancelled()` deixa cada passo rodar depois de uma falha, sem rodar
+      # quando o próprio trabalho foi cancelado por um push mais novo.
+      - name: Provas de contracts
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @vivio/contracts test
+
+      - name: Provas de ui
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @vivio/ui test
+
+      - name: Provas da web
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @vivio/web test
+
+      - name: Provas do aplicativo
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @vivio/mobile test
+
+      - name: Provas do banco que não precisam de Postgres
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @vivio/banco run test:sem-banco
 
       - name: Build da web, como a Cloudflare faz
+        if: ${{ !cancelled() }}
         # Pega o que só aparece no empacotamento — foi assim que a falta do
         # `output: standalone` apareceu, e não em teste nenhum.
         run: pnpm --filter @vivio/web run build:cloudflare
 
       - name: Empacotamento do aplicativo, como o EAS faz
+        if: ${{ !cancelled() }}
         # O Metro resolve módulos diferente do Vitest e do Next: import que só
         # ele enxerga (ou que depende do layout plano do node_modules) passa por
         # tudo acima e quebra no `eas build`, que é pago, roda na nuvem e demora

@@ -46,6 +46,27 @@ begin
     return 'PAPEL';
   end if;
 
+  /*
+    Só profissional com o registro no conselho VERIFICADO — nos dois caminhos.
+
+    Cada leitura chama o modelo mais caro da Anthropic, na conta do dono do
+    produto. O caminho sem aluno (abaixo) não pedia mais nada além de "não ser
+    aluno", e o cadastro de profissional é aberto: qualquer pessoa criava uma
+    conta e chamava a leitura em laço, sem vínculo, sem consentimento e sem
+    limite. Não vazava dado de ninguém — o documento é dela —, mas a fatura era
+    de outro. Achado na auditoria de 05/11/2026.
+
+    No caminho COM aluno o vínculo já pressupunha verificação, mas não a
+    garantia: trocar o registro no conselho derruba a verificação e mantém os
+    vínculos ativos. Por isso a pergunta é feita aqui, antes dos dois.
+  */
+  if not exists (
+    select 1 from public."PerfilProfissional" pp
+     where pp."userId" = eu and pp."verificadoEm" is not null
+  ) then
+    return 'VERIFICACAO';
+  end if;
+
   -- Sem aluno é a importação do modelo do próprio profissional: o documento é
   -- dele, não há dado de terceiro saindo daqui, e não há o que consentir.
   if p_aluno_id is null then

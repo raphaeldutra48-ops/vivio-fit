@@ -1,11 +1,23 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach, expect } from 'vitest';
 import { avisosProibidos, mensagemDoConsole } from './avisos-do-react';
 
 // Sem isto, o DOM de um teste sobra para o seguinte e `getByLabelText` acha
 // dois campos "Dose" que vieram de renderizações diferentes.
 afterEach(cleanup);
+
+/*
+  Quanto `findBy…` e `waitFor` esperam a tela aparecer: 5 s, e não o 1 s padrão.
+
+  A prova de "montar plano alimentar" passava sozinha três vezes em três e
+  reprovava com a suíte inteira rodando: o primeiro render da tela, a busca do
+  catálogo e o debounce somavam mais de 1 s numa máquina ocupada — e o runner do
+  CI é mais lento que esta. Esperar mais não atrasa nada quando a tela aparece
+  antes (a espera termina no instante em que acha), e não enfraquece prova
+  nenhuma: afirmação de ausência não usa `waitFor` para esperar algo que não vem.
+*/
+configure({ asyncUtilTimeout: 5000 });
 
 /**
  * Aninhamento de HTML inválido REPROVA o teste, em vez de virar linha de log.

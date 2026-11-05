@@ -128,6 +128,19 @@ const RECUSA: Record<string, { codigo: string; mensagem: string; status: number 
     mensagem: 'Só profissionais importam dieta.',
     status: 403,
   },
+  /*
+    A leitura automática custa por chamada, e só profissional verificado a usa.
+    Se esta função estiver publicada numa versão sem esta linha e o banco já
+    devolver `VERIFICACAO`, a recusa cai no "você não tem acesso" genérico lá
+    embaixo — menos clara, mas segura.
+  */
+  VERIFICACAO: {
+    codigo: 'ACESSO_NEGADO',
+    mensagem:
+      'A leitura automática libera depois que o seu registro no conselho for verificado. ' +
+      'Até lá, monte o plano à mão.',
+    status: 403,
+  },
   VINCULO: { codigo: 'RECURSO_NAO_ENCONTRADO', mensagem: 'Aluno não encontrado.', status: 404 },
   NUTRICAO: {
     codigo: 'CONSENTIMENTO_AUSENTE',

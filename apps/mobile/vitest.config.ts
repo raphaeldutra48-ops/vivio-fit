@@ -41,6 +41,13 @@ export default defineConfig({
     include: ['teste/**/*.test.ts', 'teste/**/*.test.tsx', 'teste/**/*.spec.ts'],
     setupFiles: ['./teste/preparo.ts'],
     /*
+      O fuso de quem usa, e não o da máquina que roda a prova — a mesma decisão
+      de `contracts` e da web. O app mostra hora e "hoje" no fuso do aparelho, e
+      as provas afirmam a hora de Brasília; sem isto elas passariam aqui e
+      reprovariam no CI, que roda em UTC.
+    */
+    env: { TZ: 'America/Sao_Paulo' },
+    /*
       Sem isto o histórico de chamadas de um `vi.fn()` sobra para o teste
       seguinte, e um `mock.calls[0]` passa a ler o envio do teste anterior. A
       suíte da web aprendeu isso com um teste que "provou" o número errado.

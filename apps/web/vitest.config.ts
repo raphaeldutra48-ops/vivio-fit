@@ -41,5 +41,19 @@ export default defineConfig({
     */
     testTimeout: 20_000,
     setupFiles: ['./teste/preparo.ts'],
+    /*
+      O fuso de quem usa, e não o da máquina que roda a prova.
+
+      As telas formatam hora no fuso do navegador (`toLocaleTimeString`), que é
+      o comportamento certo: o profissional vê a hora de Brasília. As provas
+      afirmam essa hora ("10:00" para `13:00Z`). Sem fixar o fuso, elas passavam
+      nesta máquina e reprovavam no runner do CI, que roda em UTC — e reprovaram
+      em SEIS pushes seguidos sem ninguém olhar, porque o passo para na primeira
+      falha e as suítes do app e do banco, o build da Cloudflare e o
+      empacotamento do app nunca chegaram a rodar.
+
+      É a mesma decisão da suíte de `contracts`, pelo mesmo motivo.
+    */
+    env: { TZ: 'America/Sao_Paulo' },
   },
 });

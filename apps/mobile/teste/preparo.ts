@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import { avisosProibidos, mensagemDoConsole } from './avisos-do-react';
+
+/*
+  `findBy…` e `waitFor` esperam até 5 s, e não o 1 s padrão — a mesma decisão da
+  web, onde uma prova passava sozinha e reprovava com a suíte inteira rodando. A
+  espera termina no instante em que a tela aparece; só o pior caso fica maior.
+*/
+configure({ asyncUtilTimeout: 5000 });
 
 /**
  * O DOM de uma prova não sobra para a seguinte.
