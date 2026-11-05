@@ -61,15 +61,28 @@ minimumReleaseAgeExclude:
 #   deepmerge-ts          7.1.5 → 8.0.0  (vem de @prisma/config; só sai com
 #                                         Prisma 8, hoje release candidate)
 #
-# E um que não tem correção NENHUMA publicada: o aviso de `node-forge` pede
-# 1.4.1, e a última versão que existe é a 1.4.0 — forçar quebrou a instalação
-# com "The latest release of node-forge is 1.4.0". Aviso sem versão corrigida
-# não se resolve do nosso lado; espera o upstream.
+# `node-forge` não tinha correção publicada no passe 7 (forçar 1.4.1 quebrava a
+# instalação com "The latest release of node-forge is 1.4.0"). A 1.4.1 saiu
+# depois e, em 05/11/2026, com 9 dias, entrou — com faixa no nome, como a
+# brace-expansion. Na mesma revisão: `source-map-js` 1.2.1→1.2.2 e `sharp`
+# 0.35.4→0.35.5, as duas na mesma linha.
+#
+# Ficaram de fora em 05/11/2026, além dos de cima:
+#   zod        3.25.76 → 4.6.6  é dependência NOSSA (contracts), e a correção só
+#              existe na 4: migração de API em centenas de esquemas. O risco é
+#              baixo — a validação roda no aparelho de quem usa, sobre o que a
+#              própria pessoa digitou; não há servidor nosso validando dado
+#              alheio. Pendência registrada, não correção às pressas.
+#   glob 10 → 14, minimatch 9 → 11  salto de major em ferramenta de build.
+#   deepmerge  o aviso pede 4.3.2, que não foi publicada.
+#   decode-uri-component  a 0.5.1 é ESM puro, e quem a usa é CommonJS.
 # Nenhuma delas embarca no aplicativo: são ferramental de build. A hora de
 # mexer é junto do próximo `eas build`, com `build:android` conferindo antes.
 overrides:
   postcss: ^8.5.23
   nanoid: ^3.3.18
-  sharp: ^0.35.4
+  sharp: ^0.35.5
+  node-forge@<1.4.1: ^1.4.1
+  source-map-js@<1.2.2: ^1.2.2
   brace-expansion@^5.0.0: ^5.0.12
   js-yaml: ^4.3.2
