@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { CriarPlanoTreinoInput } from '@vivio/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Treino realizado pelo SDK, sem API.
@@ -124,8 +125,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: treino realizado', () =
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
 
     const criado = await personal.treinos.criar(alunoId, plano);
@@ -190,7 +191,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: treino realizado', () =
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
 
     const uuid = crypto.randomUUID();
@@ -309,7 +310,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: treino realizado', () =
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
 
     const r = await bruto.from('ExecucaoTreino').insert({

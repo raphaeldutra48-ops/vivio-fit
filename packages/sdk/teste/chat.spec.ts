@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Conversa pelo SDK, sem API.
@@ -66,7 +67,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: conversa', () => {
 
     const criada = await admin.auth.admin.createUser({
       email: emailDoAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna da Conversa', papel: 'ALUNO' },
     });
@@ -92,9 +93,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: conversa', () => {
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailDoAluno, senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailDoAluno, senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -206,7 +207,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: conversa', () => {
       perderia a única marca de que havia algo novo.
     */
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: SENHA_DA_SEMENTE });
 
     const antes = (await personal.chat.listarConversas()).find((c) => c.id === conversaId)!;
     expect(antes.naoLidas).toBe(0);
@@ -233,7 +234,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: conversa', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     const alvo = (await personal.chat.mensagens(conversaId)).dados[0]!;
 
@@ -246,7 +247,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: conversa', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'medico@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     const r = await bruto.from('Mensagem').insert({
       id: `${marca}-intruso`,

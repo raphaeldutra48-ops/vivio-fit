@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Marcas pessoais e painel de progresso pelo SDK, sem API.
@@ -241,8 +242,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: marcas e painel', () =>
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

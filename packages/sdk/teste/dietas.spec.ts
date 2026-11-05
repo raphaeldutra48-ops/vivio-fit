@@ -3,6 +3,7 @@ import type { CriarPlanoDietaInput } from '@vivio/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Plano alimentar pelo SDK, sem API.
@@ -156,8 +157,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: plano alimentar', () =>
     );
 
     await Promise.all([
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -277,7 +278,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: plano alimentar', () =>
 
   it('a tabela da dieta não aceita escrita direta', async () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: SENHA_DA_SEMENTE });
 
     const r = await bruto.from('PlanoDieta').insert({
       id: `${marca}-na-marra`,

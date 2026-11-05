@@ -155,7 +155,10 @@ cliente.
 2. **Confirmar o e-mail** pelo link. Se o link não chegar, o problema é o 1.1.
 3. **Verificar o registro:** entre como admin (`admin@viviofit.com.br`) em
    `/admin/profissionais` e confira o número no site do conselho antes de
-   liberar. A tela repete registro, UF e nome na confirmação justamente para isso.
+   liberar. **A senha não é mais a da semente que estava no repositório**: é a
+   `SENHA_DA_SEMENTE` de `packages/banco/.env.supabase`, nesta máquina. Ela foi
+   trocada em 05/11/2026 porque o repositório é público e a antiga dava acesso
+   de administrador a quem lesse o GitHub. A tela repete registro, UF e nome na confirmação justamente para isso.
    **Sem esse passo o profissional não recebe aluno nem publica página.**
 4. **Preencher o perfil** em `/cadastros/perfil`. Atenção: trocar o registro
    depois de verificado DERRUBA a verificação — a tela avisa, e o banco impõe.
@@ -239,8 +242,11 @@ A pergunta é sempre a mesma: **a tela está afirmando algo que ela não sabe?**
   (pendência 10). O lembrete aparece dentro do app, não na tela de bloqueio.
 - **Pagamento não confirma sozinho.** Não há gateway: quem recebeu marca como
   pago (pendência 20).
-- **Excluir conta não existe como botão.** A decisão envolve retenção de registro
-  clínico e depende de revisão jurídica (pendência 27).
+- **Excluir conta é um pedido, e não um botão que apaga.** "Meus dados", no app,
+  tem "Excluir minha conta", que explica e abre `/excluir-conta`; o pedido sai
+  por e-mail e é atendido por uma pessoa. O que apagar e o que guardar depende de
+  decisão sua e de revisão jurídica (pendência 27) — e o link de e-mail só
+  aparece depois que o contato de privacidade for preenchido.
 - **Dois deploys por push falham no Railway.** Integração antiga ainda conectada
   ao repositório; não afeta o app (pendência 28).
 

@@ -3,6 +3,7 @@ import type { CriarModeloCardapioInput } from '@vivio/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Modelo de cardápio pelo SDK, sem API.
@@ -134,8 +135,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: modelo de cardápio', (
     );
 
     await Promise.all([
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -218,7 +219,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: modelo de cardápio', (
     const descartavel = await nutri.cardapios.criar(molde(`Molde a remover ${marca}`));
 
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: SENHA_DA_SEMENTE });
     const apagou = await bruto.from('ModeloCardapio').delete().eq('id', descartavel.id);
     expect(apagou.error).not.toBeNull();
 
@@ -239,7 +240,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: modelo de cardápio', (
       notar o que entrou.
     */
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: 'nutri@viviofit.com.br', password: SENHA_DA_SEMENTE });
 
     const r = await bruto.from('RefeicaoModelo').insert({
       id: `${marca}-na-marra`,

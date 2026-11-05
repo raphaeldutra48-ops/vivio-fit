@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Alerta clínico e condição de saúde, pelo SDK, sem API no caminho.
@@ -76,9 +77,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: alerta e condição', (
     });
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -156,7 +157,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: alerta e condição', (
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     const [alerta] = await personal.alertas.listar(alunoId);
 

@@ -60,6 +60,8 @@ async function paginasPublicas(): Promise<Checagem[]> {
     ['cadastro', `${ENDERECO_DO_APP}/cadastrar`],
     ['termos de uso', DOCUMENTOS_LEGAIS.termos],
     ['política de privacidade', DOCUMENTOS_LEGAIS.privacidade],
+    // O app abre esta no "Excluir minha conta", e a loja exige que ela responda.
+    ['exclusão de conta', DOCUMENTOS_LEGAIS.exclusaoDeConta],
     // A tela que o app mostra sem rede: some do pacote e o modo offline quebra
     // calado, porque quem o usa já está sem conexão para reclamar.
     ['sem conexão', `${ENDERECO_DO_APP}/sem-conexao`],

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * O envio de arquivo pelo SDK, ponta a ponta.
@@ -44,7 +45,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: envio de arquivo', () =
       (await admin.from('User').select('id').eq('email', 'personal@viviofit.com.br').single())
         .data as { id: string }
     ).id;
-    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' });
+    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE });
   });
 
   afterAll(async () => {

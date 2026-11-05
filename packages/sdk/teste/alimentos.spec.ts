@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Catálogo de alimentos pelo SDK, sem API.
@@ -18,7 +19,7 @@ describe.skipIf(!url || !anon)('SDK sem API: catálogo de alimentos', () => {
   });
 
   beforeAll(async () => {
-    await sdk.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' });
+    await sdk.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE });
   });
 
   it('lista alimentos com os macros como número', async () => {
@@ -68,7 +69,7 @@ describe.skipIf(!url || !anon)('SDK sem API: catálogo de alimentos', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'nutri@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     const r = await bruto.from('Alimento').insert({
       id: `prova-${Date.now()}`,

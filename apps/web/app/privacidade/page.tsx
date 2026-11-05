@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { VERSAO_TERMO_ATUAL } from '@vivio/contracts';
+import Link from 'next/link';
+import { CONTATO_DE_PRIVACIDADE, VERSAO_TERMO_ATUAL } from '@vivio/contracts';
 import { DocumentoLegal, Secao } from '../../components/DocumentoLegal';
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export default function Privacidade() {
           O Vívio Fit é operado por <strong>[PREENCHER: razão social, CNPJ e endereço]</strong>, que
           é o controlador dos dados tratados na plataforma. Para falar sobre privacidade, inclusive
           para exercer qualquer direito desta política:{' '}
-          <strong>[PREENCHER: e-mail de contato do encarregado]</strong>.
+          <strong>{CONTATO_DE_PRIVACIDADE}</strong>.
         </p>
         <p className="mt-xs">
           O profissional que acompanha você (personal trainer, nutricionista ou médico) também é
@@ -115,7 +116,9 @@ export default function Privacidade() {
           </li>
         </ul>
         <p className="mt-xs">
-          Ao revogar, o acesso fecha na mesma hora. Se um profissional havia compartilhado um dado
+          Ao revogar, o acesso aos dados fecha na mesma hora; um arquivo que o profissional já
+          tinha aberto pode continuar visível por alguns minutos, até o link de acesso expirar. Se
+          um profissional havia compartilhado um dado
           seu com outro (o médico autorizando a nutricionista a ver um exame, por exemplo), essa
           permissão é derivada da dele: quando você revoga, ela cai junto.
         </p>
@@ -167,12 +170,17 @@ export default function Privacidade() {
           A LGPD garante confirmação de tratamento, acesso, correção, portabilidade, informação
           sobre compartilhamento, revogação de consentimento e eliminação. Revogação e acesso ao
           registro estão nas telas do app. Para os demais, escreva para{' '}
-          <strong>[PREENCHER: e-mail de contato]</strong>; respondemos em{' '}
+          <strong>{CONTATO_DE_PRIVACIDADE}</strong>; respondemos em{' '}
           <strong>[PREENCHER: prazo, p. ex. 15 dias]</strong>.
         </p>
         <p className="mt-xs">
-          <strong>Exclusão:</strong> hoje o pedido é atendido manualmente pelo contato acima — não
-          existe botão na tela. Parte do que você pediu para apagar pode precisar ser guardada por
+          <strong>Exclusão:</strong> o pedido é atendido por uma pessoa, pelo contato acima — o passo a
+          passo está em{' '}
+          <Link href="/excluir-conta" className="underline">
+            excluir sua conta
+          </Link>
+          , que o
+          aplicativo também abre. Parte do que você pediu para apagar pode precisar ser guardada por
           obrigação legal ou profissional do seu profissional de saúde;{' '}
           <strong>[PREENCHER: prazos de guarda]</strong>.
         </p>

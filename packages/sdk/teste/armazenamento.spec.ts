@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Os arquivos no Supabase Storage, sem API no meio.
@@ -42,7 +43,7 @@ describe.skipIf(!url || !anon || !servico)('armazenamento sem API', () => {
 
   const entrar = async (email: string): Promise<SupabaseClient> => {
     const c = createClient(url!, anon!, { auth: { persistSession: false } });
-    const r = await c.auth.signInWithPassword({ email, password: 'Senha@123' });
+    const r = await c.auth.signInWithPassword({ email, password: SENHA_DA_SEMENTE });
     if (r.error) throw new Error(`login ${email}: ${r.error.message}`);
     return c;
   };
@@ -66,7 +67,7 @@ describe.skipIf(!url || !anon || !servico)('armazenamento sem API', () => {
     ]) {
       const r = await admin.auth.admin.createUser({
         email,
-        password: 'Senha@123',
+        password: SENHA_DA_SEMENTE,
         email_confirm: true,
         user_metadata: { nome, papel: 'ALUNO' },
       });

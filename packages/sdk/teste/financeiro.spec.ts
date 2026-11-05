@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Financeiro pelo SDK, sem API.
@@ -67,7 +68,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: financeiro', () => {
 
     const criada = await admin.auth.admin.createUser({
       email: emailDoAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna do Financeiro', papel: 'ALUNO' },
     });
@@ -99,8 +100,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: financeiro', () => {
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailDoAluno, senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailDoAluno, senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -162,7 +163,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: financeiro', () => {
       "pago" e o profissional continuaria esperando o dinheiro.
     */
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: SENHA_DA_SEMENTE });
 
     const lidas = await bruto.from('Cobranca').select('id,valorCentavos').eq('alunoId', alunoId);
     expect((lidas.data ?? []).length).toBe(3);
@@ -223,7 +224,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: financeiro', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     // Mudar o valor de uma cobrança paga é reescrever um recibo.
     await bruto

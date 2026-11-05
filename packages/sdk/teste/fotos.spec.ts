@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Foto de evolução pelo SDK, sem API.
@@ -68,7 +69,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: foto de evolução', ()
    */
   const alcancaOArquivo = async (email: string): Promise<boolean> => {
     const sessaoNova = createClient(url!, anon!, { auth: { persistSession: false } });
-    const entrada = await sessaoNova.auth.signInWithPassword({ email, password: 'Senha@123' });
+    const entrada = await sessaoNova.auth.signInWithPassword({ email, password: SENHA_DA_SEMENTE });
     if (entrada.error) throw new Error(`login ${email}: ${entrada.error.message}`);
 
     const partes = chave.split('/');
@@ -91,7 +92,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: foto de evolução', ()
 
     const nova = await admin.auth.admin.createUser({
       email: emailAluna,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna da Foto', papel: 'ALUNO' },
     });
@@ -126,9 +127,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: foto de evolução', ()
     );
 
     await Promise.all([
-      aluna.auth.login({ email: emailAluna, senha: 'Senha@123' }),
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
+      aluna.auth.login({ email: emailAluna, senha: SENHA_DA_SEMENTE }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

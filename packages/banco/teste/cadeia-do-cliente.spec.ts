@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { urlDoBanco } from '../conexao';
+import { senhaDaSemente } from '../prisma/senha-da-semente';
 
 /**
  * A cadeia inteira do lado do cliente, sem API nenhuma no meio.
@@ -34,7 +35,7 @@ describe.skipIf(!url || !anon)('a cadeia do cliente, sem API', () => {
 
   async function entrar(email: string): Promise<{ c: SupabaseClient; token: string }> {
     const c = createClient(url!, anon!, { auth: { persistSession: false } });
-    const { data, error } = await c.auth.signInWithPassword({ email, password: 'Senha@123' });
+    const { data, error } = await c.auth.signInWithPassword({ email, password: senhaDaSemente() });
     if (error || !data.session) throw new Error(`login de ${email}: ${error?.message}`);
     return { c, token: data.session.access_token };
   }

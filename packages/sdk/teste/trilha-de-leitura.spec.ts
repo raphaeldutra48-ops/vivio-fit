@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * A leitura pelo SDK volta a aparecer em "quem viu meus dados".
@@ -50,7 +51,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: a leitura entra na trilha', () 
 
     const nova = await admin.auth.admin.createUser({
       email,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: `Aluno ${marca}`, papel: 'ALUNO' },
     });
@@ -80,8 +81,8 @@ describe.skipIf(!url || !anon || !servico)('SDK: a leitura entra na trilha', () 
     if (consentimento.error) throw new Error(`preparo: ${consentimento.error.message}`);
 
     await Promise.all([
-      aluno.auth.login({ email, senha: 'Senha@123' }),
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
+      aluno.auth.login({ email, senha: SENHA_DA_SEMENTE }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

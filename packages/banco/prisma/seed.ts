@@ -416,7 +416,9 @@ async function main(): Promise<void> {
   await semearTreinosDaAna(ana.id, personal.id, diaDeTras);
   await semearMetasDaAna(ana.id, personal.id, diaDeTras);
 
-  console.log('\nSeed concluído. Para entrar, rode `semear-auth` (senha de todos: Senha@123).');
+  console.log(
+    '\nSeed concluído. Para entrar, rode `semear-auth` — a senha de todos é a SENHA_DA_SEMENTE do .env.supabase.',
+  );
   console.log(`Tabela de alimentos: ${catalogo.alimentos} itens`);
   console.log(`Biblioteca global: ${catalogo.exercicios} exercícios\n`);
   console.table([

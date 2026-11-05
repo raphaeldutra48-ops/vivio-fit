@@ -1,6 +1,8 @@
 import { VERSAO_TERMO_ATUAL } from '@vivio/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import ExcluirConta from '../app/excluir-conta/page';
+import NaoEncontrada from '../app/not-found';
 import Privacidade from '../app/privacidade/page';
 import Termos from '../app/termos/page';
 
@@ -19,13 +21,6 @@ import Termos from '../app/termos/page';
  * um compromisso.
  */
 describe('documentos legais', () => {
-  const cadastroComSdkFalso = async () => {
-    vi.doMock('../lib/sdk', () => ({
-      sdk: { auth: { registrarProfissional: vi.fn() } },
-    }));
-    const { default: Cadastrar } = await import('../app/cadastrar/page');
-    return Cadastrar;
-  };
 
   it('a política descreve o que o sistema faz de fato', () => {
     render(<Privacidade />);
@@ -66,10 +61,20 @@ describe('documentos legais', () => {
   it.each([
     ['privacidade', Privacidade],
     ['termos', Termos],
+    ['exclusão de conta', ExcluirConta],
   ])('enquanto %s tiver [PREENCHER], o aviso de rascunho aparece', (_nome, Pagina) => {
     render(<Pagina />);
     const texto = document.body.textContent ?? '';
-    if (texto.includes('[PREENCHER]')) {
+    /*
+      Conta só as marcas do CONTEÚDO, que têm dois-pontos ("[PREENCHER: CNPJ]").
+
+      A primeira versão perguntava `texto.includes('[PREENCHER]')` — e o próprio
+      aviso de rascunho contém esse texto. A condição era sempre verdadeira por
+      causa do aviso, o ramo "revisado" nunca rodava, e um documento todo
+      preenchido continuaria com o aviso e a prova verde. Achado em 05/11/2026.
+    */
+    const pendentes = (texto.match(/\[PREENCHER:/g) ?? []).length;
+    if (pendentes > 0) {
       expect(texto).toMatch(/rascunho/i);
       expect(texto).toMatch(/não passou por revisão jurídica/i);
     } else {
@@ -82,8 +87,67 @@ describe('documentos legais', () => {
     render(<Termos />);
     const destinos = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(destinos).toContain('/privacidade');
+    expect(destinos).toContain('/excluir-conta');
     expect(destinos).toContain('/login');
   });
+
+  it('a política, ao falar de exclusão, leva à página que explica como pedir', () => {
+    render(<Privacidade />);
+    const link = screen.getByText(/excluir sua conta/i).closest('a');
+    expect(link).toHaveAttribute('href', '/excluir-conta');
+    // E diz a verdade sobre arquivo já aberto: o link assinado dura alguns minutos.
+    expect(document.body.textContent).toMatch(/pode continuar visível por alguns minutos/i);
+  });
+});
+
+describe('excluir a conta: a página que o app abre e a loja exige', () => {
+  it('enquanto o contato é [PREENCHER], NÃO há link de e-mail — e a página diz por quê', () => {
+    // Um mailto para "[PREENCHER…]" abriria o e-mail com destinatário inválido,
+    // e a pessoa sairia achando que pediu.
+    render(<ExcluirConta />);
+    expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
+    expect(document.body.textContent).toMatch(/ainda não foi definido/i);
+  });
+
+  it('não promete o que ninguém decidiu: quem analisa, e o que pode ser guardado fica por preencher', () => {
+    /*
+      O que apagar e o que o profissional precisa guardar é decisão do
+      controlador, com revisão jurídica (pendência 27). A página diz como pedir e
+      quem analisa — e deixa a decisão marcada, em vez de inventá-la.
+    */
+    render(<ExcluirConta />);
+    const texto = document.body.textContent ?? '';
+    expect(texto).toMatch(/analisado por uma pessoa/i);
+    expect(texto).toMatch(/\[PREENCHER: o que é apagado/);
+    expect(texto).not.toMatch(/são apagados\./i);
+  });
+
+  it('diz o que a pessoa já pode fazer sozinha, sem pedir a ninguém', () => {
+    render(<ExcluirConta />);
+    const texto = document.body.textContent ?? '';
+    expect(texto).toMatch(/retirar cada autorização/i);
+    expect(texto).toMatch(/quem viu meus dados/i);
+  });
+});
+
+describe('a página que não existe', () => {
+  it('diz em português, e leva de volta ao início', () => {
+    // No ar, em 05/11/2026, o site mostrava "404: This page could not be found."
+    render(<NaoEncontrada />);
+    expect(screen.getByRole('heading', { name: /página não encontrada/i })).toBeInTheDocument();
+    expect(screen.getByText(/ir para o início/i).closest('a')).toHaveAttribute('href', '/');
+    expect(document.body.textContent).not.toMatch(/could not be found/i);
+  });
+});
+
+describe('o aceite no cadastro', () => {
+  const cadastroComSdkFalso = async () => {
+    vi.doMock('../lib/sdk', () => ({
+      sdk: { auth: { registrarProfissional: vi.fn() } },
+    }));
+    const { default: Cadastrar } = await import('../app/cadastrar/page');
+    return Cadastrar;
+  };
 
   it('o cadastro mostra a que a pessoa está concordando, com link', async () => {
     /*

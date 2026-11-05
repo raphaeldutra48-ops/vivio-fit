@@ -65,6 +65,9 @@ export function DocumentoLegal({
           <Link href="/privacidade" className="underline mr-lg">
             Política de privacidade
           </Link>
+          <Link href="/excluir-conta" className="underline mr-lg">
+            Excluir conta
+          </Link>
           <Link href="/login" className="underline">
             Entrar
           </Link>

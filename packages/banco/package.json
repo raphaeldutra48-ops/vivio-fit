@@ -11,6 +11,7 @@
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "semear-auth": "tsx prisma/semear-auth.ts",
+    "rotacionar-senha-da-semente": "tsx prisma/rotacionar-senha-da-semente.ts",
     "semear-catalogo": "tsx prisma/semear-catalogo.ts",
     "importar-taco": "tsx prisma/importar-taco.ts",
     "exportar-regras": "tsx prisma/exportar-regras.ts",

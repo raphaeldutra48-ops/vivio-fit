@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * A leitura automática de dieta, pela função de borda `ler-dieta`.
@@ -70,7 +71,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: leitura automática de dieta', 
 
     const nova = await admin.auth.admin.createUser({
       email: emailAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: `Aluno ${marca}`, papel: 'ALUNO' },
     });
@@ -89,9 +90,9 @@ describe.skipIf(!url || !anon || !servico)('SDK: leitura automática de dieta', 
     if (vinculo.error) throw new Error(`preparo: ${vinculo.error.message}`);
 
     await Promise.all([
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailAluno, senha: 'Senha@123' }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailAluno, senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

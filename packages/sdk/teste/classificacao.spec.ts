@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { SENHA_DA_SEMENTE } from './senha';
 import {
   MARCADORES,
   REFERENCIAS,
@@ -37,7 +38,7 @@ describe.skipIf(!url || !anon)('classificação: SQL e TypeScript concordam', ()
     db = createClient(url!, anon!, { auth: { persistSession: false } });
     const { error } = await db.auth.signInWithPassword({
       email: 'medico@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     if (error) throw new Error(`login: ${error.message}`);
   });

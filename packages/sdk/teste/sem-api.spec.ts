@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Os grupos do SDK que já não passam pela API, exercitados PELO SDK.
@@ -69,14 +70,14 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: vínculo e consentiment
     const r = await fetch(`${url}/auth/v1/admin/users`, {
       method: 'POST',
       headers: cabecalhosAuth(),
-      body: JSON.stringify({ email: alunoEmail, password: 'Senha@123', email_confirm: true }),
+      body: JSON.stringify({ email: alunoEmail, password: SENHA_DA_SEMENTE, email_confirm: true }),
     });
     const criado = (await r.json()) as { id?: string };
     if (!criado.id) throw new Error(`Auth recusou: ${JSON.stringify(criado)}`);
     idNoAuth = criado.id;
 
-    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' });
-    await aluno.auth.login({ email: alunoEmail, senha: 'Senha@123' });
+    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE });
+    await aluno.auth.login({ email: alunoEmail, senha: SENHA_DA_SEMENTE });
   });
 
   afterAll(async () => {

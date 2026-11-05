@@ -1,6 +1,8 @@
 import { obterTema } from '@vivio/ui-native';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderizar } from './preparo';
+import { DOCUMENTOS_LEGAIS } from '@vivio/contracts';
+import { Linking } from 'react-native';
+import { alertas, renderizar, responderAlerta } from './preparo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -184,5 +186,39 @@ describe('meus dados', () => {
     fireEvent.click(screen.getByLabelText(/salvar meus dados/i));
 
     await waitFor(() => expect(textoDaTela()).toMatch(/não foi possível salvar/i));
+  });
+});
+
+describe('excluir a conta: um pedido, não um botão que apaga', () => {
+  /*
+    O que apagar e o que o profissional de saúde precisa guardar é decisão do
+    controlador (pendência 27). O botão explica isso e abre a página com o passo
+    a passo — a mesma que o site serve e que a Google Play exige.
+  */
+  it('confirmando, abre a página de instruções', async () => {
+    const abrir = vi.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    alertas.length = 0;
+    await abrirTela();
+    await waitFor(() => expect(screen.getByLabelText('Excluir minha conta')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Excluir minha conta'));
+    expect(alertas.at(-1)?.mensagem).toMatch(/analisada por uma pessoa/);
+    await responderAlerta('Abrir instruções');
+
+    expect(abrir).toHaveBeenCalledWith(DOCUMENTOS_LEGAIS.exclusaoDeConta);
+    abrir.mockRestore();
+  });
+
+  it('cancelando, não abre nada', async () => {
+    const abrir = vi.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    alertas.length = 0;
+    await abrirTela();
+    await waitFor(() => expect(screen.getByLabelText('Excluir minha conta')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Excluir minha conta'));
+    await responderAlerta('Cancelar');
+
+    expect(abrir).not.toHaveBeenCalled();
+    abrir.mockRestore();
   });
 });

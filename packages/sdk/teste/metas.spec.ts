@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Metas pelo SDK, sem API.
@@ -64,7 +65,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: metas', () => {
     */
     const criada = await admin.auth.admin.createUser({
       email: emailDoAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna das Metas', papel: 'ALUNO' },
     });
@@ -127,8 +128,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: metas', () => {
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailDoAluno, senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailDoAluno, senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -188,7 +189,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: metas', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
 
     // Reescrever o inicial para 78 faria a meta "andar" de 40% para 100% sem
@@ -254,7 +255,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: metas', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     // A meta pode estar citada num relatório já enviado: some da tela, não do
     // banco.

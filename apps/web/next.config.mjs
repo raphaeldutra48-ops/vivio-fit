@@ -39,6 +39,9 @@ const CABECALHOS = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Sem `X-Powered-By: Next.js`: anunciar o framework (e, com ele, a lista de
+  // falhas conhecidas da versão) não serve a ninguém que usa o site.
+  poweredByHeader: false,
   // Pacotes do monorepo são TypeScript compilado localmente, não publicados.
   transpilePackages: ['@vivio/sdk', '@vivio/ui', '@vivio/contracts'],
   /*

@@ -299,6 +299,9 @@ export function EditorDeItensPrescritos({
           </div>
 
           <input
+            // Só o placeholder não basta: nem todo leitor de tela o anuncia como
+            // nome, e ele some assim que alguém escreve.
+            aria-label={`Observação para ${item.nome}`}
             className="mt-md min-h-toque w-full rounded-md border px-md"
             style={entrada}
             value={item.observacao ?? ''}
@@ -310,6 +313,7 @@ export function EditorDeItensPrescritos({
 
       <Cartao>
         <input
+          aria-label="Buscar no catálogo para adicionar"
           className="min-h-toque w-full rounded-md border px-md"
           style={entrada}
           value={busca}

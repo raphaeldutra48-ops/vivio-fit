@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Modelos do profissional pelo SDK, sem API: anamnese, prescrição e o catálogo
@@ -58,8 +59,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: modelos do profissional
     });
 
     await Promise.all([
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

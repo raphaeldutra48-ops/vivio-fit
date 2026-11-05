@@ -13,6 +13,41 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
+### 35. O diagnóstico diário precisa de dois segredos no GitHub
+**Assumida em:** 2026-11-05 · **Depende de:** você, no GitHub (2 minutos).
+**Estado:** o diagnóstico (`.github/workflows/diagnostico.yml`) roda todo dia,
+mas o passo que confere o banco foi **pulado em todas as execuções** desde que
+existe, porque os segredos nunca foram cadastrados — e o trabalho terminava
+verde. Desde 05/11 ele falha enquanto faltarem, para o verde voltar a significar
+alguma coisa. Até você cadastrar, vai chegar um e-mail de falha por dia.
+**Como:** no repositório, Settings → Secrets and variables → Actions → New
+repository secret, dois segredos: `SUPABASE_URL` e `SUPABASE_POOLER_URL`, com os
+mesmos valores do `packages/banco/.env.supabase`.
+**Por que não faço:** é digitar credencial do banco num painel — não faço.
+
+### 34. Limite de gasto na Anthropic, e um teto por profissional
+**Assumida em:** 2026-11-05 · **Depende de:** você no painel da Anthropic; o
+teto por profissional é código, para depois do teste.
+**Estado:** a leitura automática de dieta chama o modelo mais caro, na sua
+conta. Até 05/11, qualquer conta de profissional — inclusive recém-criada e não
+verificada, e o cadastro é aberto — podia chamá-la em laço. O SQL agora exige
+profissional verificado (vale depois de aplicar o RLS), mas não há limite de
+quantidade por pessoa.
+**Como:** no console da Anthropic, um limite de gasto mensal para a chave usada
+pela função `ler-dieta` (Settings → Limits). É o teto que vale mesmo que alguma
+outra porta abra. O teto por profissional exige uma tabela de registro das
+leituras — migração nova — e fica para depois do primeiro teste.
+
+### 33. Conferir o endereço do site no Supabase Auth
+**Assumida em:** 2026-11-05 · **Depende de:** você, no painel do Supabase.
+**Estado:** o domínio `app.viviofit.com.br` passou do Railway para a Cloudflare.
+O link do e-mail de confirmação e o de redefinição de senha usam o **Site URL**
+do Supabase Auth; se ele ainda apontar para outro endereço, a pessoa confirma o
+e-mail e cai no lugar errado. Ler essa configuração exige um token pessoal da
+sua conta, que eu não tenho.
+**Como:** Authentication → URL Configuration: Site URL
+`https://app.viviofit.com.br`; em Redirect URLs, o mesmo endereço com `/**`.
+
 ### 29. A proteção nova do formulário público precisa ser APLICADA no banco
 **Assumida em:** 2026-10-02 · **Depende de:** você, com a credencial do Supabase.
 **Estado:** `packages/banco/prisma/rls/28-site.sql` já está corrigido no
@@ -58,10 +93,14 @@ ao cadastro e à tela de autorizações do aplicativo. O que falta não é códi
   mostra aviso de rascunho — e há teste que exige esse par.
 - **Revisão jurídica.** O texto foi escrito a partir do comportamento real do
   software, que é a parte que um advogado não adivinha; o inverso também vale.
-- **Exclusão de conta não tem tela.** O direito existe na LGPD e a política diz
-  que o pedido é atendido por e-mail. Um botão exige decidir o que apagar e o que
-  o profissional precisa guardar por obrigação dele — e isso é decisão de
-  produto, não de implementação.
+- **Exclusão de conta: o caminho existe desde 05/11/2026; a decisão, não.**
+  "Meus dados", no app, tem "Excluir minha conta", que explica e abre
+  `/excluir-conta` — a página pública que a Google Play pede. O pedido sai por
+  e-mail e é atendido por uma pessoa. O que falta é seu: o contato de
+  privacidade (`CONTATO_DE_PRIVACIDADE`, em `packages/contracts/src/enderecos.ts`
+  — preenchido ali, vale nas três telas; enquanto for `[PREENCHER]`, nenhuma
+  monta link de e-mail) e a decisão do que se apaga e do que o profissional
+  precisa guardar, que a página deixa marcada em vez de inventar.
 **Pagar em:** antes de abrir cadastro para fora. É bloqueador de lançamento, não
 de desenvolvimento.
 
@@ -187,6 +226,69 @@ com mais de N dias. Nunca começar pelo que apaga.
 uns 60% sem explicação.
 
 ## Resolvidas
+
+### Auditoria geral de 05/11/2026, ciclo 1: o que estava verde sem olhar
+
+Quatro semanas depois do passe 9, comecei pelo que o projeto diz sobre si mesmo
+— CI, diagnóstico, site no ar — em vez de pelo código. Três das quatro
+"garantias" estavam mentindo.
+
+**1. O CI estava vermelho em todo push desde 08/10 — inclusive nos passes em que
+eu relatei "cadeia verde".** Duas provas da web (agenda e resumo do
+profissional, escritas por mim) afirmavam "10:00" para `13:00Z`, que só vale no
+fuso de Brasília; o runner roda em UTC. A minha cadeia local rodava no fuso da
+máquina e nunca viu. E o passo do CI rodava as cinco suítes num `run:` só, que
+para na primeira falha: **as suítes do app e do banco, o build da Cloudflare e o
+empacotamento do app não rodaram em nenhum push por quatro semanas.** Correções:
+web e app fixam `America/Sao_Paulo`, como `contracts` já fazia; cada suíte e
+cada build viraram passo próprio com `if: !cancelled()`; e a verificação local
+virou um espelho fiel do `verificar.yml`, em UTC, incluindo os dois builds.
+Lição registrada para mim: **"verde" é o do CI, lido na API do GitHub — não o da
+minha máquina.**
+
+**2. O "Diagnóstico ✓" diário nunca diagnosticou nada** (pendência 35). Sem os
+segredos, ele pulava o passo do banco e terminava verde, por desenho. Agora falha.
+
+**3. O site não podia mais ser publicado.** O Next 15 saiu do suporte em
+21/10/2026, e o empacotador da Cloudflare passou a recusar a build — qualquer
+deploy depois disso falhava e o site ficava congelado na última versão boa. Isso
+só apareceu porque o passo do build voltou a rodar. Subiu para o **Next 16.4.5**,
+com `@opennextjs/cloudflare 1.20.16` (que exige essa versão por correção de
+segurança) e `wrangler 4.157.0`. Ao instalar, o pnpm acrescentou sozinho ao
+`pnpm-workspace.yaml` exceções à **idade mínima de publicação** para uma
+`wrangler` de horas e um `miniflare` *beta* — a proteção contra pacote
+comprometido recém-publicado. Desfiz e escolhi uma `wrangler` com dois dias, que
+passa na regra sem exceção nenhuma.
+
+**4. Segurança: a senha da semente estava num repositório público, e uma das
+contas é o administrador.** `admin@viviofit.com.br`/`Senha@123` — e o roteiro do
+teste usa essa conta para verificar os profissionais de verdade. O administrador
+vê nome, e-mail, telefone e registro de todo profissional, e decide quem aparece
+como verificado. A senha saiu do código (`SENHA_DA_SEMENTE`, no `.env.supabase`),
+`rotacionar-senha-da-semente` troca nas contas gravando a nova no arquivo ANTES
+de trocar, e uma prova recusa senha de conta escrita em código — com amostra boa
+e ruim. 133 trocas em 40 arquivos de prova.
+
+**5. Custo: a leitura automática de dieta aceitava profissional não verificado**
+(pendência 34). O cadastro é aberto; a leitura chama o modelo mais caro, na conta
+do dono. `falta_para_ler_dieta` agora exige verificação nos dois caminhos — vale
+quando o RLS for aplicado.
+
+**6. Uma prova que não provava**: a dos documentos legais dizia garantir "com
+`[PREENCHER]`, aviso de rascunho; sem, sem aviso" — mas o próprio aviso contém
+`[PREENCHER]`, então a condição era sempre verdadeira e o ramo "revisado" nunca
+rodava. Agora conta só as marcas do conteúdo.
+
+**Melhorias:** página `/excluir-conta` e botão "Excluir minha conta" no app
+(pendência 27, parte de código); 404 em português (o site no ar mostrava "This
+page could not be found"); `global-error.tsx`; `poweredByHeader: false`; a
+política de privacidade passou a dizer a verdade sobre arquivo já aberto depois
+de revogar (o link vale alguns minutos); prazo de espera das provas de 1 s para
+5 s, depois de uma que passava sozinha e reprovava sob carga.
+
+**Conferido e limpo, sem defeito:** credenciais no histórico do git (só exemplos
+e a chave `anon`, pública por desenho); datas renderizadas no servidor em UTC (o
+layout da área logada só desenha depois da sessão, no navegador).
 
 ### Auditoria de 02/10 — passe 9: o SDK fala com o banco por texto, e agora há quem confira — 09/10/2026
 

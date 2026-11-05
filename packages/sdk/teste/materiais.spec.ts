@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Material pelo SDK, sem API.
@@ -54,7 +55,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
 
     const criada = await admin.auth.admin.createUser({
       email: emailDoAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna do Material', papel: 'ALUNO' },
     });
@@ -86,9 +87,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailDoAluno, senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailDoAluno, senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -173,7 +174,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
   it('recompartilhar não duplica nem apaga o "visto"', async () => {
     // O aluno abre o material.
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: SENHA_DA_SEMENTE });
     await bruto
       .from('MaterialCompartilhado')
       .update({ vistoEm: new Date().toISOString() })
@@ -193,7 +194,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: material', () => {
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
     await bruto.auth.signInWithPassword({
       email: 'personal@viviofit.com.br',
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
     });
     // O autor enxerga o carimbo — é o que diz se o material foi aberto —, mas
     // quem o cria é quem abriu.

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Agenda pelo SDK, sem API.
@@ -74,7 +75,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: agenda', () => {
 
     const criada = await admin.auth.admin.createUser({
       email: emailDoAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluna da Agenda', papel: 'ALUNO' },
     });
@@ -118,9 +119,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: agenda', () => {
     );
 
     await Promise.all([
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      aluno.auth.login({ email: emailDoAluno, senha: 'Senha@123' }),
-      medico.auth.login({ email: 'medico@viviofit.com.br', senha: 'Senha@123' }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      aluno.auth.login({ email: emailDoAluno, senha: SENHA_DA_SEMENTE }),
+      medico.auth.login({ email: 'medico@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -225,7 +226,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: agenda', () => {
   it('o aluno também não muda o horário por baixo', async () => {
     // O que ele pode é confirmar e cancelar; remarcar é conversa, não clique.
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailDoAluno, password: SENHA_DA_SEMENTE });
     /*
       Move o par inteiro — início E fim. Mexer só no início cairia antes, no
       "o fim precisa ser depois do início", e o teste passaria sem nunca

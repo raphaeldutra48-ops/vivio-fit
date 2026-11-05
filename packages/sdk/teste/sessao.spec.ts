@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * O aviso de sessão perdida.
@@ -36,7 +37,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: sessão perdida', () => {
     admin = createClient(url!, servico!, { auth: { persistSession: false } });
     const nova = await admin.auth.admin.createUser({
       email,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: `Sessão ${marca}`, papel: 'ALUNO' },
     });
@@ -63,7 +64,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: sessão perdida', () => {
       caminhos, e não vazio.
     */
     const c = cliente(() => undefined);
-    const entrada = await c.auth.login({ email, senha: 'Senha@123' });
+    const entrada = await c.auth.login({ email, senha: SENHA_DA_SEMENTE });
     expect(entrada.usuario.nome).not.toBe('');
 
     const atual = await c.supabase.usuarioAtual();
@@ -74,7 +75,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: sessão perdida', () => {
   it('sair porque pediu NÃO conta como sessão perdida', async () => {
     const aviso = vi.fn();
     const c = cliente(aviso);
-    await c.auth.login({ email, senha: 'Senha@123' });
+    await c.auth.login({ email, senha: SENHA_DA_SEMENTE });
 
     await c.auth.logout();
     // O evento de saída é assíncrono: dá a ele a chance de chegar antes de
@@ -120,7 +121,7 @@ describe.skipIf(!url || !anon || !servico)('SDK: sessão perdida', () => {
       },
       aoPerderSessao: aviso,
     });
-    await c.auth.login({ email, senha: 'Senha@123' });
+    await c.auth.login({ email, senha: SENHA_DA_SEMENTE });
     // O relógio de renovação automática ficaria vivo depois do teste.
     await c.supabase.db.auth.stopAutoRefresh();
 

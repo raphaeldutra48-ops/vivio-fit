@@ -18,12 +18,12 @@
     "@vivio/contracts": "workspace:*",
     "@vivio/sdk": "workspace:*",
     "@vivio/ui": "workspace:*",
-    "next": "^15.5.25",
+    "next": "^16.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.20.4",
+    "@opennextjs/cloudflare": "^1.20.16",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -38,6 +38,6 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "wrangler": "^4.127.1"
+    "wrangler": "^4.156.0"
   }
 }

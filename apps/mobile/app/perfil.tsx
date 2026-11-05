@@ -1,9 +1,17 @@
-import { FAIXA_ALTURA_CM, SexoBiologico, numeroDoCampo, type MeuPerfil } from '@vivio/contracts';
+import {
+  DOCUMENTOS_LEGAIS,
+  FAIXA_ALTURA_CM,
+  SexoBiologico,
+  numeroDoCampo,
+  type MeuPerfil,
+} from '@vivio/contracts';
 import { espacamento, raio, tipografia } from '@vivio/ui-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -273,6 +281,34 @@ export default function Perfil() {
           >
             {salvando ? 'Salvando…' : 'Salvar'}
           </Text>
+        </Pressable>
+
+        {/*
+          Excluir a conta é um PEDIDO, atendido por uma pessoa (pendência 27): o
+          que apagar e o que o profissional de saúde precisa guardar por
+          obrigação dele é decisão do controlador, e não deste botão. O app
+          explica e abre a página com o passo a passo — a mesma que o site serve
+          e que a Google Play pede para app que cria conta.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Excluir minha conta"
+          onPress={() =>
+            Alert.alert(
+              'Excluir minha conta',
+              'A exclusão é pedida por e-mail e analisada por uma pessoa. A página a seguir explica como pedir e o que pode precisar ser guardado pelo seu profissional de saúde.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Abrir instruções',
+                  onPress: () => void Linking.openURL(DOCUMENTOS_LEGAIS.exclusaoDeConta),
+                },
+              ],
+            )
+          }
+          style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: tema.erro, fontWeight: '600' }}>Excluir minha conta</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

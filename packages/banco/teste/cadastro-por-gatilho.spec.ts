@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it } from 'vitest';
 import { urlDoBanco } from '../conexao';
+import { senhaDaSemente } from '../prisma/senha-da-semente';
 
 /**
  * Cadastro sem API: a conta nasce no Supabase Auth e o gatilho faz o resto.
@@ -38,7 +39,7 @@ describe.skipIf(!urlSupabase || !chaveServico)('cadastro por gatilho', () => {
       headers: cabecalhos,
       body: JSON.stringify({
         email,
-        password: 'Senha-de-prova-123',
+        password: senhaDaSemente(),
         email_confirm: false,
         user_metadata: meta,
       }),

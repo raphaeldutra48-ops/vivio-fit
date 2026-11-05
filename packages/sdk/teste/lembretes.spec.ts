@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Lembretes, aparelhos e notificações pelo SDK, sem API.
@@ -45,7 +46,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: lembretes', () => {
     const criar = async (email: string, nome: string): Promise<string> => {
       const r = await admin.auth.admin.createUser({
         email,
-        password: 'Senha@123',
+        password: SENHA_DA_SEMENTE,
         email_confirm: true,
         user_metadata: { nome, papel: 'ALUNO' },
       });
@@ -83,8 +84,8 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: lembretes', () => {
     if (r2.error) throw new Error(`notificacao 2: ${JSON.stringify(r2.error)}`);
 
     await Promise.all([
-      a.auth.login({ email: emailA, senha: 'Senha@123' }),
-      b.auth.login({ email: emailB, senha: 'Senha@123' }),
+      a.auth.login({ email: emailA, senha: SENHA_DA_SEMENTE }),
+      b.auth.login({ email: emailB, senha: SENHA_DA_SEMENTE }),
     ]);
   });
 
@@ -196,7 +197,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: lembretes', () => {
       texto de um que foi enviado de verdade.
     */
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailA, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailA, password: SENHA_DA_SEMENTE });
 
     /*
       Dia diferente do aviso semeado de propósito: a tabela tem única por
@@ -233,7 +234,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: lembretes', () => {
     ).lidaEm;
 
     const bruto = createClient(url!, anon!, { auth: { persistSession: false } });
-    await bruto.auth.signInWithPassword({ email: emailB, password: 'Senha@123' });
+    await bruto.auth.signInWithPassword({ email: emailB, password: SENHA_DA_SEMENTE });
     await bruto
       .from('Notificacao')
       .update({ lidaEm: new Date().toISOString() })

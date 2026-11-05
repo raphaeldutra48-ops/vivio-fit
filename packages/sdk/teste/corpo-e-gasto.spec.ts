@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Cardio, calorimetria e avaliação física pelo SDK, sem API.
@@ -55,7 +56,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: corpo e gasto', () => {
 
     const nova = await admin.auth.admin.createUser({
       email: emailAluno,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: 'Aluno do Gasto', papel: 'ALUNO' },
     });
@@ -132,9 +133,9 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: corpo e gasto', () => {
     });
 
     await Promise.all([
-      aluno.auth.login({ email: emailAluno, senha: 'Senha@123' }),
-      personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' }),
-      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' }),
+      aluno.auth.login({ email: emailAluno, senha: SENHA_DA_SEMENTE }),
+      personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
+      nutri.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE }),
     ]);
   });
 

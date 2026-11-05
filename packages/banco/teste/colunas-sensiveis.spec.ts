@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { urlDoBanco } from '../conexao';
+import { senhaDaSemente } from '../prisma/senha-da-semente';
 
 /**
  * O que cada papel alcança COLUNA a coluna, pela porta que o app usa.
@@ -36,7 +37,7 @@ describe.skipIf(!url || !anon)('colunas sensíveis pelo PostgREST', () => {
 
   async function entrar(email: string): Promise<SupabaseClient> {
     const c = createClient(url!, anon!, { auth: { persistSession: false } });
-    const { error } = await c.auth.signInWithPassword({ email, password: 'Senha@123' });
+    const { error } = await c.auth.signInWithPassword({ email, password: senhaDaSemente() });
     if (error) throw new Error(`${email}: ${error.message}`);
     return c;
   }

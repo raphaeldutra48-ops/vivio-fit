@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { config as carregarEnv } from 'dotenv';
+import { resolve } from 'node:path';
+import { senhaDaSemente } from './senha-da-semente';
 
 /**
  * Espelha os usuários da semente no Supabase Auth.
@@ -21,8 +24,10 @@ import { PrismaClient } from '@prisma/client';
  * Quando houver gente de verdade, a conversa muda — e aí é decisão explícita,
  * não efeito colateral de um seed.
  *
- * A senha é a mesma `SENHA_PADRAO` do `seed.ts`, que está versionada no
- * repositório porque é conta de desenvolvimento.
+ * A senha vem de `SENHA_DA_SEMENTE`, no `.env.supabase` — e não do código.
+ * Ela foi versionada enquanto o repositório era privado e o banco só tinha
+ * semente; as duas coisas deixaram de ser verdade, e uma das contas é o
+ * administrador que verifica os profissionais. Ver `senha-da-semente.ts`.
  *
  * ## Idempotente
  *
@@ -30,7 +35,7 @@ import { PrismaClient } from '@prisma/client';
  * acrescentar um usuário à semente traz só o novo.
  */
 
-const SENHA_PADRAO = 'Senha@123';
+carregarEnv({ path: resolve(__dirname, '../.env.supabase') });
 
 interface UsuarioDoAuth {
   id: string;
@@ -52,7 +57,7 @@ async function criarNoAuth(url: string, chave: string, email: string): Promise<v
     headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email,
-      password: SENHA_PADRAO,
+      password: senhaDaSemente(),
       // Sem isto a conta nasce pendente e o login é recusado. A semente não
       // tem caixa de entrada para confirmar.
       email_confirm: true,

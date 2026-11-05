@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Check-in diário pelo SDK, sem API.
@@ -80,14 +81,14 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: check-in diário', () =
     const r = await fetch(`${url}/auth/v1/admin/users`, {
       method: 'POST',
       headers: cabecalhos(),
-      body: JSON.stringify({ email, password: 'Senha@123', email_confirm: true }),
+      body: JSON.stringify({ email, password: SENHA_DA_SEMENTE, email_confirm: true }),
     });
     const criado = (await r.json()) as { id?: string };
     if (!criado.id) throw new Error(`Auth recusou: ${JSON.stringify(criado)}`);
     idNoAuth = criado.id;
 
-    await aluno.auth.login({ email, senha: 'Senha@123' });
-    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' });
+    await aluno.auth.login({ email, senha: SENHA_DA_SEMENTE });
+    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE });
   });
 
   afterAll(async () => {
@@ -195,7 +196,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: check-in diário', () =
 
   it('quem não atende o aluno não registra por ele', async () => {
     const outro = cliente();
-    await outro.auth.login({ email: 'nutri@viviofit.com.br', senha: 'Senha@123' });
+    await outro.auth.login({ email: 'nutri@viviofit.com.br', senha: SENHA_DA_SEMENTE });
     await expect(
       outro.checkins.registrar(alunoId, {
         data: diaUtc(),

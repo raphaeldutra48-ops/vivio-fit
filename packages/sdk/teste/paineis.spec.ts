@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroApi } from '../src/erro';
 import { VivioClient } from '../src/client';
+import { SENHA_DA_SEMENTE } from './senha';
 
 /**
  * Cabeçalho do aluno, lista de compras e painel de feedback — sem API.
@@ -108,7 +109,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: painéis', () => {
     for (const [i, rotulo] of [['0', 'Com consentimento'], ['1', 'Sem consentimento']]) {
       const r = await admin.auth.admin.createUser({
         email: `${marca}-${i}@teste.com`,
-        password: 'Senha@123',
+        password: SENHA_DA_SEMENTE,
         email_confirm: true,
         user_metadata: { nome: `${rotulo} ${marca}`, papel: 'ALUNO' },
       });
@@ -196,7 +197,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: painéis', () => {
       localDor: 'Joelho',
     });
 
-    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: 'Senha@123' });
+    await personal.auth.login({ email: 'personal@viviofit.com.br', senha: SENHA_DA_SEMENTE });
   });
 
   afterAll(async () => {
@@ -242,7 +243,7 @@ describe.skipIf(!url || !anon || !servico)('SDK sem API: painéis', () => {
     */
     const estranho = await admin.auth.admin.createUser({
       email: `${marca}-estranho@teste.com`,
-      password: 'Senha@123',
+      password: SENHA_DA_SEMENTE,
       email_confirm: true,
       user_metadata: { nome: `Estranho ${marca}`, papel: 'ALUNO' },
     });
