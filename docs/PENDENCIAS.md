@@ -13,6 +13,40 @@ deve ser paga. Não apagar item sem resolver — mover para "Resolvidas".
 > este banco** (a guarda de produção recusa, e é para isso que ela existe).
 
 
+### 37. O `zod` só tem correção de segurança na versão 4
+**Assumida em:** 2026-11-05 · **Depende de:** tempo; migração de API.
+**Estado:** o aviso GHSA-mrhx-c7xc-m3w5 ("validar coleção grande com restrição
+pode esgotar memória") afeta `zod < 4.6.6`; o projeto usa 3.25.76, e a correção
+não existe na linha 3. Migrar é trocar a API em centenas de esquemas de
+`packages/contracts`.
+**Por que não agora:** o risco é baixo neste sistema. A validação roda no
+aparelho de quem usa, sobre o que a própria pessoa digitou ou recebeu — não há
+servidor nosso validando dado de outra pessoa; o pior caso é a própria tela
+travar. Os outros avisos que sobraram (glob, minimatch, uuid, deepmerge,
+decode-uri-component, deepmerge-ts) são de ferramenta de build e estão
+explicados no `pnpm-workspace.yaml`.
+**Pagar em:** junto da próxima subida grande (Expo SDK 58, por exemplo), com a
+suíte de `contracts` como rede.
+
+### 36. Qualquer conta pode encher o armazenamento
+**Assumida em:** 2026-11-05 · **Depende de:** aplicar no banco e provar com a
+suíte do SDK (`armazenamento.spec.ts`), que fala com o Supabase de verdade.
+**Estado:** a política `midia_escreve` (`rls/32-armazenamento.sql`) deixa
+qualquer conta autenticada subir arquivo em qualquer um dos cinco compartimentos,
+dentro da própria pasta, sem limite de quantidade — e `materiais` aceita 200 MB
+por arquivo. Com o cadastro aberto, uma conta nova enche a cota (1 GB no plano
+gratuito) e o upload para de funcionar para todo mundo. Não vaza dado: é
+indisponibilidade e custo.
+**Desenho proposto:** cada compartimento só para o papel que o usa —
+`exercicios` e `materiais` para profissional VERIFICADO, `evolucao` para o
+próprio aluno, `exames` para quem registra exame, `avatares` para todos — e um
+teto de arquivos por pessoa e compartimento, contado em `storage.objects` no
+`with check`. Não escrevi às cegas: política de armazenamento só se prova contra
+o Postgres de verdade, e o Postgres avalia TODAS as políticas de
+`storage.objects` (já derrubou download de foto uma vez).
+**Pagar em:** antes de abrir o cadastro para o público. Para um teste fechado,
+com gente convidada, o risco é baixo.
+
 ### 35. O diagnóstico diário precisa de dois segredos no GitHub
 **Assumida em:** 2026-11-05 · **Depende de:** você, no GitHub (2 minutos).
 **Estado:** o diagnóstico (`.github/workflows/diagnostico.yml`) roda todo dia,
