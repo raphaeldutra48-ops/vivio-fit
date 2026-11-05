@@ -51,6 +51,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # A v5 liga sozinha o cache do gerenciador quando o package.json declara
+          # `packageManager` — e procura o pnpm ANTES do `corepack enable`, que é o
+          # passo seguinte. Sem esta linha a v5 morre com "Unable to locate
+          # executable file: pnpm" (foi o primeiro push com ela, em 05/11/2026).
+          package-manager-cache: false
 
       - run: corepack enable
 
